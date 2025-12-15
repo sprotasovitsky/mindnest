@@ -1,0 +1,62 @@
+spring:
+  application:
+    name: mindnest-backend
+  threads:
+    virtual:
+      enabled: true
+
+  # PostgreSQL
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:mindnest}
+    username: ${POSTGRES_USER:mindnest}
+    password: ${POSTGRES_PASSWORD:mindnest}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+
+  # Neo4j
+  neo4j:
+    uri: bolt://${NEO4J_HOST:localhost}:${NEO4J_PORT:7687}
+    authentication:
+      username: ${NEO4J_USER:neo4j}
+      password: ${NEO4J_PASSWORD:mindnest}
+
+server:
+  port: 8080
+
+# Qdrant
+qdrant:
+  host: ${QDRANT_HOST:localhost}
+  port: ${QDRANT_PORT:6334}
+  collection: knowledge_vectors
+
+# Vertex AI
+vertex-ai:
+  project-id: ${VERTEX_AI_PROJECT_ID:}
+  location: ${VERTEX_AI_LOCATION:us-central1}
+  models:
+    chat: gemini-1.5-flash
+    chat-pro: gemini-1.5-pro
+    embedding: text-embedding-004
+
+# Logging
+logging:
+  level:
+    com.mindnest: DEBUG
+    org.springframework.data.neo4j: INFO
+
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always

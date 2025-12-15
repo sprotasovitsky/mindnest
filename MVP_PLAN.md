@@ -17,8 +17,8 @@
 
 ### 0.1 Настройка проекта
 
-- [ ] Создать репозиторий (GitHub/GitLab)
-- [ ] Настроить структуру проекта:
+- [x] Создать репозиторий (GitHub/GitLab)
+- [x] Настроить структуру проекта:
   ```
   mindnest/
   ├── mobile/            # Flutter (iOS, Android, Web)
@@ -26,7 +26,7 @@
   ├── docker/            # Docker Compose
   └── docs/              # Документация
   ```
-- [ ] Настроить Docker Compose (dev environment)
+- [x] Настроить Docker Compose (dev environment)
 - [ ] Настроить CI/CD (GitHub Actions)
 
 ### 0.2 Google Cloud
@@ -38,12 +38,12 @@
 
 ### 0.3 Базы данных (Docker)
 
-- [ ] Neo4j container + health check
-- [ ] Qdrant container + health check
-- [ ] PostgreSQL container + init scripts
-- [ ] Docker network между сервисами
+- [x] Neo4j container + health check
+- [x] Qdrant container + health check
+- [x] PostgreSQL container + init scripts
+- [x] Docker network между сервисами
 
-**Критерий готовности:** `docker-compose up` запускает все сервисы, они доступны.
+**Критерий готовности:** `docker-compose up` запускает все сервисы, они доступны. ✅
 
 ---
 
@@ -51,16 +51,16 @@
 
 ### 1.1 Spring Boot каркас
 
-- [ ] Создать Spring Boot проект (Java 21, Gradle/Maven)
-- [ ] Настроить Virtual Threads
-- [ ] Подключить Spring Data Neo4j
-- [ ] Подключить Qdrant client
-- [ ] Подключить Spring Data JPA (PostgreSQL)
-- [ ] Базовая конфигурация (application.yml)
+- [x] Создать Spring Boot проект (Java 21, Gradle/Maven)
+- [x] Настроить Virtual Threads
+- [x] Подключить Spring Data Neo4j
+- [x] Подключить Qdrant client
+- [x] Подключить Spring Data JPA (PostgreSQL)
+- [x] Базовая конфигурация (application.yml)
 
 ### 1.2 Модели данных
 
-- [ ] `KnowledgeItem` entity (Neo4j)
+- [x] `KnowledgeItem` entity (Neo4j)
   ```java
   @Node
   public class KnowledgeItem {
@@ -76,26 +76,26 @@
   }
   ```
 - [ ] `Relation` между KnowledgeItems (Neo4j)
-- [ ] `User` entity (PostgreSQL)
-- [ ] `Project` entity (PostgreSQL)
-- [ ] `Conversation` entity (PostgreSQL)
+- [x] `User` entity (PostgreSQL)
+- [x] `Project` entity (PostgreSQL)
+- [ ] `Conversation` entity (PostgreSQL) — схема есть, entity нет
 
 ### 1.3 Repositories
 
-- [ ] `KnowledgeRepository` (Neo4j)
+- [x] `KnowledgeRepository` (Neo4j)
   - `findById`
   - `findByProjectId`
   - `findRelated(id, depth)`
   - `findByTypeAndStatus`
-- [ ] `UserRepository` (PostgreSQL)
-- [ ] `ProjectRepository` (PostgreSQL)
+- [x] `UserRepository` (PostgreSQL)
+- [x] `ProjectRepository` (PostgreSQL)
 
 ### 1.4 Vertex AI интеграция
 
-- [ ] `LlmService` — вызов Gemini
-- [ ] `EmbeddingService` — text-embedding-004
-- [ ] `ModelRouter` — выбор модели по типу задачи
-- [ ] Rate limiting / error handling
+- [x] `LlmService` — вызов Gemini
+- [x] `EmbeddingService` — text-embedding-004
+- [x] `ModelRouter` — выбор модели по типу задачи
+- [ ] Rate limiting / error handling — базовый error handling есть
 
 ### 1.5 Vector Search
 
@@ -138,16 +138,16 @@
 
 ### 2.2 Orchestrator Agent
 
-- [ ] System prompt (персона секретаря)
+- [x] System prompt (персона секретаря)
 - [ ] Tool definitions для Gemini
 - [ ] Conversation context management
-- [ ] Model routing logic
-- [ ] Confidence score в ответах
-- [ ] Указание источников
+- [x] Model routing logic
+- [x] Confidence score в ответах
+- [ ] Указание источников — placeholder есть
 
 ### 2.3 API Endpoints
 
-- [ ] `POST /api/chat` — основной чат
+- [x] `POST /api/chat` — основной чат
   ```json
   Request: { "message": "...", "projectId": "..." }
   Response: { "reply": "...", "sources": [...], "confidence": 0.95 }
@@ -164,11 +164,11 @@
 
 ### 3.1 Flutter каркас
 
-- [ ] Создать Flutter проект
-- [ ] Настроить структуру (clean architecture)
-- [ ] Настроить HTTP client (Dio)
-- [ ] Настроить state management (Riverpod / Bloc)
-- [ ] Настроить роутинг (go_router)
+- [x] Создать Flutter проект
+- [x] Настроить структуру (clean architecture)
+- [x] Настроить HTTP client (Dio)
+- [x] Настроить state management (Riverpod / Bloc)
+- [x] Настроить роутинг (go_router)
 
 ### 3.2 Auth (простой)
 
@@ -179,14 +179,14 @@
 
 ### 3.3 Chat Interface
 
-- [ ] Chat screen
+- [x] Chat screen
   - Message list (ListView)
   - Input field
   - Send button
   - Loading indicator
-- [ ] Message widget (markdown rendering)
-- [ ] Auto-scroll к новым сообщениям
-- [ ] Keyboard handling
+- [x] Message widget (markdown rendering)
+- [x] Auto-scroll к новым сообщениям
+- [x] Keyboard handling
 
 ### 3.4 Onboarding
 
@@ -328,15 +328,17 @@
 - [ ] Google Cloud account создан
 - [ ] Billing настроен
 - [ ] Vertex AI API включен
-- [ ] Java 21 установлена
-- [ ] Flutter SDK установлен
+- [x] Java 21 установлена
+- [x] Flutter SDK установлен
 - [ ] Android Studio установлен (для эмулятора)
 - [ ] Xcode установлен (для iOS симулятора)
-- [ ] Docker установлен
+- [x] Docker установлен
 - [ ] IDE настроена (IntelliJ для Java, VS Code для Flutter)
 
 ---
 
 ## Следующий шаг
 
-**Начать с Фазы 0.1:** Создать структуру проекта и настроить Docker Compose для локальной разработки.
+**Текущий прогресс:** Фаза 0 завершена, Фаза 1.1-1.4 завершена, Фаза 3.1 и 3.3 частично.
+
+**Следующее:** Настроить Google Cloud credentials, затем продолжить с Фазой 1.5 (Vector Search) или Фазой 2 (Agent Tools).
