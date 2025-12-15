@@ -1,0 +1,53 @@
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+.env
+.env.local
+*.pem
+*.key
+secrets/
+
+# Logs
+*.log
+logs/
+
+# Build artifacts
+build/
+target/
+out/
+dist/
+
+# Dependencies
+node_modules/
+
+# Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+pubspec.lock
+**/ios/Pods/
+**/ios/.symlinks/
+**/android/.gradle/
+**/android/local.properties
+
+# Java
+*.class
+*.jar
+*.war
+.gradle/
+gradle-app.setting
+!gradle-wrapper.jar
+
+# Docker
+docker-compose.override.yml
+
+# Database volumes (local dev)
+data/
