@@ -17,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -37,6 +38,27 @@ public class ToolExecutor {
     private final TimeTools timeTools;
     private final ObjectMapper objectMapper;
 
+    // Thread-local storage for sources collected during execution
+    private static final ThreadLocal<List<String>> sourcesThreadLocal = ThreadLocal.withInitial(ArrayList::new);
+
+    /**
+     * Clear sources before processing a new message
+     */
+    public void clearSources() {
+        sourcesThreadLocal.get().clear();
+    }
+
+    /**
+     * Get sources collected during execution
+     */
+    public List<String> getSources() {
+        return new ArrayList<>(sourcesThreadLocal.get());
+    }
+
+    private void addSource(String source) {
+        sourcesThreadLocal.get().add(source);
+    }
+
     /**
      * Execute a tool call and return the result as a string.
      */
@@ -48,6 +70,7 @@ public class ToolExecutor {
                 // Knowledge tools
                 case "create_knowledge" -> executeCreateKnowledge(args, projectId, userId);
                 case "search_knowledge" -> executeSearchKnowledge(args, projectId);
+                case "delete_knowledge" -> executeDeleteKnowledge(args, projectId);
                 case "get_knowledge" -> executeGetKnowledge(args);
 
                 // Task tools
@@ -55,7 +78,9 @@ public class ToolExecutor {
                 case "get_tasks_for_today" -> executeGetTasksForToday(userId);
                 case "get_active_tasks" -> executeGetActiveTasks(userId);
                 case "update_task_status" -> executeUpdateTaskStatus(args);
+                case "complete_task_by_title" -> executeCompleteTaskByTitle(args, projectId);
                 case "search_tasks" -> executeSearchTasks(args, projectId);
+                case "decompose_task" -> executeDecomposeTask(args);
 
                 // Project tools
                 case "create_project" -> executeCreateProject(args, userId);
@@ -96,6 +121,13 @@ public class ToolExecutor {
             return "No knowledge found matching: " + query;
         }
 
+        // Track sources for attribution
+        for (SearchResult r : results) {
+            String content = (String) r.payload().get("content");
+            String type = (String) r.payload().get("type");
+            addSource(String.format("[%s] %s", type, truncate(content, 100)));
+        }
+
         return results.stream()
                 .map(r -> String.format("- [%s] %s (relevance: %.0f%%)",
                         r.payload().get("type"),
@@ -110,6 +142,18 @@ public class ToolExecutor {
                 .map(item -> String.format("Type: %s\nContent: %s\nCreated: %s",
                         item.getType(), item.getContent(), item.getCreatedAt()))
                 .orElse("Knowledge item not found: " + id);
+    }
+
+    private String executeDeleteKnowledge(Map<String, Object> args, String projectId) {
+        String query = (String) args.get("query");
+
+        int deleted = knowledgeTools.deleteKnowledgeByQuery(query, projectId);
+
+        if (deleted > 0) {
+            return String.format("Deleted %d item(s) matching '%s' from the knowledge base", deleted, query);
+        } else {
+            return "No items found matching '" + query + "' to delete";
+        }
     }
 
     // Task tool implementations
@@ -168,6 +212,14 @@ public class ToolExecutor {
                 .orElse("Task not found: " + taskId);
     }
 
+    private String executeCompleteTaskByTitle(Map<String, Object> args, String projectId) {
+        String title = (String) args.get("title");
+
+        return taskTools.completeTaskByTitle(title, projectId)
+                .map(t -> String.format("Marked task '%s' as completed", getTaskTitle(t)))
+                .orElse("No matching task found for: " + title + ". Please check the task title.");
+    }
+
     private String executeSearchTasks(Map<String, Object> args, String projectId) {
         String query = (String) args.get("query");
         int limit = ((Number) args.getOrDefault("limit", 5)).intValue();
@@ -178,11 +230,39 @@ public class ToolExecutor {
             return "No tasks found matching: " + query;
         }
 
+        // Track sources for attribution
+        for (SearchResult r : results) {
+            String content = (String) r.payload().get("content");
+            addSource(String.format("[TASK] %s", truncate(content, 100)));
+        }
+
         return results.stream()
                 .map(r -> String.format("- %s (relevance: %.0f%%)",
                         r.payload().get("content"),
                         r.score() * 100))
                 .collect(Collectors.joining("\n"));
+    }
+
+    @SuppressWarnings("unchecked")
+    private String executeDecomposeTask(Map<String, Object> args) {
+        String taskId = (String) args.get("task_id");
+        List<String> subtasks = (List<String>) args.get("subtasks");
+
+        if (subtasks == null || subtasks.isEmpty()) {
+            return "No subtasks provided to decompose the task.";
+        }
+
+        List<KnowledgeItem> created = taskTools.decomposeTask(taskId, subtasks);
+
+        if (created.isEmpty()) {
+            return "Failed to decompose task. Task not found: " + taskId;
+        }
+
+        return String.format("Created %d subtasks:\n%s",
+                created.size(),
+                created.stream()
+                        .map(t -> "- " + getTaskTitle(t))
+                        .collect(Collectors.joining("\n")));
     }
 
     // Project tool implementations

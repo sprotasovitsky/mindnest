@@ -41,4 +41,27 @@ public interface KnowledgeRepository extends Neo4jRepository<KnowledgeItem, Stri
 
     @Query("MATCH (k:KnowledgeItem) WHERE k.type = 'TASK' AND k.ownerId = $ownerId AND k.status IN ['TODO', 'IN_PROGRESS'] RETURN k ORDER BY k.deadline")
     List<KnowledgeItem> findActiveTasksByOwner(String ownerId);
+
+    @Query("MATCH (source:KnowledgeItem {id: $sourceId}), (target:KnowledgeItem {id: $targetId}) " +
+           "CREATE (source)-[r:RELATES_TO {type: $relationType, description: $description, weight: $weight, createdAt: datetime()}]->(target) " +
+           "RETURN source, collect(r), collect(target)")
+    KnowledgeItem createRelation(String sourceId, String targetId, String relationType, String description, Double weight);
+
+    @Query("MATCH (source:KnowledgeItem {id: $sourceId})-[r:RELATES_TO]->(target:KnowledgeItem {id: $targetId}) DELETE r")
+    void deleteRelation(String sourceId, String targetId);
+
+    @Query("MATCH (k:KnowledgeItem {id: $id})-[r:RELATES_TO]->(related:KnowledgeItem) RETURN related, r")
+    List<KnowledgeItem> findDirectRelations(String id);
+
+    @Query("MATCH (k:KnowledgeItem {id: $id})<-[r:RELATES_TO]-(related:KnowledgeItem) RETURN related, r")
+    List<KnowledgeItem> findIncomingRelations(String id);
+
+    @Query("MATCH path = (source:KnowledgeItem {id: $sourceId})-[:RELATES_TO*1..$maxDepth]-(target:KnowledgeItem {id: $targetId}) " +
+           "RETURN path LIMIT 1")
+    List<KnowledgeItem> findPath(String sourceId, String targetId, int maxDepth);
+
+    @Query("MATCH (k:KnowledgeItem {id: $id}) " +
+           "OPTIONAL MATCH (k)-[r:RELATES_TO]->(related:KnowledgeItem) " +
+           "RETURN k, collect(r), collect(related)")
+    KnowledgeItem findByIdWithRelations(String id);
 }

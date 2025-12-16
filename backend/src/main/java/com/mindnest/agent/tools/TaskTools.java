@@ -3,6 +3,7 @@ package com.mindnest.agent.tools;
 import com.mindnest.model.entity.KnowledgeItem;
 import com.mindnest.model.entity.KnowledgeItem.KnowledgeType;
 import com.mindnest.model.entity.KnowledgeItem.TaskStatus;
+import com.mindnest.model.entity.KnowledgeRelation.RelationType;
 import com.mindnest.repository.KnowledgeRepository;
 import com.mindnest.repository.VectorRepository.SearchResult;
 import com.mindnest.service.VectorSearchService;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -169,5 +171,96 @@ public class TaskTools {
     public Optional<KnowledgeItem> getTask(String taskId) {
         return knowledgeRepository.findById(taskId)
                 .filter(item -> item.getType() == KnowledgeType.TASK);
+    }
+
+    /**
+     * Find and complete task by title/content match
+     */
+    public Optional<KnowledgeItem> completeTaskByTitle(String titleQuery, String projectId) {
+        log.info("Completing task by title: '{}' in project: {}", titleQuery, projectId);
+
+        // First try exact match in content
+        List<KnowledgeItem> tasks = knowledgeRepository.findByProjectIdAndType(projectId, KnowledgeType.TASK);
+
+        // Find task that matches the query (case-insensitive, partial match)
+        String queryLower = titleQuery.toLowerCase();
+        Optional<KnowledgeItem> matchingTask = tasks.stream()
+                .filter(t -> t.getStatus() != TaskStatus.DONE && t.getStatus() != TaskStatus.CANCELLED)
+                .filter(t -> t.getContent().toLowerCase().contains(queryLower) ||
+                            queryLower.contains(getTaskTitle(t).toLowerCase()))
+                .findFirst();
+
+        if (matchingTask.isPresent()) {
+            KnowledgeItem task = matchingTask.get();
+            task.setStatus(TaskStatus.DONE);
+            task.setUpdatedAt(Instant.now());
+            KnowledgeItem updated = knowledgeRepository.save(task);
+            vectorSearchService.reindex(updated);
+            log.info("Completed task: {} - '{}'", updated.getId(), getTaskTitle(updated));
+            return Optional.of(updated);
+        }
+
+        log.warn("No matching task found for: '{}'", titleQuery);
+        return Optional.empty();
+    }
+
+    private String getTaskTitle(KnowledgeItem task) {
+        String content = task.getContent();
+        int newlineIdx = content.indexOf('\n');
+        return newlineIdx > 0 ? content.substring(0, newlineIdx) : content;
+    }
+
+    /**
+     * Decompose a task into subtasks
+     */
+    public List<KnowledgeItem> decomposeTask(String parentTaskId, List<String> subtaskTitles) {
+        Optional<KnowledgeItem> parentOpt = getTask(parentTaskId);
+        if (parentOpt.isEmpty()) {
+            log.warn("Parent task not found: {}", parentTaskId);
+            return List.of();
+        }
+
+        KnowledgeItem parent = parentOpt.get();
+        List<KnowledgeItem> subtasks = new ArrayList<>();
+
+        for (String title : subtaskTitles) {
+            // Create subtask
+            KnowledgeItem subtask = KnowledgeItem.builder()
+                    .content(title)
+                    .type(KnowledgeType.TASK)
+                    .status(TaskStatus.TODO)
+                    .deadline(parent.getDeadline())
+                    .projectId(parent.getProjectId())
+                    .ownerId(parent.getOwnerId())
+                    .createdAt(Instant.now())
+                    .updatedAt(Instant.now())
+                    .build();
+
+            KnowledgeItem saved = knowledgeRepository.save(subtask);
+            vectorSearchService.index(saved);
+
+            // Create SUBTASK_OF relation to parent
+            knowledgeRepository.createRelation(
+                    saved.getId(),
+                    parentTaskId,
+                    RelationType.SUBTASK_OF.name(),
+                    "Subtask of parent task",
+                    1.0
+            );
+
+            subtasks.add(saved);
+            log.info("Created subtask: {} for parent: {}", saved.getId(), parentTaskId);
+        }
+
+        return subtasks;
+    }
+
+    /**
+     * Get subtasks of a parent task
+     */
+    public List<KnowledgeItem> getSubtasks(String parentTaskId) {
+        return knowledgeRepository.findIncomingRelations(parentTaskId).stream()
+                .filter(item -> item.getType() == KnowledgeType.TASK)
+                .toList();
     }
 }

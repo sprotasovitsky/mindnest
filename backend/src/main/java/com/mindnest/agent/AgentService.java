@@ -5,6 +5,9 @@ import com.google.cloud.vertexai.api.*;
 import com.google.cloud.vertexai.generativeai.GenerativeModel;
 import com.google.cloud.vertexai.generativeai.ResponseHandler;
 import com.mindnest.model.dto.ChatResponse;
+import com.mindnest.model.entity.Conversation;
+import com.mindnest.model.entity.Message;
+import com.mindnest.service.ConversationService;
 import com.mindnest.service.ModelRouter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,6 +25,7 @@ public class AgentService {
     private final VertexAI vertexAI;
     private final ModelRouter modelRouter;
     private final ToolExecutor toolExecutor;
+    private final ConversationService conversationService;
 
     @Value("${vertex-ai.models.chat}")
     private String chatModel;
@@ -35,31 +39,55 @@ public class AgentService {
             - You help manage tasks and projects
             - You respond concisely and to the point
 
-            Rules:
-            - If user shares a fact or information — use create_knowledge to save it
-            - If user asks to create a task — use create_task
-            - If user asks about their tasks — use get_tasks_for_today or get_active_tasks
-            - If user asks to find something — use search_knowledge or search_tasks
-            - If you need the current date — use get_current_date
-            - Always use the appropriate tool for the user's request
+            IMPORTANT TOOL USAGE RULES:
+            1. SAVING INFORMATION:
+               - If user shares facts, shopping items, notes, expenses — use create_knowledge
+               - Use type: FACT for factual data, NOTE for general info, DECISION for decisions
+
+            2. TASKS:
+               - To create a new task — use create_task with title and optional deadline
+               - To mark a task as DONE — use complete_task_by_title with the task title/keywords
+               - To find tasks — use search_tasks
+               - To list active tasks — use get_active_tasks
+
+            3. DELETING/REMOVING:
+               - When user says "remove X from list" or "delete X" — use delete_knowledge with the item name
+               - This is CRITICAL: always use delete_knowledge when asked to remove something
+
+            4. SEARCHING:
+               - To find information — use search_knowledge
+               - To find tasks — use search_tasks
+
+            5. DATES:
+               - If you need current date — use get_current_date
+               - Deadlines like "December 30" should be passed as-is to create_task
+
+            RESPONSE RULES:
             - Respond in the same language the user is using
-            - After using a tool, summarize the result naturally for the user
+            - After using a tool, provide a brief natural confirmation
+            - Always confirm what action was taken
             """;
 
     public ChatResponse processMessage(String message, String projectId, String userId) {
         log.info("Processing message for project: {}, user: {}", projectId, userId);
 
         try {
+            // Get or create conversation
+            UUID userUuid = UUID.fromString(userId);
+            UUID projectUuid = UUID.fromString(projectId);
+            Conversation conversation = conversationService.getOrCreateConversation(userUuid, projectUuid);
+
+            // Save user message
+            conversationService.addMessage(conversation.getId(), Message.Role.user, message, null);
+
+            // Clear sources before processing
+            toolExecutor.clearSources();
+
             // Build the model with tools
             GenerativeModel model = buildModelWithTools();
 
-            // Create content with system instruction embedded in first message
-            List<Content> contents = new ArrayList<>();
-            String promptWithSystem = SYSTEM_PROMPT + "\n\nUser request: " + message;
-            contents.add(Content.newBuilder()
-                    .setRole("user")
-                    .addParts(Part.newBuilder().setText(promptWithSystem).build())
-                    .build());
+            // Build conversation history for context
+            List<Content> contents = buildConversationContents(conversation.getId(), message);
 
             // Generate response (may include function calls)
             GenerateContentResponse response = model.generateContent(contents);
@@ -67,13 +95,25 @@ public class AgentService {
             // Process response - handle function calls if present
             String finalResponse = processResponse(response, projectId, userId, model, contents);
 
+            // Get sources collected during tool execution
+            List<String> sources = toolExecutor.getSources();
+
             // Calculate confidence
             double confidence = calculateConfidence(finalResponse);
 
+            // Save assistant response
+            Map<String, Object> metadata = new HashMap<>();
+            metadata.put("confidence", confidence);
+            if (!sources.isEmpty()) {
+                metadata.put("sources", sources);
+            }
+            conversationService.addMessage(conversation.getId(), Message.Role.assistant, finalResponse, metadata);
+
             return ChatResponse.builder()
                     .reply(finalResponse)
-                    .sources(List.of())
+                    .sources(sources)
                     .confidence(confidence)
+                    .conversationId(conversation.getId().toString())
                     .build();
 
         } catch (Exception e) {
@@ -86,16 +126,63 @@ public class AgentService {
         }
     }
 
+    private List<Content> buildConversationContents(UUID conversationId, String currentMessage) {
+        List<Content> contents = new ArrayList<>();
+
+        // Get recent messages for context (excluding the one we just added)
+        List<Message> history = conversationService.getContextMessages(conversationId);
+
+        // Add system prompt as first user message
+        boolean isFirstUserMessage = true;
+
+        for (Message msg : history) {
+            // Skip the current message as it's already being processed
+            if (msg.getContent().equals(currentMessage) && msg.getRole() == Message.Role.user) {
+                continue;
+            }
+
+            String role = msg.getRole() == Message.Role.user ? "user" : "model";
+            String content = msg.getContent();
+
+            // Embed system prompt in first user message
+            if (isFirstUserMessage && msg.getRole() == Message.Role.user) {
+                content = SYSTEM_PROMPT + "\n\nUser request: " + content;
+                isFirstUserMessage = false;
+            }
+
+            contents.add(Content.newBuilder()
+                    .setRole(role)
+                    .addParts(Part.newBuilder().setText(content).build())
+                    .build());
+        }
+
+        // Add current message with system prompt if no history
+        String currentContent = currentMessage;
+        if (isFirstUserMessage || contents.isEmpty()) {
+            currentContent = SYSTEM_PROMPT + "\n\nUser request: " + currentMessage;
+        }
+
+        contents.add(Content.newBuilder()
+                .setRole("user")
+                .addParts(Part.newBuilder().setText(currentContent).build())
+                .build());
+
+        return contents;
+    }
+
     private GenerativeModel buildModelWithTools() throws IOException {
         // Define available tools
         Tool tools = Tool.newBuilder()
                 .addFunctionDeclarations(buildCreateKnowledgeFunction())
                 .addFunctionDeclarations(buildSearchKnowledgeFunction())
+                .addFunctionDeclarations(buildDeleteKnowledgeFunction())
                 .addFunctionDeclarations(buildCreateTaskFunction())
                 .addFunctionDeclarations(buildGetTasksForTodayFunction())
                 .addFunctionDeclarations(buildGetActiveTasksFunction())
                 .addFunctionDeclarations(buildUpdateTaskStatusFunction())
+                .addFunctionDeclarations(buildCompleteTaskByTitleFunction())
                 .addFunctionDeclarations(buildSearchTasksFunction())
+                .addFunctionDeclarations(buildDecomposeTaskFunction())
                 .addFunctionDeclarations(buildCreateProjectFunction())
                 .addFunctionDeclarations(buildListProjectsFunction())
                 .addFunctionDeclarations(buildGetCurrentDateFunction())
@@ -166,10 +253,29 @@ public class AgentService {
 
             // Get final response after function execution
             GenerateContentResponse finalResponse = model.generateContent(contents);
-            return ResponseHandler.getText(finalResponse);
+            String finalText = ResponseHandler.getText(finalResponse);
+
+            // Fallback if response is empty
+            if (finalText == null || finalText.isBlank()) {
+                // Build response from function results
+                StringBuilder fallbackResponse = new StringBuilder();
+                for (Part part : functionResponses) {
+                    if (part.hasFunctionResponse()) {
+                        String result = part.getFunctionResponse().getResponse()
+                                .getFieldsMap().get("result").getStringValue();
+                        if (result != null && !result.isBlank()) {
+                            fallbackResponse.append(result).append("\n");
+                        }
+                    }
+                }
+                return fallbackResponse.length() > 0
+                        ? fallbackResponse.toString().trim()
+                        : "Done.";
+            }
+            return finalText;
         }
 
-        return textResponse.toString();
+        return textResponse.toString().isBlank() ? "I understand." : textResponse.toString();
     }
 
     private Map<String, Object> protoToMap(com.google.protobuf.Struct struct) {
@@ -228,6 +334,21 @@ public class AgentService {
                         .putProperties("limit", Schema.newBuilder()
                                 .setType(Type.INTEGER)
                                 .setDescription("Maximum number of results (default 5)")
+                                .build())
+                        .addRequired("query")
+                        .build())
+                .build();
+    }
+
+    private FunctionDeclaration buildDeleteKnowledgeFunction() {
+        return FunctionDeclaration.newBuilder()
+                .setName("delete_knowledge")
+                .setDescription("Delete/remove an item from the knowledge base by searching for it. Use when user says 'remove X from the list' or 'delete X'")
+                .setParameters(Schema.newBuilder()
+                        .setType(Type.OBJECT)
+                        .putProperties("query", Schema.newBuilder()
+                                .setType(Type.STRING)
+                                .setDescription("Search query to find the item to delete (e.g. 'Christmas tree', 'champagne')")
                                 .build())
                         .addRequired("query")
                         .build())
@@ -297,6 +418,21 @@ public class AgentService {
                 .build();
     }
 
+    private FunctionDeclaration buildCompleteTaskByTitleFunction() {
+        return FunctionDeclaration.newBuilder()
+                .setName("complete_task_by_title")
+                .setDescription("Mark a task as completed by searching for it by title or description. Use this when user says 'mark task X as done' or 'completed task X'")
+                .setParameters(Schema.newBuilder()
+                        .setType(Type.OBJECT)
+                        .putProperties("title", Schema.newBuilder()
+                                .setType(Type.STRING)
+                                .setDescription("Task title or keywords to find the task (e.g. 'buy alcohol', 'shopping')")
+                                .build())
+                        .addRequired("title")
+                        .build())
+                .build();
+    }
+
     private FunctionDeclaration buildSearchTasksFunction() {
         return FunctionDeclaration.newBuilder()
                 .setName("search_tasks")
@@ -312,6 +448,29 @@ public class AgentService {
                                 .setDescription("Maximum results (default 5)")
                                 .build())
                         .addRequired("query")
+                        .build())
+                .build();
+    }
+
+    private FunctionDeclaration buildDecomposeTaskFunction() {
+        return FunctionDeclaration.newBuilder()
+                .setName("decompose_task")
+                .setDescription("Break down a task into smaller subtasks")
+                .setParameters(Schema.newBuilder()
+                        .setType(Type.OBJECT)
+                        .putProperties("task_id", Schema.newBuilder()
+                                .setType(Type.STRING)
+                                .setDescription("ID of the parent task to decompose")
+                                .build())
+                        .putProperties("subtasks", Schema.newBuilder()
+                                .setType(Type.ARRAY)
+                                .setItems(Schema.newBuilder()
+                                        .setType(Type.STRING)
+                                        .build())
+                                .setDescription("List of subtask titles")
+                                .build())
+                        .addRequired("task_id")
+                        .addRequired("subtasks")
                         .build())
                 .build();
     }

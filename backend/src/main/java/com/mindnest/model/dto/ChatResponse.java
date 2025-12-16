@@ -11,4 +11,5 @@ public class ChatResponse {
     private String reply;
     private List<String> sources;
     private Double confidence;
+    private String conversationId;
 }

@@ -7,10 +7,13 @@ import lombok.Builder;
 import org.springframework.data.neo4j.core.schema.Id;
 import org.springframework.data.neo4j.core.schema.Node;
 import org.springframework.data.neo4j.core.schema.GeneratedValue;
+import org.springframework.data.neo4j.core.schema.Relationship;
 import org.springframework.data.neo4j.core.support.UUIDStringGenerator;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
 @Node("KnowledgeItem")
 @Data
@@ -38,6 +41,10 @@ public class KnowledgeItem {
     private Instant createdAt;
 
     private Instant updatedAt;
+
+    @Relationship(type = "RELATES_TO", direction = Relationship.Direction.OUTGOING)
+    @Builder.Default
+    private List<KnowledgeRelation> relations = new ArrayList<>();
 
     public enum KnowledgeType {
         FACT,

@@ -84,21 +84,49 @@ public class TimeTools {
     }
 
     private LocalDate tryParseExact(String dateStr) {
-        // Try various date formats
-        String[] formats = {
+        LocalDate today = LocalDate.now();
+        int currentYear = today.getYear();
+
+        // Try various date formats with year
+        String[] formatsWithYear = {
                 "yyyy-MM-dd",
                 "dd.MM.yyyy",
                 "dd/MM/yyyy",
                 "MM/dd/yyyy",
                 "d MMMM yyyy",
-                "d MMMM",
-                "MMMM d"
+                "MMMM d, yyyy",
+                "MMMM d yyyy"
         };
 
-        for (String format : formats) {
+        for (String format : formatsWithYear) {
             try {
-                DateTimeFormatter formatter = DateTimeFormatter.ofPattern(format);
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern(format, java.util.Locale.ENGLISH);
                 return LocalDate.parse(dateStr, formatter);
+            } catch (Exception ignored) {
+            }
+        }
+
+        // Try formats without year - use current or next year
+        String[] formatsWithoutYear = {
+                "d MMMM",
+                "MMMM d",
+                "MMMM dd",
+                "dd MMMM"
+        };
+
+        for (String format : formatsWithoutYear) {
+            try {
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern(format, java.util.Locale.ENGLISH);
+                java.time.temporal.TemporalAccessor parsed = formatter.parse(dateStr);
+                int day = parsed.get(java.time.temporal.ChronoField.DAY_OF_MONTH);
+                int month = parsed.get(java.time.temporal.ChronoField.MONTH_OF_YEAR);
+
+                // If the date is in the past this year, use next year
+                LocalDate result = LocalDate.of(currentYear, month, day);
+                if (result.isBefore(today)) {
+                    result = LocalDate.of(currentYear + 1, month, day);
+                }
+                return result;
             } catch (Exception ignored) {
             }
         }
@@ -109,7 +137,11 @@ public class TimeTools {
             if (parts.length == 2) {
                 int day = Integer.parseInt(parts[0]);
                 int month = Integer.parseInt(parts[1]);
-                return LocalDate.of(LocalDate.now().getYear(), month, day);
+                LocalDate result = LocalDate.of(currentYear, month, day);
+                if (result.isBefore(today)) {
+                    result = LocalDate.of(currentYear + 1, month, day);
+                }
+                return result;
             }
         } catch (Exception ignored) {
         }

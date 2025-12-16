@@ -45,6 +45,11 @@ vertex-ai:
     chat-pro: gemini-1.5-pro-002
     embedding: text-embedding-004
 
+# JWT
+jwt:
+  secret: ${JWT_SECRET:bWluZG5lc3Qtc2VjcmV0LWtleS1mb3ItZGV2ZWxvcG1lbnQtb25seS1jaGFuZ2UtaW4tcHJvZHVjdGlvbg==}
+  expiration: ${JWT_EXPIRATION:86400000}
+
 # Logging
 logging:
   level:
