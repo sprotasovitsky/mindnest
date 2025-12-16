@@ -17,6 +17,12 @@ MindNest is an AI-first platform for knowledge and task management through a cha
 ## Common Commands
 
 ### Backend (from `backend/` directory)
+
+**IMPORTANT**: Backend requires Java 21. On macOS with Homebrew:
+```bash
+export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home
+```
+
 ```bash
 ./gradlew build              # Build the project
 ./gradlew bootRun            # Run the Spring Boot application
@@ -94,7 +100,9 @@ docker-compose logs -f       # View logs
 
 Service account key is stored in `.secrets/` (gitignored). To run backend with Vertex AI:
 ```bash
-export GOOGLE_APPLICATION_CREDENTIALS=/path/to/MindNest/.secrets/mindnest-481413-d59e7e99bbfb.json
+# Full command to run backend (from backend/ directory):
+export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home
+export GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/../.secrets/mindnest-481413-d59e7e99bbfb.json
 export VERTEX_AI_PROJECT_ID=mindnest-481413
 ./gradlew bootRun
 ```
