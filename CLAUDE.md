@@ -112,6 +112,96 @@ export VERTEX_AI_PROJECT_ID=mindnest-481413
 - `NEO4J_HOST/PORT/USER/PASSWORD`
 - `QDRANT_HOST/PORT`
 
+## Database Access & Credentials
+
+### PostgreSQL (users, projects, members)
+- **Credentials**: `mindnest:mindnest` (user:password)
+- **Database**: `mindnest`
+```bash
+docker exec mindnest-postgres psql -U mindnest -d mindnest -c "SELECT * FROM users"
+docker exec mindnest-postgres psql -U mindnest -d mindnest -c "SELECT * FROM projects"
+docker exec mindnest-postgres psql -U mindnest -d mindnest -c "SELECT u.name, pm.role FROM project_members pm JOIN users u ON pm.user_id = u.id WHERE pm.project_id = '<PROJECT_ID>'"
+```
+
+### Neo4j (knowledge graph)
+- **Credentials**: `neo4j:mindnest` (user:password)
+- **NOT `password` or `mindnest123`**
+```bash
+docker exec mindnest-neo4j cypher-shell -u neo4j -p mindnest "MATCH (k:KnowledgeItem {projectId: '<PROJECT_ID>'}) RETURN k.type, count(*)"
+docker exec mindnest-neo4j cypher-shell -u neo4j -p mindnest "MATCH (k:KnowledgeItem {projectId: '<PROJECT_ID>', type: 'TASK'}) RETURN k.content, k.status, k.deadline"
+```
+
+### Qdrant (vector search)
+- **Collection name**: `knowledge_vectors` (NOT `knowledge`)
+- **No authentication**
+```bash
+# Count all vectors
+curl -s "http://localhost:6333/collections/knowledge_vectors" | jq '.result.points_count'
+
+# Get vectors for project
+curl -s "http://localhost:6333/collections/knowledge_vectors/points/scroll" \
+  -H "Content-Type: application/json" \
+  -d '{"filter":{"must":[{"key":"projectId","match":{"value":"<PROJECT_ID>"}}]},"limit":10,"with_payload":true}' | jq
+```
+
+## Testing
+
+### Test Scenarios
+Test scenarios are in `tests/scenarios/`. Each scenario is a markdown file with steps to execute.
+
+```bash
+# Location
+tests/
+├── README.md           # Test process documentation
+└── scenarios/
+    └── 001-new-year-party.md
+```
+
+### Running Tests
+1. Start infrastructure: `cd docker && docker-compose up -d`
+2. Start backend with proper Java/credentials (see Environment Variables)
+3. Execute scenario steps via curl or test scripts
+4. Run post-test analysis (see tests/README.md)
+
+### Post-Test Analysis Checklist
+After each test scenario, verify:
+- [ ] All tasks have correct status (DONE/TODO)
+- [ ] Dates/deadlines have correct year (not 2023!)
+- [ ] No duplicate data in Neo4j
+- [ ] Vector count in Qdrant matches Neo4j count
+- [ ] Deleted items are actually removed
+
+## Agent Architecture
+
+### Key Principle: Tools, Not Agents
+When adding new AI capabilities, **add new tools to existing agent** rather than creating new agents. The single `AgentService` handles all interactions.
+
+### Tool Structure
+```
+AgentService.java          # Orchestrates LLM calls, defines function declarations
+    ↓
+ToolExecutor.java          # Routes function calls to appropriate tool class
+    ↓
+*Tools.java                # Actual implementations
+├── KnowledgeTools.java    # create, search, delete knowledge
+├── TaskTools.java         # create, complete, search tasks
+├── ProjectTools.java      # project/member management
+└── TimeTools.java         # date parsing
+```
+
+### Adding New Tool
+1. Add method to appropriate `*Tools.java` class
+2. Add function declaration in `AgentService.java` (TOOL_DECLARATIONS)
+3. Add executor method in `ToolExecutor.java`
+4. Update system prompt in `AgentService.java` if needed
+
+### Common Issues Fixed
+- **Tasks not completing**: Use `complete_task_by_title` (searches by name, not ID)
+- **Empty responses**: Fallback returns function call results if LLM returns empty text
+- **Delete not working**: Use `delete_knowledge` tool with query-based search
+- **Wrong year in dates**: TimeTools uses current/next year for dates without year
+- **Data duplication**: 85% similarity check before creating new items
+
 ## State Management (Mobile)
 
 Uses Riverpod with code generation. After modifying providers or data classes:
