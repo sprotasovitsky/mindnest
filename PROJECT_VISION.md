@@ -1,46 +1,46 @@
-# MindNest - Видение проекта
+# MindNest - Project Vision
 
-## Главная цель
+## Main Goal
 
-Создать **AI-first платформу** для управления знаниями и задачами через **чат-интерфейс**, где каждый пользователь работает через своего персонального агента — как с секретарём, который мгновенно находит любую информацию и управляет твоими делами.
+Create an **AI-first platform** for knowledge and task management through a **chat interface**, where each user works through their personal agent — like having a secretary who instantly finds any information and manages your affairs.
 
-**Метафора:** Confluence + Jira, но AI-first и через чат. Секретарь, который очень быстро пользуется этими системами за тебя.
+**Metaphor:** Confluence + Jira, but AI-first and through chat. A secretary who uses these systems very quickly on your behalf.
 
 ---
 
-## ВАЖНО: Фундаментальные принципы
+## IMPORTANT: Fundamental Principles
 
-### 1. Знания, а не документы
+### 1. Knowledge, Not Documents
 
-**MindNest — это граф знаний, а не редактор документов.**
+**MindNest is a knowledge graph, not a document editor.**
 
-- Мы **НЕ конкурируем** с Google Docs, Notion как редактором
-- Документ — это просто контейнер знаний на входе/выходе
-- Внутри храним **структуру знаний и связей**, не форматированный текст
-- На выходе можем сформировать любой документ из знаний когда нужно
+- We **DO NOT compete** with Google Docs, Notion as an editor
+- A document is just a container for knowledge on input/output
+- Inside we store **knowledge structure and connections**, not formatted text
+- On output we can generate any document from knowledge when needed
 
 ```
-Google Docs: редактор → форматирование → документ
-MindNest:    знания → граф связей → документ (когда нужно)
+Google Docs: editor → formatting → document
+MindNest:    knowledge → connection graph → document (when needed)
 ```
 
-**Пример:**
+**Example:**
 ```
-Вход: Google Doc с заметками встречи
+Input: Google Doc with meeting notes
       ↓
-MindNest: извлекает знания, решения, задачи, вопросы
-          строит связи с существующими знаниями
+MindNest: extracts knowledge, decisions, tasks, questions
+          builds connections with existing knowledge
       ↓
-Выход: "Сформируй отчёт для руководства" → красивый документ
+Output: "Generate a report for management" → beautiful document
 ```
 
-### 2. Пассивный источник снаружи, активный внутри
+### 2. Passive Source Externally, Active Internally
 
-**MindNest — это память и мозг команды, к которому обращаются другие агенты.**
+**MindNest is the memory and brain of a team, which other agents access.**
 
 ```
 ┌─────────────────────────────────────────────────┐
-│                 ВНЕШНИЙ МИР                     │
+│                 EXTERNAL WORLD                   │
 │                                                 │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐      │
 │  │ Coding   │  │ Email    │  │ Calendar │      │
@@ -49,366 +49,366 @@ MindNest: извлекает знания, решения, задачи, воп�
 │       │             │             │            │
 │       └─────────────┴─────────────┘            │
 │                     │                          │
-│                     ↓ MCP (запросы к MindNest) │
+│                     ↓ MCP (requests to MindNest)│
 │       ┌─────────────────────────────┐          │
 │       │   MindNest MCP Server       │          │
 │       └─────────────────────────────┘          │
 └─────────────────────────────────────────────────┘
 ```
 
-| Внутри MindNest | Снаружи |
+| Inside MindNest | Outside |
 |-----------------|---------|
-| **Активен**: валидирует, связывает, создаёт | **Пассивен**: только отвечает на запросы |
-| Агенты работают автономно | НЕ командует внешним системам |
-| Сам управляет графом знаний | Предоставляет MCP-сервер для других |
+| **Active**: validates, connects, creates | **Passive**: only responds to requests |
+| Agents work autonomously | DOES NOT command external systems |
+| Manages knowledge graph itself | Provides MCP server for others |
 
-**Мы НЕ используем** MCP для подключения к внешним системам (пока).
-**Мы предоставляем** MCP-сервер, чтобы другие агенты могли получать знания и намерения.
+**We DO NOT use** MCP to connect to external systems (for now).
+**We provide** an MCP server so other agents can access knowledge and intents.
 
-**Почему так:**
-- Простота — не управляем внешними системами
-- Надёжность — меньше точек отказа
-- Чистота — MindNest = память, другие агенты = руки
-- Не запутаемся на старте
+**Why:**
+- Simplicity — don't manage external systems
+- Reliability — fewer failure points
+- Clarity — MindNest = memory, other agents = hands
+- Won't get confused at the start
 
-### 3. Отображение — по запросу
+### 3. Display — On Demand
 
-- Основной интерфейс — текстовый чат
-- Если нужно красиво отобразить (карточки, списки) — агент это сделает
-- Никаких фиксированных дашбордов, но структурированный вывод когда уместно
+- Primary interface — text chat
+- If beautiful display needed (cards, lists) — agent will do it
+- No fixed dashboards, but structured output when appropriate
 
 ```
-User: Покажи задачи на сегодня
+User: Show tasks for today
 
-Agent: [отображает как карточки или список — что уместнее]
+Agent: [displays as cards or list — whatever is more appropriate]
 
-       📋 Задачи на 15.12:
+       📋 Tasks for 12/15:
        ┌────────────────────────┐
-       │ Настроить nginx       │
-       │ Дедлайн: сегодня      │
-       │ Связано: API Design   │
+       │ Configure nginx        │
+       │ Deadline: today        │
+       │ Related: API Design    │
        └────────────────────────┘
 ```
 
 ---
 
-## Ключевые принципы
+## Key Principles
 
-### 1. Знания и намерения важнее структуры
-- Не важно как выглядит документ — важно какие знания в нём
-- Пользователь диктует/загружает → агент извлекает и сохраняет знания
-- Форматирование и структура — на выходе, когда нужно (другими агентами)
+### 1. Knowledge and Intents Over Structure
+- It doesn't matter how a document looks — what matters is what knowledge is in it
+- User dictates/uploads → agent extracts and saves knowledge
+- Formatting and structure — on output, when needed (by other agents)
 
-### 2. Всё через чат — никаких дашбордов
-- Чат — единственный интерфейс
-- Нет списков задач, канбан-досок, дашбордов
-- Спрашиваешь → получаешь. Как разговор с секретарём
+### 2. Everything Through Chat — No Dashboards
+- Chat — the only interface
+- No task lists, kanban boards, dashboards
+- You ask → you receive. Like talking to a secretary
 
-### 3. Всё связано
-- Знания ↔ Задачи ↔ Люди ↔ Проекты
-- AI автоматически строит граф связей
-- Семантический поиск находит по смыслу, не по ключевым словам
+### 3. Everything is Connected
+- Knowledge ↔ Tasks ↔ People ↔ Projects
+- AI automatically builds connection graph
+- Semantic search finds by meaning, not keywords
 
-### 4. Доверие через прозрачность
-- **Confidence Score** — агент показывает уверенность в ответе
-- **Показывать источники** — "По данным документа X (обновлён 2 дня назад)..."
-- Борьба с галлюцинациями через явные ссылки на данные
-
----
-
-## Целевая аудитория
-
-- **Маленькие IT-команды** (2-10 человек)
-- **Малый бизнес** (не только IT)
-- **Семьи** с совместными проектами (ремонт, отпуск, покупки)
-- Все, кому нужен простой инструмент для знаний + задач без сложного UI
+### 4. Trust Through Transparency
+- **Confidence Score** — agent shows confidence in response
+- **Show sources** — "According to document X (updated 2 days ago)..."
+- Fighting hallucinations through explicit data references
 
 ---
 
-## 1. Управление знаниями
+## Target Audience
 
-### Цель
-Хранить и находить информацию через разговор
-
-### Возможности
-- ✅ Создание знаний через чат (диктуешь → агент сохраняет)
-- ✅ Загрузка файлов → агент извлекает знания
-- ✅ Организация по проектам
-- ✅ **Семантический поиск** — по смыслу, не по словам
-- ✅ **Автоматические связи** — агент находит связанное
-- ✅ **Версионность** — история изменений
-
-### Пример
-
-```
-User: Вот заметки со встречи: [текст или файл]
-
-Agent: Извлёк из заметок:
-       - Решение: используем PostgreSQL
-       - Задача: настроить репликацию (@Ivan)
-       - Открытый вопрос: какой хостинг выбрать?
-
-       Сохранил в проект "Backend". Создать задачу для Ivan?
-
-... позже ...
-
-User: Что мы решили по базе данных?
-
-Agent: Вы решили использовать PostgreSQL (встреча от 10.12).
-       Связанные задачи: настройка репликации (in progress).
-       Источник: "Заметки встречи 10.12"
-```
+- **Small IT teams** (2-10 people)
+- **Small businesses** (not just IT)
+- **Families** with joint projects (renovation, vacation, shopping)
+- Anyone who needs a simple tool for knowledge + tasks without complex UI
 
 ---
 
-## 2. Управление задачами
+## 1. Knowledge Management
 
-### Цель
-Ставить и отслеживать задачи через разговор
+### Goal
+Store and find information through conversation
 
-### Возможности
-- ✅ Создание задач через описание
-- ✅ Просмотр задач: "Что на мне сегодня?"
-- ✅ **Дедлайны** — даты на задачах
-- ✅ **Автоматическое связывание** с релевантными знаниями
-- ✅ Изменение статуса через чат
-- ✅ **Декомпозиция** — разбить на подзадачи
-- ✅ Обнаружение похожих/дублирующих задач
+### Features
+- ✅ Create knowledge through chat (you dictate → agent saves)
+- ✅ Upload files → agent extracts knowledge
+- ✅ Organization by projects
+- ✅ **Semantic search** — by meaning, not words
+- ✅ **Automatic connections** — agent finds related items
+- ✅ **Versioning** — change history
 
-### Пример
+### Example
 
 ```
-User: Какие задачи на сегодня?
+User: Here are meeting notes: [text or file]
 
-Agent: На сегодня 3 задачи:
-       1. "Настроить nginx" — дедлайн сегодня
-       2. "Ревью кода Anna" — дедлайн завтра
-       3. "Подготовить презентацию" — дедлайн пятница
+Agent: Extracted from notes:
+       - Decision: using PostgreSQL
+       - Task: set up replication (@Ivan)
+       - Open question: which hosting to choose?
 
-       Начнём с nginx? Есть связанная документация.
+       Saved to "Backend" project. Create task for Ivan?
 
-User: Да, покажи что там
+... later ...
 
-Agent: Задача: "Настроить nginx"
-       Контекст: нужен SSL (из обсуждения 08.12), rate limiting
-       Связано с: документ "API Architecture", задача "Деплой на прод"
+User: What did we decide about the database?
 
-       Источник: задача создана Anna 05.12
+Agent: You decided to use PostgreSQL (meeting from 12/10).
+       Related tasks: replication setup (in progress).
+       Source: "Meeting Notes 12/10"
 ```
 
 ---
 
-## 3. Чат-интерфейс с персональным агентом
+## 2. Task Management
 
-### Цель
-Работа через разговор — как с секретарём
+### Goal
+Create and track tasks through conversation
 
-### Принципы
-- 💬 **Только чат** — никаких дашбордов, списков, канбанов
-- 👤 **Персонализация** — агент знает твою роль и предпочтения
-- 🎯 **Onboarding** — агент сам начинает диалог с новыми пользователями
-- 📱 **Мобильный доступ** — работает на телефоне
+### Features
+- ✅ Create tasks through description
+- ✅ View tasks: "What's on me today?"
+- ✅ **Deadlines** — dates on tasks
+- ✅ **Automatic linking** with relevant knowledge
+- ✅ Change status through chat
+- ✅ **Decomposition** — break into subtasks
+- ✅ Detect similar/duplicate tasks
 
-### Onboarding (для новых пользователей)
+### Example
 
 ```
-Agent: Привет! Я твой персональный агент в MindNest.
+User: What tasks for today?
 
-       Расскажи немного о себе:
-       - Какая у тебя роль? (разработчик, менеджер, дизайнер...)
-       - Над какими проектами работаешь?
+Agent: You have 3 tasks for today:
+       1. "Configure nginx" — deadline today
+       2. "Code review Anna" — deadline tomorrow
+       3. "Prepare presentation" — deadline Friday
 
-       Это поможет мне лучше понимать твои запросы.
+       Start with nginx? There's related documentation.
+
+User: Yes, show me what's there
+
+Agent: Task: "Configure nginx"
+       Context: need SSL (from discussion 12/08), rate limiting
+       Related to: document "API Architecture", task "Deploy to prod"
+
+       Source: task created by Anna 12/05
 ```
 
-### Персоны (примеры)
+---
+
+## 3. Chat Interface with Personal Agent
+
+### Goal
+Work through conversation — like with a secretary
+
+### Principles
+- 💬 **Chat only** — no dashboards, lists, kanbans
+- 👤 **Personalization** — agent knows your role and preferences
+- 🎯 **Onboarding** — agent initiates dialog with new users
+- 📱 **Mobile access** — works on phone
+
+### Onboarding (for new users)
+
+```
+Agent: Hi! I'm your personal agent in MindNest.
+
+       Tell me a bit about yourself:
+       - What's your role? (developer, manager, designer...)
+       - What projects are you working on?
+
+       This will help me better understand your requests.
+```
+
+### Personas (examples)
 
 ```yaml
 Developer:
-  - Технические детали
-  - Связи с кодом/API
-  - Напоминания про тесты
+  - Technical details
+  - Code/API connections
+  - Test reminders
 
 Product Manager:
-  - Прогресс и статусы
-  - Бизнес-контекст
-  - Блокеры команды
+  - Progress and statuses
+  - Business context
+  - Team blockers
 
-Семья:
-  - Простой язык
-  - Фокус на общих делах
-  - Напоминания о событиях
+Family:
+  - Simple language
+  - Focus on shared tasks
+  - Event reminders
 ```
 
-### Типичный workflow
+### Typical Workflow
 
 ```
-User: Доброе утро!
+User: Good morning!
 
-Agent: Привет! На сегодня:
-       - 2 задачи с дедлайном
-       - Новое сообщение от Anna по проекту X
+Agent: Hi! For today:
+       - 2 tasks with deadline
+       - New message from Anna on project X
 
-       С чего начнём?
+       Where shall we start?
 ```
 
 ---
 
-## 4. Модель данных
+## 4. Data Model
 
-### Единая сущность: KnowledgeItem
+### Single Entity: KnowledgeItem
 
-Отказываемся от традиционных отдельных сущностей (Document, Comment, Task как UI-элементы).
-Всё — это знание разного типа:
+Moving away from traditional separate entities (Document, Comment, Task as UI elements).
+Everything is knowledge of different types:
 
 ```yaml
 KnowledgeItem:
-  id: уникальный идентификатор
+  id: unique identifier
   type: fact | task | decision | note | question
-  content: текст знания
-  status: (для task) todo | in_progress | done
-  deadline: (для task) дата, опционально
-  owner: ответственный
-  project_id: проект
-  relations: связи с другими KnowledgeItem
-  created_at: когда создано
-  updated_at: когда изменено
-  created_by: кем создано
+  content: knowledge text
+  status: (for task) todo | in_progress | done
+  deadline: (for task) date, optional
+  owner: responsible person
+  project_id: project
+  relations: connections to other KnowledgeItems
+  created_at: when created
+  updated_at: when modified
+  created_by: who created
 ```
 
-### Примеры типов
+### Type Examples
 
-| Тип | Пример |
-|-----|--------|
-| `fact` | "Мы используем PostgreSQL" |
-| `task` | "Настроить репликацию базы" |
-| `decision` | "Решили использовать AWS" |
-| `note` | "Заметки со встречи 10.12" |
-| `question` | "Какой хостинг выбрать?" |
+| Type | Example |
+|------|---------|
+| `fact` | "We use PostgreSQL" |
+| `task` | "Set up database replication" |
+| `decision` | "Decided to use AWS" |
+| `note` | "Meeting notes 12/10" |
+| `question` | "Which hosting to choose?" |
 
-### Связи между знаниями
+### Connections Between Knowledge
 
-Агент автоматически создаёт связи:
-- `relates_to` — общая связь
-- `implements` — задача реализует решение
-- `blocks` — задача блокирует другую
-- `answers` — знание отвечает на вопрос
+Agent automatically creates connections:
+- `relates_to` — general connection
+- `implements` — task implements decision
+- `blocks` — task blocks another
+- `answers` — knowledge answers a question
 
-### История чата и контекст LLM
+### Chat History and LLM Context
 
-**Где храним историю чата:**
+**Where we store chat history:**
 
 ```yaml
 Conversation:
-  id: уникальный идентификатор
-  user_id: пользователь
-  project_id: проект (контекст)
-  created_at: начало разговора
+  id: unique identifier
+  user_id: user
+  project_id: project (context)
+  created_at: conversation start
 
 Message:
-  id: уникальный идентификатор
-  conversation_id: разговор
+  id: unique identifier
+  conversation_id: conversation
   role: user | assistant
-  content: текст сообщения
-  timestamp: когда отправлено
-  tokens_used: сколько токенов (для аналитики)
-  model_used: какая модель отвечала
+  content: message text
+  timestamp: when sent
+  tokens_used: how many tokens (for analytics)
+  model_used: which model responded
 ```
 
-**Хранилище:** PostgreSQL (простые запросы, пагинация, не нужен граф)
+**Storage:** PostgreSQL (simple queries, pagination, no graph needed)
 
-**Стратегия контекста для LLM:**
+**LLM Context Strategy:**
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    CONTEXT WINDOW                           │
 │                                                             │
 │  ┌─────────────────────────────────────────────────────┐   │
-│  │ 1. System Prompt (персона + инструкции)             │   │
+│  │ 1. System Prompt (persona + instructions)           │   │
 │  │    ~500-1000 tokens                                 │   │
 │  └─────────────────────────────────────────────────────┘   │
 │                                                             │
 │  ┌─────────────────────────────────────────────────────┐   │
-│  │ 2. Контекст пользователя                            │   │
-│  │    - Роль, предпочтения                             │   │
-│  │    - Текущий проект                                 │   │
+│  │ 2. User Context                                     │   │
+│  │    - Role, preferences                              │   │
+│  │    - Current project                                │   │
 │  │    ~200-500 tokens                                  │   │
 │  └─────────────────────────────────────────────────────┘   │
 │                                                             │
 │  ┌─────────────────────────────────────────────────────┐   │
-│  │ 3. Релевантные знания (RAG)                         │   │
-│  │    - Семантический поиск по запросу                 │   │
-│  │    - Top-5 релевантных KnowledgeItems               │   │
+│  │ 3. Relevant Knowledge (RAG)                         │   │
+│  │    - Semantic search by query                       │   │
+│  │    - Top-5 relevant KnowledgeItems                  │   │
 │  │    ~1000-2000 tokens                                │   │
 │  └─────────────────────────────────────────────────────┘   │
 │                                                             │
 │  ┌─────────────────────────────────────────────────────┐   │
-│  │ 4. История чата (sliding window)                    │   │
-│  │    - Последние N сообщений                          │   │
-│  │    - Если N > лимита → суммаризация старых          │   │
+│  │ 4. Chat History (sliding window)                    │   │
+│  │    - Last N messages                                │   │
+│  │    - If N > limit → summarize old ones              │   │
 │  │    ~2000-4000 tokens                                │   │
 │  └─────────────────────────────────────────────────────┘   │
 │                                                             │
 │  ┌─────────────────────────────────────────────────────┐   │
-│  │ 5. Текущий запрос пользователя                      │   │
+│  │ 5. Current User Request                             │   │
 │  │    ~100-500 tokens                                  │   │
 │  └─────────────────────────────────────────────────────┘   │
 │                                                             │
-│  ИТОГО: ~4000-8000 tokens на запрос                        │
-│  Gemini Flash контекст: 1M tokens (есть запас)             │
+│  TOTAL: ~4000-8000 tokens per request                      │
+│  Gemini Flash context: 1M tokens (plenty of room)          │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**Стратегия sliding window + summary:**
+**Sliding window + summary strategy:**
 
 ```
-Сообщения 1-10:  Полностью в контексте
-Сообщения 11-30: Суммаризация → 1 блок "Ранее обсуждали: ..."
-Сообщения 31+:   Не в контексте (но можно найти через RAG)
+Messages 1-10:  Fully in context
+Messages 11-30: Summarization → 1 block "Previously discussed: ..."
+Messages 31+:   Not in context (but can be found via RAG)
 ```
 
-**Пример:**
+**Example:**
 
 ```
 [System Prompt]
-Ты персональный ассистент в MindNest...
+You are a personal assistant in MindNest...
 
 [User Context]
-Пользователь: Сергей, роль: разработчик
-Текущий проект: "MindNest MVP"
+User: Sergey, role: developer
+Current project: "MindNest MVP"
 
 [Relevant Knowledge - RAG]
-- Задача: "Настроить nginx" (in_progress, дедлайн сегодня)
-- Факт: "Используем PostgreSQL для метаданных"
-- Решение: "Flutter для мобильного приложения"
+- Task: "Configure nginx" (in_progress, deadline today)
+- Fact: "Using PostgreSQL for metadata"
+- Decision: "Flutter for mobile app"
 
 [Chat Summary]
-Ранее обсуждали: архитектуру системы, выбор технологий,
-план MVP. Решили использовать Java + Spring Boot.
+Previously discussed: system architecture, technology choices,
+MVP plan. Decided to use Java + Spring Boot.
 
 [Recent Messages]
-User: Какие задачи на сегодня?
-Assistant: У тебя 2 задачи с дедлайном сегодня...
-User: Расскажи подробнее про nginx
+User: What tasks for today?
+Assistant: You have 2 tasks with deadline today...
+User: Tell me more about nginx
 
 [Current Message]
-User: А что там с SSL?
+User: What about SSL?
 ```
 
-**Оптимизация стоимости:**
+**Cost optimization:**
 
-| Стратегия | Экономия |
-|-----------|----------|
-| Суммаризация через Flash-8B | Дешёвая модель для summary |
-| Кэширование RAG результатов | Меньше embedding запросов |
-| Короткие system prompts | Меньше токенов на каждый запрос |
-| Lazy loading контекста | Грузим знания только если нужно |
+| Strategy | Savings |
+|----------|---------|
+| Summarization via Flash-8B | Cheap model for summary |
+| Caching RAG results | Fewer embedding requests |
+| Short system prompts | Fewer tokens per request |
+| Lazy loading context | Load knowledge only if needed |
 
 ---
 
-## 5. Многоагентная архитектура
+## 5. Multi-Agent Architecture
 
-### Структура
+### Structure
 
 ```
 ┌─────────────────┐
@@ -416,8 +416,8 @@ User: А что там с SSL?
 └────────┬────────┘
          ↓
 ┌─────────────────────────┐
-│  Personal Agent         │ ← Твой персональный секретарь
-│  (знает твой контекст)  │
+│  Personal Agent         │ ← Your personal secretary
+│  (knows your context)   │
 └────────┬────────────────┘
          │
     ┌────┴────┬─────────────┐
@@ -428,148 +428,148 @@ User: А что там с SSL?
 └────────┘ └────────┘ └────────┘
                           ↓
                     ┌────────┐
-                    │ Time   │ ← Отдельно для работы с датами
-                    │ Agent  │    (LLM плохо понимают время)
+                    │ Time   │ ← Separate for date handling
+                    │ Agent  │    (LLMs poorly understand time)
                     └────────┘
 ```
 
-### Роли агентов
+### Agent Roles
 
 **Personal Agent:**
-- Общается с пользователем
-- Понимает контекст и роль
-- Делегирует специализированным агентам
-- Показывает Confidence Score и источники
+- Communicates with user
+- Understands context and role
+- Delegates to specialized agents
+- Shows Confidence Score and sources
 
 **Knowledge Agent:**
-- Создаёт и обновляет знания
-- Контролирует версионность
-- Строит связи
+- Creates and updates knowledge
+- Controls versioning
+- Builds connections
 
 **Task Agent:**
-- Управляет задачами и статусами
-- Декомпозирует большие задачи
-- Находит дубликаты
+- Manages tasks and statuses
+- Decomposes large tasks
+- Finds duplicates
 
 **Search Agent:**
-- Семантический поиск
-- Векторизация запросов
-- Ранжирование результатов
+- Semantic search
+- Query vectorization
+- Result ranking
 
 **Time Agent:**
-- Работа с датами и дедлайнами
-- Фильтрация "задачи на сегодня"
-- Программная логика (не LLM)
+- Works with dates and deadlines
+- "Tasks for today" filtering
+- Programmatic logic (not LLM)
 
 ---
 
-## 6. Командная работа
+## 6. Team Collaboration
 
-### Принципы
-- Каждый работает через своего агента
-- Все видят общие проекты (без разделения внутри проекта)
-- Агенты имеют доступ к общему графу знаний
+### Principles
+- Everyone works through their own agent
+- Everyone sees shared projects (no separation within project)
+- Agents have access to shared knowledge graph
 
-### Пример
+### Example
 
 ```
-Anna → агенту: "Добавь к задаче nginx — SSL обязателен"
-Agent Anna: Добавила контекст.
+Anna → agent: "Add to nginx task — SSL is required"
+Anna's Agent: Added context.
 
-Ivan → агенту: "Что там с задачей nginx?"
-Agent Ivan: Задача в работе. Anna отметила: SSL обязателен.
-            Источник: комментарий Anna от 10.12
+Ivan → agent: "What's with the nginx task?"
+Ivan's Agent: Task in progress. Anna noted: SSL required.
+              Source: Anna's comment from 12/10
 ```
 
-### Что НЕ делаем
-- ❌ Групповые обсуждения (для этого есть Slack/Telegram)
-- ❌ Приватность внутри проекта (пока)
-- ❌ Сложные права доступа (пока)
+### What We DON'T Do
+- ❌ Group discussions (use Slack/Telegram for that)
+- ❌ Privacy within project (for now)
+- ❌ Complex access rights (for now)
 
 ---
 
-## 7. AI-помощь и ограничения
+## 7. AI Capabilities and Limitations
 
-### Что AI ДЕЛАЕТ
-- 🤖 Извлекает знания из текста/файлов
-- 🤖 Строит семантические связи
-- 🤖 Декомпозирует задачи
-- 🤖 Находит похожее и дубликаты
-- 🤖 Отвечает на вопросы по базе знаний
-- 🤖 Показывает Confidence Score
-- 🤖 Указывает источники информации
+### What AI DOES
+- 🤖 Extracts knowledge from text/files
+- 🤖 Builds semantic connections
+- 🤖 Decomposes tasks
+- 🤖 Finds similar items and duplicates
+- 🤖 Answers questions from knowledge base
+- 🤖 Shows Confidence Score
+- 🤖 Cites information sources
 
-### Что AI НЕ ДЕЛАЕТ
-- ❌ Не пишет код
-- ❌ Не выполняет задачи за людей
-- ❌ Не интегрируется с CI/CD
-- ❌ Не делает автоматическую разработку
+### What AI DOES NOT Do
+- ❌ Write code
+- ❌ Execute tasks for people
+- ❌ Integrate with CI/CD
+- ❌ Do automatic development
 
-### Борьба с галлюцинациями
-- Всегда показывать источник данных
-- Confidence Score для неточных ответов
-- Возможность запросить "сырые данные"
+### Fighting Hallucinations
+- Always show data source
+- Confidence Score for uncertain answers
+- Ability to request "raw data"
 
 ---
 
 ## 8. MVP Scope
 
-### В MVP включаем
+### Included in MVP
 
-1. ✅ **Чат-интерфейс** (Web + Mobile responsive)
-2. ✅ **Onboarding** — агент начинает диалог
-3. ✅ **Personal Agent** с базовыми персонами
-4. ✅ **Knowledge Agent** (создание, поиск, версионность)
-5. ✅ **Task Agent** (создание, статусы, дедлайны)
-6. ✅ **Search Agent** (семантический поиск)
-7. ✅ **Time Agent** (работа с датами)
-8. ✅ **Автоматические связи** между знаниями
-9. ✅ **Проекты** + базовая коллаборация
-10. ✅ **Confidence Score** и показ источников
-11. ✅ **Бесплатный tier** с ограничениями
+1. ✅ **Chat interface** (Web + Mobile responsive)
+2. ✅ **Onboarding** — agent initiates dialog
+3. ✅ **Personal Agent** with basic personas
+4. ✅ **Knowledge Agent** (create, search, versioning)
+5. ✅ **Task Agent** (create, statuses, deadlines)
+6. ✅ **Search Agent** (semantic search)
+7. ✅ **Time Agent** (date handling)
+8. ✅ **Automatic connections** between knowledge
+9. ✅ **Projects** + basic collaboration
+10. ✅ **Confidence Score** and source display
+11. ✅ **Free tier** with limitations
 
-### Решения по MVP
+### MVP Decisions
 
-| Аспект | Решение |
-|--------|---------|
-| UI | Только чат, никаких дашбордов |
-| Длинные документы | Не редактируем, загружаем/диктуем |
-| Мобильный | Responsive web (не отдельное приложение) |
-| Приватность | Нет разделения внутри проекта |
-| Offline | Нет |
-| Групповые чаты | Нет, только личные агенты |
+| Aspect | Decision |
+|--------|----------|
+| UI | Chat only, no dashboards |
+| Long documents | Don't edit, upload/dictate |
+| Mobile | Responsive web (not separate app) |
+| Privacy | No separation within project |
+| Offline | No |
+| Group chats | No, only personal agents |
 
 ---
 
 ## 9. Post-MVP Roadmap
 
-### Следующая итерация
+### Next Iteration
 
-| Фича | Описание |
-|------|----------|
-| **Напоминания** | Автоматические напоминания о дедлайнах |
-| **Time Machine** | Посмотреть состояние на любую дату |
-| **Миграция** | Импорт из Notion, Jira, Confluence |
-| **Голосовой ввод** | "Окей MindNest, добавь задачу..." |
-| **Интеграции** | Google Calendar, Slack, GitHub |
+| Feature | Description |
+|---------|-------------|
+| **Reminders** | Automatic deadline reminders |
+| **Time Machine** | View state at any date |
+| **Migration** | Import from Notion, Jira, Confluence |
+| **Voice input** | "Hey MindNest, add task..." |
+| **Integrations** | Google Calendar, Slack, GitHub |
 
-### Дальнее будущее
+### Future
 
-| Фича | Описание |
-|------|----------|
-| **Agent-to-Agent** | Агенты общаются между собой для автоматизации |
-| **Локальные модели** | Self-hosted для приватности |
-| **Приватность** | Разделение прав внутри проекта |
-| **Мобильное приложение** | Flutter + Dart (нативное) |
-| **Multimodal** | Работа с изображениями, диаграммами |
+| Feature | Description |
+|---------|-------------|
+| **Agent-to-Agent** | Agents communicate for automation |
+| **Local models** | Self-hosted for privacy |
+| **Privacy** | Access rights within project |
+| **Mobile app** | Flutter + Dart (native) |
+| **Multimodal** | Work with images, diagrams |
 
 ---
 
-## 10. Эволюция архитектуры
+## 10. Architecture Evolution
 
-### 10.1 Путь к мультиагентной архитектуре
+### 10.1 Path to Multi-Agent Architecture
 
-**MVP:** Один агент с Tools
+**MVP:** One agent with Tools
 ```
 ┌─────────────────────────────────┐
 │     Orchestrator Agent          │
@@ -583,7 +583,7 @@ Agent Ivan: Задача в работе. Anna отметила: SSL обяза�
 └─────────────────────────────────┘
 ```
 
-**Эволюция:** Tools → Agents
+**Evolution:** Tools → Agents
 ```
 ┌─────────────────────────────────┐
 │     Orchestrator Agent          │
@@ -598,63 +598,63 @@ Agent Ivan: Задача в работе. Anna отметила: SSL обяза�
 └────────┘    └────────┘    └────────┘
 ```
 
-**Что делаем сейчас для лёгкого перехода:**
-- Tools как отдельные классы с единым интерфейсом
-- Dependency Injection везде
+**What we do now for easy transition:**
+- Tools as separate classes with unified interface
+- Dependency Injection everywhere
 - Stateless tools
-- Чёткое разделение ответственности
+- Clear separation of responsibilities
 
-**Переход = рефакторинг на 1-2 дня:**
-- Каждый Tool-класс получает свой system prompt
-- Добавляется Router для выбора агента
-- Оркестратор делегирует вместо прямого вызова
+**Transition = 1-2 day refactor:**
+- Each Tool class gets its own system prompt
+- Add Router for agent selection
+- Orchestrator delegates instead of direct calls
 
-**Фреймворки для мультиагентов (Java):**
-- Spring AI — встроенная поддержка
-- LangGraph4j — графы агентов
-- Своя реализация через message bus
+**Frameworks for multi-agents (Java):**
+- Spring AI — built-in support
+- LangGraph4j — agent graphs
+- Custom implementation via message bus
 
-### 10.2 Мобильное приложение (Flutter + Dart)
+### 10.2 Mobile App (Flutter + Dart)
 
-**Стратегия:**
+**Strategy:**
 
 ```
 MVP: Flutter + Dart
   │
-  │  Нативное приложение iOS + Android
-  │  Один код на оба platform
-  │  Лучший UX с первого дня
+  │  Native iOS + Android app
+  │  Single codebase for both platforms
+  │  Best UX from day one
   │
   ↓
-Post-MVP: Расширение функционала
+Post-MVP: Feature expansion
   │
   │  Push notifications
   │  Offline mode
   │  Background sync
   │
   ↓
-Будущее: Platform features
+Future: Platform features
   │
-  │  Виджеты iOS/Android
-  │  Siri/Google Assistant интеграция
+  │  iOS/Android widgets
+  │  Siri/Google Assistant integration
   │  Wear OS / Watch support
 ```
 
-**Почему Flutter:**
-- Один код → iOS + Android
-- Нативная производительность
-- Отличный UI toolkit
-- Хорошая документация
-- Dart похож на Java (легко освоить)
+**Why Flutter:**
+- Single code → iOS + Android
+- Native performance
+- Excellent UI toolkit
+- Good documentation
+- Dart is similar to Java (easy to learn)
 
-**Архитектура мобильного приложения:**
+**Mobile app architecture:**
 ```
 ┌─────────────────────────────────┐
 │     Flutter App                 │
 │                                 │
 │  ┌───────────────────────────┐  │
 │  │      Chat UI              │  │
-│  │   (тот же дизайн)         │  │
+│  │   (same design)           │  │
 │  └───────────────────────────┘  │
 │                                 │
 │  ┌───────────────────────────┐  │
@@ -671,13 +671,13 @@ Post-MVP: Расширение функционала
             ↓
 ┌─────────────────────────────────┐
 │     MindNest Backend            │
-│     (тот же API)                │
+│     (same API)                  │
 └─────────────────────────────────┘
 ```
 
-### 10.3 План масштабирования
+### 10.3 Scaling Plan
 
-**Фаза 1: MVP (10-100 пользователей)**
+**Phase 1: MVP (10-100 users)**
 ```
 ┌─────────────────────────────────┐
 │  Google Compute Engine VM       │
@@ -690,11 +690,11 @@ Post-MVP: Расширение функционала
 │  - PostgreSQL                   │
 │  - Nginx                        │
 │                                 │
-│  ~$50-100/месяц                 │
+│  ~$50-100/month                 │
 └─────────────────────────────────┘
 ```
 
-**Фаза 2: Рост (100-10,000 пользователей)**
+**Phase 2: Growth (100-10,000 users)**
 ```
 ┌─────────────────────────────────┐
 │  Cloud Run (auto-scaling)       │
@@ -709,18 +709,18 @@ Post-MVP: Расширение функционала
 │  - Cloud SQL (PostgreSQL)       │
 │  - Qdrant Cloud                 │
 │                                 │
-│  ~$200-500/месяц                │
+│  ~$200-500/month                │
 └─────────────────────────────────┘
 ```
 
-**Фаза 3: Scale (10,000+ пользователей)**
+**Phase 3: Scale (10,000+ users)**
 ```
 ┌─────────────────────────────────┐
 │  GKE Kubernetes Cluster         │
 │                                 │
 │  - Auto-scaling pods            │
 │  - Load balancer                │
-│  - Redis для кэша/сессий        │
+│  - Redis for cache/sessions     │
 └─────────────────────────────────┘
             │
             ↓
@@ -730,59 +730,59 @@ Post-MVP: Расширение функционала
 │  - Qdrant sharding              │
 │  - PostgreSQL read replicas     │
 │                                 │
-│  ~$1000+/месяц                  │
+│  ~$1000+/month                  │
 └─────────────────────────────────┘
 ```
 
-**Принципы для масштабирования (делаем сразу):**
+**Scaling principles (do now):**
 
-| Принцип | Реализация |
-|---------|------------|
-| Stateless backend | Сессии в DB, не в памяти |
-| 12-factor app | Конфиг через env variables |
+| Principle | Implementation |
+|-----------|----------------|
+| Stateless backend | Sessions in DB, not in memory |
+| 12-factor app | Config via env variables |
 | Health checks | `/actuator/health` |
 | Connection pooling | HikariCP |
-| Graceful shutdown | Spring Boot автоматически |
+| Graceful shutdown | Spring Boot automatic |
 | Async operations | Virtual Threads |
 
-**Потенциальные bottlenecks:**
+**Potential bottlenecks:**
 
-| Проблема | Решение |
-|----------|---------|
-| LLM rate limits | Queue + retry, несколько API keys |
-| Neo4j нагрузка | Read replicas, кэширование |
+| Problem | Solution |
+|---------|----------|
+| LLM rate limits | Queue + retry, multiple API keys |
+| Neo4j load | Read replicas, caching |
 | Vector search | Qdrant sharding |
-| WebSocket | Redis pub/sub для распределения |
+| WebSocket | Redis pub/sub for distribution |
 
 ---
 
-## 11. Технологический стек
+## 11. Technology Stack
 
 ### Frontend (Mobile + Web)
-- **Flutter + Dart** — один код для iOS, Android, Web
-- Real-time chat через WebSocket
-- Нативная производительность
+- **Flutter + Dart** — single code for iOS, Android, Web
+- Real-time chat via WebSocket
+- Native performance
 
 ### Backend
 - **Java 21 + Spring Boot 3.2+**
 - Virtual Threads (Project Loom)
-- Spring AI для LLM интеграции
+- Spring AI for LLM integration
 - Spring Data Neo4j
 
 ### AI Layer (Google Cloud Vertex AI)
 
-**LLM — Gemini с Model Routing:**
+**LLM — Gemini with Model Routing:**
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    MODEL ROUTING                            │
 │                                                             │
-│  Входящий запрос                                           │
+│  Incoming request                                           │
 │        │                                                    │
 │        ↓                                                    │
 │  ┌─────────────────┐                                       │
-│  │ Router (Flash)  │ ← Быстрая/дешёвая модель             │
-│  │ Классифицирует  │   решает какую модель использовать   │
-│  │ тип запроса     │                                       │
+│  │ Router (Flash)  │ ← Fast/cheap model                    │
+│  │ Classifies      │   decides which model to use          │
+│  │ request type    │                                       │
 │  └────────┬────────┘                                       │
 │           │                                                 │
 │     ┌─────┴─────┬─────────────┬──────────────┐             │
@@ -790,53 +790,53 @@ Post-MVP: Расширение функционала
 │  ┌──────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐       │
 │  │Flash │  │Flash-8B  │  │   Pro    │  │Programm- │       │
 │  │      │  │          │  │          │  │atic      │       │
-│  │Чат,  │  │Простые   │  │Сложный   │  │Time,     │       │
-│  │поиск │  │запросы   │  │анализ,   │  │фильтры,  │       │
-│  │      │  │          │  │декомпоз. │  │даты      │       │
+│  │Chat, │  │Simple    │  │Complex   │  │Time,     │       │
+│  │search│  │queries   │  │analysis, │  │filters,  │       │
+│  │      │  │          │  │decomp.   │  │dates     │       │
 │  └──────┘  └──────────┘  └──────────┘  └──────────┘       │
 │                                                             │
-│  $0.075/M    $0.0375/M     $1.25/M      $0 (код)           │
+│  $0.075/M    $0.0375/M     $1.25/M      $0 (code)          │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-| Задача | Модель | Почему |
-|--------|--------|--------|
-| Простой чат, FAQ | Gemini Flash-8B | Дёшево, быстро |
-| Поиск, извлечение | Gemini Flash | Баланс цена/качество |
-| Декомпозиция задач | Gemini Pro | Нужно качество |
-| Анализ связей | Gemini Pro | Сложная логика |
-| Даты, фильтры | Программный код | LLM не нужен |
+| Task | Model | Why |
+|------|-------|-----|
+| Simple chat, FAQ | Gemini Flash-8B | Cheap, fast |
+| Search, extraction | Gemini Flash | Price/quality balance |
+| Task decomposition | Gemini Pro | Quality needed |
+| Connection analysis | Gemini Pro | Complex logic |
+| Dates, filters | Programmatic code | LLM not needed |
 
 **Embeddings:**
 - **text-embedding-004** (Vertex AI) — 768 dimensions
 
-### Хранилища данных (Self-hosted, Docker)
-- **Neo4j 5.x** — граф знаний, связи, версионность
-- **Qdrant** — векторный поиск, embeddings
-- **PostgreSQL 16** — пользователи, сессии, auth
+### Data Storage (Self-hosted, Docker)
+- **Neo4j 5.x** — knowledge graph, connections, versioning
+- **Qdrant** — vector search, embeddings
+- **PostgreSQL 16** — users, sessions, auth
 
 ### Infrastructure (Google Cloud)
-- **Compute Engine VM** — Docker Compose для MVP
-- **Cloud Run** — масштабирование позже
+- **Compute Engine VM** — Docker Compose for MVP
+- **Cloud Run** — scaling later
 - **Artifact Registry** — Docker images
 - **Secret Manager** — credentials
-- **Cloud Logging** — мониторинг
+- **Cloud Logging** — monitoring
 
 ---
 
-## 12. Итоговая формулировка
+## 12. Summary
 
-**MindNest — это:**
+**MindNest is:**
 
-> AI-first платформа для управления знаниями и задачами через чат.
+> An AI-first platform for knowledge and task management through chat.
 >
-> Работаешь как с персональным секретарём, который:
-> - Мгновенно находит любую информацию
-> - Управляет твоими задачами и дедлайнами
-> - Понимает контекст и связи между всем
-> - Показывает откуда взял информацию
+> Work like with a personal secretary who:
+> - Instantly finds any information
+> - Manages your tasks and deadlines
+> - Understands context and connections between everything
+> - Shows where information came from
 >
-> Никаких дашбордов, списков, канбанов — только разговор.
+> No dashboards, lists, kanbans — just conversation.
 >
-> Для маленьких команд, малого бизнеса и семей.
-> Замена Confluence + Jira, но проще и через AI.
+> For small teams, small businesses, and families.
+> Replacement for Confluence + Jira, but simpler and through AI.

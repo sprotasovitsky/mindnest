@@ -68,7 +68,7 @@ class _ChatInputState extends State<ChatInput> {
               minLines: 1,
               textInputAction: TextInputAction.newline,
               decoration: InputDecoration(
-                hintText: 'Напишите сообщение...',
+                hintText: 'Type a message...',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(24),
                   borderSide: BorderSide.none,

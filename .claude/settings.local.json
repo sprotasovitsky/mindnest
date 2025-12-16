@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git commit:*)",
+      "Bash(chmod:*)",
+      "Bash(flutter --version:*)",
+      "Bash(docker --version:*)",
+      "Bash(docker-compose:*)",
+      "Bash(docker compose:*)",
+      "Bash(open:*)",
+      "Bash(for i in {1..30})",
+      "Bash(do docker info)",
+      "Bash(break)",
+      "Bash(echo:*)",
+      "Bash(done)",
+      "Bash(java -version:*)",
+      "Bash(brew install:*)",
+      "Bash(export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home:*)",
+      "Bash(./gradlew build:*)",
+      "Bash(curl:*)",
+      "Bash(unzip:*)",
+      "Bash(/tmp/gradle-8.5/bin/gradle wrapper:*)",
+      "Bash(flutter pub get:*)",
+      "Bash(pkill:*)",
+      "Bash(./gradlew compileJava:*)",
+      "Bash(git add:*)",
+      "Bash(git push:*)",
+      "Bash(JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home ./gradlew compileJava:*)",
+      "WebSearch",
+      "Bash(docker exec:*)",
+      "Bash(flutter build web:*)",
+      "Bash(flutter create:*)"
+    ]
+  }
+}

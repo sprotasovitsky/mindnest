@@ -1,64 +1,64 @@
-# MindNest MVP - План разработки
+# MindNest MVP - Development Plan
 
-## Обзор
+## Overview
 
-**Цель MVP:** Работающий прототип для тебя и жены — чат-интерфейс для управления знаниями и задачами.
+**MVP Goal:** Working prototype for personal use — chat interface for knowledge and task management.
 
 **Tech Stack:**
 - Frontend: Flutter + Dart (iOS, Android, Web)
 - Backend: Java 21 + Spring Boot 3.2
 - AI: Google Vertex AI (Gemini + Embeddings)
 - Storage: Neo4j + Qdrant + PostgreSQL
-- Deploy: Docker Compose на Google Cloud VM
+- Deploy: Docker Compose on Google Cloud VM
 
 ---
 
-## Фаза 0: Инфраструктура
+## Phase 0: Infrastructure
 
-### 0.1 Настройка проекта
+### 0.1 Project Setup
 
-- [x] Создать репозиторий (GitHub/GitLab)
-- [x] Настроить структуру проекта:
+- [x] Create repository (GitHub/GitLab)
+- [x] Set up project structure:
   ```
   mindnest/
   ├── mobile/            # Flutter (iOS, Android, Web)
   ├── backend/           # Spring Boot
   ├── docker/            # Docker Compose
-  └── docs/              # Документация
+  └── docs/              # Documentation
   ```
-- [x] Настроить Docker Compose (dev environment)
-- [ ] Настроить CI/CD (GitHub Actions)
+- [x] Set up Docker Compose (dev environment)
+- [ ] Set up CI/CD (GitHub Actions)
 
 ### 0.2 Google Cloud
 
-- [ ] Создать проект в Google Cloud
-- [ ] Включить Vertex AI API
-- [ ] Создать Service Account + ключи
-- [ ] Настроить billing alerts
+- [x] Create Google Cloud project
+- [x] Enable Vertex AI API
+- [x] Create Service Account + keys
+- [ ] Set up billing alerts
 
-### 0.3 Базы данных (Docker)
+### 0.3 Databases (Docker)
 
 - [x] Neo4j container + health check
 - [x] Qdrant container + health check
 - [x] PostgreSQL container + init scripts
-- [x] Docker network между сервисами
+- [x] Docker network between services
 
-**Критерий готовности:** `docker-compose up` запускает все сервисы, они доступны. ✅
+**Completion criteria:** `docker-compose up` starts all services, they are accessible. ✅
 
 ---
 
-## Фаза 1: Backend Core
+## Phase 1: Backend Core
 
-### 1.1 Spring Boot каркас
+### 1.1 Spring Boot Scaffold
 
-- [x] Создать Spring Boot проект (Java 21, Gradle/Maven)
-- [x] Настроить Virtual Threads
-- [x] Подключить Spring Data Neo4j
-- [x] Подключить Qdrant client
-- [x] Подключить Spring Data JPA (PostgreSQL)
-- [x] Базовая конфигурация (application.yml)
+- [x] Create Spring Boot project (Java 21, Gradle/Maven)
+- [x] Configure Virtual Threads
+- [x] Connect Spring Data Neo4j
+- [x] Connect Qdrant client
+- [x] Connect Spring Data JPA (PostgreSQL)
+- [x] Basic configuration (application.yml)
 
-### 1.2 Модели данных
+### 1.2 Data Models
 
 - [x] `KnowledgeItem` entity (Neo4j)
   ```java
@@ -67,18 +67,18 @@
       String id;
       KnowledgeType type;  // fact, task, decision, note, question
       String content;
-      TaskStatus status;   // для tasks
-      LocalDate deadline;  // для tasks
+      TaskStatus status;   // for tasks
+      LocalDate deadline;  // for tasks
       String ownerId;
       String projectId;
       LocalDateTime createdAt;
       LocalDateTime updatedAt;
   }
   ```
-- [ ] `Relation` между KnowledgeItems (Neo4j)
+- [ ] `Relation` between KnowledgeItems (Neo4j)
 - [x] `User` entity (PostgreSQL)
 - [x] `Project` entity (PostgreSQL)
-- [ ] `Conversation` entity (PostgreSQL) — схема есть, entity нет
+- [ ] `Conversation` entity (PostgreSQL) — schema exists, entity not yet
 
 ### 1.3 Repositories
 
@@ -90,90 +90,90 @@
 - [x] `UserRepository` (PostgreSQL)
 - [x] `ProjectRepository` (PostgreSQL)
 
-### 1.4 Vertex AI интеграция
+### 1.4 Vertex AI Integration
 
-- [x] `LlmService` — вызов Gemini
+- [x] `LlmService` — Gemini calls
 - [x] `EmbeddingService` — text-embedding-004
-- [x] `ModelRouter` — выбор модели по типу задачи
-- [ ] Rate limiting / error handling — базовый error handling есть
+- [x] `ModelRouter` — model selection by task type
+- [ ] Rate limiting / error handling — basic error handling exists
 
 ### 1.5 Vector Search
 
-- [ ] `VectorRepository` (Qdrant)
+- [x] `VectorRepository` (Qdrant)
   - `upsert(id, vector, metadata)`
   - `search(vector, limit, filters)`
-- [ ] Интеграция с EmbeddingService
+- [x] Integration with EmbeddingService
 
-**Критерий готовности:** API endpoints работают, данные сохраняются в БД.
+**Completion criteria:** API endpoints work, data persists in DB. ✅
 
 ---
 
-## Фаза 2: Agent Layer
+## Phase 2: Agent Layer
 
-### 2.1 Tools (функции агента)
+### 2.1 Tools (Agent Functions)
 
-- [ ] **Knowledge Tools:**
+- [x] **Knowledge Tools:**
   - `createKnowledge(type, content, projectId)`
   - `getKnowledge(id)`
   - `updateKnowledge(id, content)`
-  - `searchKnowledge(query)` — семантический поиск
+  - `searchKnowledge(query)` — semantic search
   - `getRelatedKnowledge(id, depth)`
 
-- [ ] **Task Tools:**
+- [x] **Task Tools:**
   - `createTask(title, description, deadline, projectId)`
   - `updateTaskStatus(id, status)`
   - `getTasksForToday(userId)`
   - `getTasksByStatus(status, projectId)`
-  - `decomposeTask(taskId)` — разбить на подзадачи
+  - [ ] `decomposeTask(taskId)` — break into subtasks
 
-- [ ] **Project Tools:**
+- [x] **Project Tools:**
   - `createProject(name)`
   - `getProjects(userId)`
   - `switchProject(projectId)`
 
-- [ ] **Time Tools (программные, без LLM):**
+- [x] **Time Tools (programmatic, no LLM):**
   - `getCurrentDate()`
   - `filterByDeadline(tasks, date)`
   - `getOverdueTasks()`
 
 ### 2.2 Orchestrator Agent
 
-- [x] System prompt (персона секретаря)
-- [ ] Tool definitions для Gemini
+- [x] System prompt (secretary persona)
+- [x] Tool definitions for Gemini
 - [ ] Conversation context management
 - [x] Model routing logic
-- [x] Confidence score в ответах
-- [ ] Указание источников — placeholder есть
+- [x] Confidence score in responses
+- [ ] Source attribution — placeholder exists
 
 ### 2.3 API Endpoints
 
-- [x] `POST /api/chat` — основной чат
+- [x] `POST /api/chat` — main chat
   ```json
   Request: { "message": "...", "projectId": "..." }
   Response: { "reply": "...", "sources": [...], "confidence": 0.95 }
   ```
-- [ ] `GET /api/projects` — список проектов
-- [ ] `POST /api/projects` — создать проект
-- [ ] WebSocket для streaming responses (опционально)
+- [x] `GET /api/projects` — list projects
+- [x] `POST /api/projects` — create project
+- [ ] WebSocket for streaming responses (optional)
 
-**Критерий готовности:** Можно общаться с агентом через API, он создаёт/ищет знания и задачи.
+**Completion criteria:** Can chat with agent via API, it creates/searches knowledge and tasks. ✅
 
 ---
 
-## Фаза 3: Frontend (Flutter)
+## Phase 3: Frontend (Flutter)
 
-### 3.1 Flutter каркас
+### 3.1 Flutter Scaffold
 
-- [x] Создать Flutter проект
-- [x] Настроить структуру (clean architecture)
-- [x] Настроить HTTP client (Dio)
-- [x] Настроить state management (Riverpod / Bloc)
-- [x] Настроить роутинг (go_router)
+- [x] Create Flutter project
+- [x] Set up structure (clean architecture)
+- [x] Set up HTTP client (Dio)
+- [x] Set up state management (Riverpod / Bloc)
+- [x] Set up routing (go_router)
 
-### 3.2 Auth (простой)
+### 3.2 Auth (Simple)
 
-- [ ] Login screen (email/password для MVP)
-- [ ] Secure storage для токенов
+- [ ] Login screen (email/password for MVP)
+- [ ] Secure storage for tokens
 - [ ] Auth state management
 - [ ] Protected routes
 
@@ -185,68 +185,69 @@
   - Send button
   - Loading indicator
 - [x] Message widget (markdown rendering)
-- [x] Auto-scroll к новым сообщениям
+- [x] Auto-scroll to new messages
 - [x] Keyboard handling
+- [x] Backend API integration
 
 ### 3.4 Onboarding
 
-- [ ] Welcome screen для новых пользователей
-- [ ] Агент сам начинает диалог
-- [ ] Выбор/создание первого проекта
+- [ ] Welcome screen for new users
+- [ ] Agent initiates dialog
+- [ ] Select/create first project
 
 ### 3.5 Project Switcher
 
-- [ ] Drawer / Bottom sheet для проектов
-- [ ] Создание нового проекта
+- [ ] Drawer / Bottom sheet for projects
+- [ ] Create new project
 
-### 3.6 Платформы
+### 3.6 Platforms
 
-- [ ] Android build + тест на устройстве
-- [ ] iOS build + тест на симуляторе
-- [ ] Web build + тест в браузере
+- [ ] Android build + test on device
+- [ ] iOS build + test on simulator
+- [x] Web build + test in browser
 
-**Критерий готовности:** Можно установить на телефон, зайти, выбрать проект, общаться с агентом.
+**Completion criteria:** Can install on phone, log in, select project, chat with agent.
 
 ---
 
-## Фаза 4: Интеграция и Polish
+## Phase 4: Integration and Polish
 
-### 4.1 End-to-end сценарии
+### 4.1 End-to-end Scenarios
 
-- [ ] Создать проект → добавить знание → создать задачу → найти связи
-- [ ] "Какие задачи на сегодня?" работает
-- [ ] "Разбей задачу на подзадачи" работает
-- [ ] Семантический поиск находит релевантное
+- [ ] Create project → add knowledge → create task → find connections
+- [x] "What tasks do I have today?" works
+- [ ] "Break down this task into subtasks" works
+- [x] Semantic search finds relevant items
 
-### 4.2 Onboarding flow
+### 4.2 Onboarding Flow
 
-- [ ] Агент приветствует нового пользователя
-- [ ] Спрашивает про роль и проекты
-- [ ] Помогает создать первый проект
+- [ ] Agent greets new user
+- [ ] Asks about role and projects
+- [ ] Helps create first project
 
-### 4.3 Error handling
+### 4.3 Error Handling
 
-- [ ] Graceful errors в UI
-- [ ] Retry logic для API calls
-- [ ] Fallback если Vertex AI недоступен
+- [ ] Graceful errors in UI
+- [ ] Retry logic for API calls
+- [ ] Fallback if Vertex AI unavailable
 
-### 4.4 Basic security
+### 4.4 Basic Security
 
-- [ ] CORS настройка
+- [ ] CORS configuration
 - [ ] Rate limiting
 - [ ] Input sanitization
 
-**Критерий готовности:** Полный flow работает без критических багов.
+**Completion criteria:** Full flow works without critical bugs.
 
 ---
 
-## Фаза 5: Deploy
+## Phase 5: Deploy
 
-### 5.1 Production setup
+### 5.1 Production Setup
 
-- [ ] Создать Compute Engine VM
-- [ ] Настроить Docker Compose для prod
-- [ ] Настроить Nginx (reverse proxy + SSL)
+- [ ] Create Compute Engine VM
+- [ ] Configure Docker Compose for prod
+- [ ] Configure Nginx (reverse proxy + SSL)
 - [ ] Domain + HTTPS (Let's Encrypt)
 
 ### 5.2 Monitoring
@@ -257,88 +258,88 @@
 
 ### 5.3 Backup
 
-- [ ] Backup скрипты для Neo4j, PostgreSQL, Qdrant
-- [ ] Cron job для автоматических бэкапов
+- [ ] Backup scripts for Neo4j, PostgreSQL, Qdrant
+- [ ] Cron job for automatic backups
 
-**Критерий готовности:** Приложение доступно по домену, работает стабильно.
+**Completion criteria:** App accessible via domain, runs stable.
 
 ---
 
-## Приоритеты для первой итерации
+## Priorities for First Iteration
 
-**Must have (без этого не запускаем):**
-1. Чат с агентом работает
-2. Создание/поиск знаний
-3. Создание/просмотр задач
-4. Один проект (без переключения)
-5. Базовый auth
+**Must have (don't launch without):**
+1. Chat with agent works
+2. Create/search knowledge
+3. Create/view tasks
+4. Single project (no switching)
+5. Basic auth
 
-**Should have (желательно):**
-1. Семантический поиск
-2. Связи между знаниями
-3. Переключение проектов
-4. Дедлайны на задачах
+**Should have (desirable):**
+1. Semantic search
+2. Knowledge connections
+3. Project switching
+4. Task deadlines
 5. Mobile responsive
 
-**Could have (если останется время):**
-1. Декомпозиция задач
+**Could have (if time permits):**
+1. Task decomposition
 2. Confidence scores
 3. Streaming responses
 4. Onboarding flow
 
-**Won't have (точно не в MVP):**
+**Won't have (definitely not in MVP):**
 1. MCP server
-2. Командная работа (несколько пользователей)
-3. Напоминания
-4. Голосовой ввод
-5. Миграция из других систем
+2. Team collaboration (multiple users)
+3. Reminders
+4. Voice input
+5. Migration from other systems
 
 ---
 
-## Порядок разработки (рекомендация)
+## Development Order (Recommendation)
 
 ```
-Неделя 1-2: Фаза 0 + Фаза 1.1-1.3
-  - Инфраструктура
-  - Backend каркас
-  - Модели данных
+Week 1-2: Phase 0 + Phase 1.1-1.3
+  - Infrastructure
+  - Backend scaffold
+  - Data models
 
-Неделя 3-4: Фаза 1.4-1.5 + Фаза 2.1-2.2
-  - Vertex AI интеграция
+Week 3-4: Phase 1.4-1.5 + Phase 2.1-2.2
+  - Vertex AI integration
   - Tools
   - Orchestrator Agent
 
-Неделя 5-6: Фаза 2.3
+Week 5-6: Phase 2.3
   - API endpoints
-  - WebSocket для real-time
+  - WebSocket for real-time
 
-Неделя 7-9: Фаза 3
-  - Flutter app (каркас, auth, chat)
+Week 7-9: Phase 3
+  - Flutter app (scaffold, auth, chat)
   - Android/iOS builds
 
-Неделя 10: Фаза 4 + Фаза 5
-  - Интеграция
+Week 10: Phase 4 + Phase 5
+  - Integration
   - Deploy
 ```
 
 ---
 
-## Чек-лист перед началом
+## Checklist Before Starting
 
-- [ ] Google Cloud account создан
-- [ ] Billing настроен
-- [ ] Vertex AI API включен
-- [x] Java 21 установлена
-- [x] Flutter SDK установлен
-- [ ] Android Studio установлен (для эмулятора)
-- [ ] Xcode установлен (для iOS симулятора)
-- [x] Docker установлен
-- [ ] IDE настроена (IntelliJ для Java, VS Code для Flutter)
+- [x] Google Cloud account created
+- [ ] Billing configured
+- [x] Vertex AI API enabled
+- [x] Java 21 installed
+- [x] Flutter SDK installed
+- [ ] Android Studio installed (for emulator)
+- [ ] Xcode installed (for iOS simulator)
+- [x] Docker installed
+- [ ] IDE configured (IntelliJ for Java, VS Code for Flutter)
 
 ---
 
-## Следующий шаг
+## Next Step
 
-**Текущий прогресс:** Фаза 0 завершена, Фаза 1.1-1.4 завершена, Фаза 3.1 и 3.3 частично.
+**Current progress:** Phase 0 complete, Phase 1.1-1.4 complete, Phase 3.1 and 3.3 partial.
 
-**Следующее:** Настроить Google Cloud credentials, затем продолжить с Фазой 1.5 (Vector Search) или Фазой 2 (Agent Tools).
+**Next:** Configure Google Cloud credentials, then continue with Phase 1.5 (Vector Search) or Phase 2 (Agent Tools).

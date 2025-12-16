@@ -26,7 +26,7 @@ public class ModelRouter {
     @Value("${vertex-ai.models.chat-pro}")
     private String proModel;
 
-    // Patterns that indicate complex tasks requiring Pro model
+    // Patterns that indicate complex tasks requiring Pro model (multilingual support)
     private static final List<Pattern> COMPLEX_PATTERNS = List.of(
             Pattern.compile("(?i)(объясни|explain|analyze|анализ|сравни|compare)"),
             Pattern.compile("(?i)(план|plan|стратегия|strategy|архитектур)"),
@@ -36,7 +36,7 @@ public class ModelRouter {
             Pattern.compile("(?i)(связь между|relationship|correlation|зависимост)")
     );
 
-    // Patterns for simple tasks that can use Flash
+    // Patterns for simple tasks that can use Flash (multilingual support)
     private static final List<Pattern> SIMPLE_PATTERNS = List.of(
             Pattern.compile("(?i)(создай задачу|create task|добавь|add)"),
             Pattern.compile("(?i)(покажи|show|список|list|найди|find|search)"),

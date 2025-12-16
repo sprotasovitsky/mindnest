@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/api/api_client.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/chat_input.dart';
 
@@ -7,20 +8,24 @@ class ChatMessage {
   final String content;
   final bool isUser;
   final DateTime timestamp;
+  final double? confidence;
 
   ChatMessage({
     required this.content,
     required this.isUser,
     DateTime? timestamp,
+    this.confidence,
   }) : timestamp = timestamp ?? DateTime.now();
 }
 
 final messagesProvider = StateProvider<List<ChatMessage>>((ref) => [
       ChatMessage(
-        content: 'Привет! Я MindNest — твой персональный помощник для управления знаниями и задачами. Чем могу помочь?',
+        content: 'Hi! I\'m MindNest — your personal assistant for knowledge and task management. How can I help?',
         isUser: false,
       ),
     ]);
+
+final isLoadingProvider = StateProvider<bool>((ref) => false);
 
 class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({super.key});
@@ -50,10 +55,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     });
   }
 
-  void _sendMessage(String text) {
+  Future<void> _sendMessage(String text) async {
     if (text.trim().isEmpty) return;
 
     final messages = ref.read(messagesProvider.notifier);
+    final apiClient = ref.read(apiClientProvider);
 
     // Add user message
     messages.state = [
@@ -62,23 +68,42 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     ];
     _scrollToBottom();
 
-    // TODO: Call API and add response
-    // For now, add a placeholder response
-    Future.delayed(const Duration(milliseconds: 500), () {
+    // Set loading state
+    ref.read(isLoadingProvider.notifier).state = true;
+
+    try {
+      // Call backend API
+      final response = await apiClient.chat(text);
+
+      final reply = response['reply'] as String? ?? 'No response';
+      final confidence = (response['confidence'] as num?)?.toDouble();
+
       messages.state = [
         ...messages.state,
         ChatMessage(
-          content: 'Это placeholder ответ. Интеграция с backend будет добавлена позже.',
+          content: reply,
+          isUser: false,
+          confidence: confidence,
+        ),
+      ];
+    } catch (e) {
+      messages.state = [
+        ...messages.state,
+        ChatMessage(
+          content: 'Error: Could not connect to server. Please check if backend is running.',
           isUser: false,
         ),
       ];
+    } finally {
+      ref.read(isLoadingProvider.notifier).state = false;
       _scrollToBottom();
-    });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final messages = ref.watch(messagesProvider);
+    final isLoading = ref.watch(isLoadingProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -89,7 +114,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             onPressed: () {
               // TODO: Open project switcher
             },
-            tooltip: 'Проекты',
+            tooltip: 'Projects',
           ),
         ],
       ),
@@ -100,8 +125,24 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               child: ListView.builder(
                 controller: _scrollController,
                 padding: const EdgeInsets.all(16),
-                itemCount: messages.length,
+                itemCount: messages.length + (isLoading ? 1 : 0),
                 itemBuilder: (context, index) {
+                  if (index == messages.length && isLoading) {
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          SizedBox(width: 8),
+                          Text('Thinking...'),
+                        ],
+                      ),
+                    );
+                  }
                   final message = messages[index];
                   return MessageBubble(
                     message: message.content,

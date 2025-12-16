@@ -41,8 +41,8 @@ vertex-ai:
   project-id: ${VERTEX_AI_PROJECT_ID:}
   location: ${VERTEX_AI_LOCATION:us-central1}
   models:
-    chat: gemini-1.5-flash
-    chat-pro: gemini-1.5-pro
+    chat: gemini-2.0-flash-001
+    chat-pro: gemini-1.5-pro-002
     embedding: text-embedding-004
 
 # Logging
