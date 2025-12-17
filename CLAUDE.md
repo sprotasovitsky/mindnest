@@ -211,29 +211,33 @@ After each test scenario, verify:
 - ALWAYS use `tests/run-scenario.sh` to execute tests
 - If the runner needs fixes, fix it in the repo - not create a new script in /tmp
 
-**How to run tests:**
-```bash
-cd /Users/siarheipratasavitski/Projects/MindNest/tests
-./run-scenario.sh scenarios/012-russian-language.md
-./run-scenario.sh scenarios/015-cross-language.md
+**COMPLETE TEST WORKFLOW:**
+
+```
+1. BEFORE TEST → Save prompt to tests/prompts/prompt-vN.txt
+2. RUN TEST    → ./run-scenario.sh scenarios/XXX.md
+3. AFTER TEST  → Save results to tests/results/XXX-description.md
 ```
 
-**BEFORE starting a test iteration:**
-1. Save the current system prompt to `tests/prompts/prompt-vN.txt` (increment N)
-2. This ensures we know exactly which prompt version was used for each test
+**Step 1 - BEFORE test:**
+- Save current SYSTEM_PROMPT and INTENT_DETECTION_PROMPT from AgentService.java
+- Increment version: `prompt-v8.txt` → `prompt-v9.txt`
+
+**Step 2 - RUN test:**
+```bash
+cd tests
+./run-scenario.sh scenarios/012-russian-language.md
+```
+
+**Step 3 - AFTER test:**
+- Create `tests/results/XXX-description.md` with pass/fail counts
+- Include prompt version used
+- Document any issues found
 
 **During test execution:**
-- Execute ALL steps in each scenario - no shortcuts
-- Follow the EXACT sequence from the markdown file
 - If issues are found, STOP and fix them BEFORE moving to next test
-- Do NOT just record issues and continue - FIX THEM FIRST
-- After ANY code change, rebuild backend and restart ALL tests from 001
-
-**After fixing issues:**
-1. Rebuild backend with `./gradlew build`
-2. Restart backend
-3. Run ALL tests from the beginning (001, 002, etc.)
-4. Do NOT skip tests - a fix might break something else
+- After ANY code change, rebuild backend and re-run test
+- Do NOT skip tests - a fix might break something else
 
 **Test Results Format** (`tests/results/NNN-iteration-X.md`):
 ```

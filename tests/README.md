@@ -23,22 +23,51 @@ tests/
 
 ## How to Run Tests
 
-### Using the Test Runner (Recommended)
+### Complete Test Workflow
+
+#### Step 1: BEFORE running test - Save the prompt
+
+```bash
+# Extract current system prompt from AgentService.java and save it
+# Increment version number (v8 → v9, etc.)
+cp prompts/prompt-v8.txt prompts/prompt-v9.txt
+# Edit to reflect current SYSTEM_PROMPT and INTENT_DETECTION_PROMPT from AgentService.java
+```
+
+#### Step 2: Run the test
 
 ```bash
 cd /Users/siarheipratasavitski/Projects/MindNest/tests
-
-# Run a specific scenario
 ./run-scenario.sh scenarios/012-russian-language.md
-./run-scenario.sh scenarios/015-cross-language.md
+```
 
-# The runner will:
-# 1. Parse users from markdown table
-# 2. Register/login users
-# 3. Create project
-# 4. Add members
-# 5. Execute all Chat: steps in order
-# 6. Show verification (Qdrant/Neo4j counts)
+The runner will:
+1. Parse users from markdown table
+2. Register/login users
+3. Create project and add members
+4. Execute all Chat: steps in order
+5. Show verification (Qdrant/Neo4j counts)
+
+#### Step 3: AFTER test - Save results
+
+Create a results file `results/XXX-description.md`:
+
+```markdown
+# Test Scenario XXX - Description
+Date: YYYY-MM-DD
+Prompt Version: N (see prompts/prompt-vN.txt)
+
+## Results
+| Step | Expected | Actual | Status |
+|------|----------|--------|--------|
+| 2.1  | SAVE     | SAVE   | ✅     |
+| 3.3  | SEARCH   | SEARCH | ✅     |
+...
+
+## Summary
+- Total: X/Y passed (Z%)
+- Issues found: ...
+- Fixes applied: ...
 ```
 
 ### Prerequisites
