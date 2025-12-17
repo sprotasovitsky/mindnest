@@ -73,17 +73,22 @@ public class AgentService {
 
             if (toolResult != null) {
                 // Tool already executed - use model without tools to generate response
-                model = buildModelWithoutTools();
-                String enhancedMessage = "[CRITICAL INSTRUCTION]\n" +
-                    "Tool '" + intentResult.toolToCall() + "' was ALREADY EXECUTED for this request.\n" +
-                    "Tool result: " + toolResult + "\n\n" +
-                    "STRICT RULES:\n" +
-                    "1. Your response MUST describe THIS tool result, not previous operations\n" +
-                    "2. IGNORE all previous messages in conversation - they are NOT relevant\n" +
-                    "3. User said: \"" + message + "\"\n" +
-                    "4. Tool did: " + toolResult + "\n" +
-                    "5. Confirm EXACTLY what the tool did - use the SAME content from tool result\n\n" +
-                    "Generate a short natural response in user's language confirming the operation.";
+                model = buildModelForResponse();  // Lower temperature for consistent responses
+                String enhancedMessage = "=== MANDATORY INSTRUCTION - READ CAREFULLY ===\n\n" +
+                    "A tool was ALREADY executed. You MUST respond about THIS result ONLY.\n\n" +
+                    "TOOL: " + intentResult.toolToCall() + "\n" +
+                    "RESULT: " + toolResult + "\n" +
+                    "USER MESSAGE: " + message + "\n\n" +
+                    "=== ABSOLUTE RULES ===\n" +
+                    "1. DO NOT mention ANY information from conversation history\n" +
+                    "2. DO NOT repeat previous responses\n" +
+                    "3. ONLY describe what is in RESULT above\n" +
+                    "4. If RESULT contains 'Created note' → say you saved it\n" +
+                    "5. If RESULT contains search results → summarize them\n" +
+                    "6. If RESULT contains 'Marked task' → confirm completion\n" +
+                    "7. If RESULT contains 'Found item to delete' → ask for confirmation\n" +
+                    "8. Respond in the SAME language as USER MESSAGE\n\n" +
+                    "YOUR RESPONSE (1-2 sentences about the RESULT only):";
                 contents.set(contents.size() - 1, Content.newBuilder()
                     .setRole("user")
                     .addParts(Part.newBuilder().setText(
@@ -223,6 +228,22 @@ public class AgentService {
                         .setTemperature(0.7f)
                         .build())
                 // No tools - model can only generate text
+                .build();
+    }
+
+    /**
+     * Build model for response generation after tool execution.
+     * Uses very low temperature for consistent, deterministic responses.
+     */
+    private GenerativeModel buildModelForResponse() {
+        return new GenerativeModel.Builder()
+                .setModelName(chatModel)
+                .setVertexAi(vertexAI)
+                .setGenerationConfig(GenerationConfig.newBuilder()
+                        .setMaxOutputTokens(512)   // Short responses only
+                        .setTemperature(0.1f)      // Very low for consistency
+                        .build())
+                // No tools - only text generation
                 .build();
     }
 
