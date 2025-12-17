@@ -373,6 +373,31 @@ Every test run MUST follow ALL THREE steps. Skipping any step is a violation of 
 - Document all issues found (even minor ones)
 - Include database verification counts
 
+**🔴 MANDATORY RESPONSE ANALYSIS - TESTS ALWAYS PASS:**
+
+Tests will always "pass" (run without errors). This does NOT mean they are successful!
+You MUST analyze the actual responses:
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│  FOR EVERY TEST RUN, YOU MUST:                                 │
+│                                                                │
+│  1. Read the FULL test output (not just tail/metrics)          │
+│  2. Check EACH response for correctness:                       │
+│     - Did agent detect correct intent? (SAVE/SEARCH/TASK/etc)  │
+│     - Did agent save correct content?                          │
+│     - Did search return relevant results?                      │
+│     - Did SUPERSEDES relations get created for updates?        │
+│     - Did [DELETED] markers get created for deletes?           │
+│  3. Verify immutable architecture is working:                  │
+│     - Neo4j: Check for SUPERSEDES/CONTRADICTS relations        │
+│     - No direct updates to existing nodes                      │
+│  4. Document ANY incorrect response (even partially wrong)     │
+│                                                                │
+│  "All tests passed" means NOTHING without this analysis!       │
+└────────────────────────────────────────────────────────────────┘
+```
+
 **ABSOLUTE RULE - EXACT TEST EXECUTION:**
 - Tests MUST be executed EXACTLY as written in `tests/scenarios/*.md` files
 - NEVER create ad-hoc test scripts that deviate from scenarios

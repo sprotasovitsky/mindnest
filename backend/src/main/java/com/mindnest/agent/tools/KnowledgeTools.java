@@ -99,7 +99,8 @@ public class KnowledgeTools {
     }
 
     /**
-     * Create a relation between two knowledge items
+     * Create a relation between two knowledge items.
+     * Uses the appropriate Neo4j relationship type based on relationType.
      */
     public Optional<KnowledgeItem> createRelation(String sourceId, String targetId, RelationType relationType, String description) {
         log.info("Creating relation: {} -[{}]-> {}", sourceId, relationType, targetId);
@@ -116,13 +117,24 @@ public class KnowledgeTools {
             return Optional.empty();
         }
 
-        KnowledgeItem result = knowledgeRepository.createRelation(
-                sourceId,
-                targetId,
-                relationType.name(),
-                description,
-                1.0
-        );
+        // Call the appropriate repository method based on relation type
+        KnowledgeItem result = switch (relationType) {
+            case SUPERSEDES -> knowledgeRepository.createSupersedes(sourceId, targetId, description, 1.0);
+            case CONTRADICTS -> knowledgeRepository.createContradicts(sourceId, targetId, description, 1.0);
+            case BELONGS_TO -> knowledgeRepository.createBelongsTo(sourceId, targetId, description, 1.0);
+            case ASSIGNED_TO -> knowledgeRepository.createAssignedTo(sourceId, targetId, description, 1.0);
+            case DEPENDS_ON -> knowledgeRepository.createDependsOn(sourceId, targetId, description, 1.0);
+            case SUPPORTS -> knowledgeRepository.createSupports(sourceId, targetId, description, 1.0);
+            case SIMILAR_TO -> knowledgeRepository.createSimilarTo(sourceId, targetId, description, 1.0);
+            case SUBTASK_OF -> knowledgeRepository.createSubtaskOf(sourceId, targetId, description, 1.0);
+            case PART_OF -> knowledgeRepository.createPartOf(sourceId, targetId, description, 1.0);
+            case CONTAINS -> knowledgeRepository.createContains(sourceId, targetId, description, 1.0);
+            // For types without specific repository methods, use RELATES_TO
+            case RELATES_TO, BLOCKS, CREATED_BY, PAID_BY, MENTIONED_IN, VOTED_FOR, REFERENCES, DERIVED_FROM ->
+                knowledgeRepository.createRelatesTo(sourceId, targetId, description, 1.0);
+        };
+
+        log.info("Created {} relation: {} -> {}", relationType, sourceId, targetId);
         return Optional.ofNullable(result);
     }
 

@@ -8,8 +8,10 @@ import com.google.cloud.vertexai.api.*;
 import com.google.cloud.vertexai.generativeai.GenerativeModel;
 import com.google.cloud.vertexai.generativeai.ResponseHandler;
 import com.mindnest.agent.IntentResult.Intent;
+import com.mindnest.agent.tools.KnowledgeTools;
 import com.mindnest.config.PromptConfig;
 import com.mindnest.model.dto.ChatResponse;
+import com.mindnest.model.entity.KnowledgeRelation;
 import com.mindnest.model.entity.Conversation;
 import com.mindnest.model.entity.Message;
 import com.mindnest.model.entity.ProjectMember;
@@ -39,6 +41,7 @@ public class AgentService {
     private final PromptConfig promptConfig;
     private final com.mindnest.repository.UserRepository userRepository;
     private final com.mindnest.agent.tools.ProjectTools projectTools;
+    private final KnowledgeTools knowledgeTools;
 
     @Value("${vertex-ai.models.chat}")
     private String chatModel;
@@ -231,12 +234,14 @@ public class AgentService {
         log.info("Chunk intent: {} -> type: {}", intent.intent(), intent.type());
 
         // 2.2 Execute based on intent
-        // NOTE: No COMPLETE - task completion handled via TASK with status=DONE + SUPERSEDES
+        // NOTE: System is IMMUTABLE - no DELETE/UPDATE intents
+        // - "Delete" returns SAVE with [DELETED] content + SUPERSEDES relation
+        // - "Update" returns SAVE with new content + SUPERSEDES relation
+        // - "Complete task" returns TASK with status=DONE + SUPERSEDES relation
         return switch (intent.intent().toUpperCase()) {
             case "SAVE" -> executeSave(intent, projectId, userId);
             case "TASK" -> executeTask(intent, projectId, userId);
             case "SEARCH" -> executeSearch(intent, projectId, userId);
-            case "DELETE" -> executeDelete(intent, projectId, userId);
             case "CHAT" -> ChunkResult.chat();
             default -> {
                 log.warn("Unknown intent: {}", intent.intent());
@@ -342,6 +347,22 @@ public class AgentService {
      * Execute SAVE intent - create knowledge/expense item with relations
      */
     private ChunkResult executeSave(ChunkIntent intent, String projectId, String userId) {
+        // IMPORTANT: Find relation targets BEFORE creating new item
+        // Otherwise vector search will find the newly created item instead of the original
+        Map<String, String> preFoundTargets = new HashMap<>();
+        for (RelationIntent rel : intent.relations()) {
+            try {
+                // Search for target item BEFORE creating new item
+                var searchResults = knowledgeTools.searchKnowledge(rel.toQuery(), projectId, 1);
+                if (!searchResults.isEmpty()) {
+                    preFoundTargets.put(rel.toQuery(), searchResults.get(0).id());
+                    log.debug("Pre-found target for '{}': {}", rel.toQuery(), searchResults.get(0).id());
+                }
+            } catch (Exception e) {
+                log.warn("Failed to pre-find target '{}': {}", rel.toQuery(), e.getMessage());
+            }
+        }
+
         Map<String, Object> args = new HashMap<>();
         args.put("content", intent.content());
 
@@ -362,13 +383,28 @@ public class AgentService {
 
         String result = toolExecutor.execute("create_knowledge", args, projectId, userId);
 
-        // Create relations if specified
+        // Extract created item ID from result
+        String createdItemId = extractIdFromResult(result);
+
+        // Create relations using pre-found target IDs
         List<String> linkedTo = new ArrayList<>();
         for (RelationIntent rel : intent.relations()) {
             try {
-                String linkResult = createRelation(intent.content(), rel.toQuery(), rel.type(), projectId, userId);
-                if (linkResult != null && linkResult.contains("Created relation")) {
-                    linkedTo.add(rel.toQuery() + " (" + rel.type() + ")");
+                String targetId = preFoundTargets.get(rel.toQuery());
+                if (targetId != null && createdItemId != null) {
+                    // Use direct ID-based relation creation
+                    var relResult = knowledgeTools.createRelation(
+                            createdItemId,
+                            targetId,
+                            KnowledgeRelation.RelationType.valueOf(rel.type()),
+                            null
+                    );
+                    if (relResult.isPresent()) {
+                        linkedTo.add(rel.toQuery() + " (" + rel.type() + ")");
+                        log.info("Created {} relation: {} -> {}", rel.type(), createdItemId, targetId);
+                    }
+                } else {
+                    log.warn("Could not create relation: targetId={}, createdItemId={}", targetId, createdItemId);
                 }
             } catch (Exception e) {
                 log.warn("Failed to create relation to '{}': {}", rel.toQuery(), e.getMessage());
@@ -376,6 +412,19 @@ public class AgentService {
         }
 
         return new ChunkResult(true, null, intent.content(), linkedTo, null);
+    }
+
+    /**
+     * Extract item ID from tool execution result.
+     * Result format: "Created note: '...' (id: UUID)"
+     */
+    private String extractIdFromResult(String result) {
+        if (result == null) return null;
+        int idStart = result.indexOf("(id: ");
+        if (idStart < 0) return null;
+        int idEnd = result.indexOf(")", idStart);
+        if (idEnd < 0) return null;
+        return result.substring(idStart + 5, idEnd);
     }
 
     /**
@@ -395,18 +444,31 @@ public class AgentService {
             args.put("title", intent.content() + " [DONE]");
             String result = toolExecutor.execute("create_task", args, projectId, userId);
 
-            // Create SUPERSEDES relation to original task
-            List<String> linkedTo = new ArrayList<>();
+            // Find target query from relations or use content as fallback
+            String targetQuery = null;
             for (RelationIntent rel : intent.relations()) {
                 if ("SUPERSEDES".equals(rel.type())) {
-                    try {
-                        String linkResult = createRelation(intent.content() + " [DONE]", rel.toQuery(), rel.type(), projectId, userId);
-                        if (linkResult != null && linkResult.contains("Created relation")) {
-                            linkedTo.add("completed: " + rel.toQuery());
-                        }
-                    } catch (Exception e) {
-                        log.warn("Failed to create SUPERSEDES relation: {}", e.getMessage());
+                    targetQuery = rel.toQuery();
+                    break;
+                }
+            }
+
+            // Fallback: if no relations provided, use task content as search query
+            if (targetQuery == null && intent.content() != null && !intent.content().isEmpty()) {
+                targetQuery = intent.content();
+                log.info("TASK DONE fallback: using content='{}' as targetQuery", targetQuery);
+            }
+
+            // Create SUPERSEDES relation to original task
+            List<String> linkedTo = new ArrayList<>();
+            if (targetQuery != null) {
+                try {
+                    String linkResult = createRelation(intent.content() + " [DONE]", targetQuery, "SUPERSEDES", projectId, userId);
+                    if (linkResult != null && linkResult.contains("Created relation")) {
+                        linkedTo.add("completed: " + targetQuery);
                     }
+                } catch (Exception e) {
+                    log.warn("Failed to create SUPERSEDES relation: {}", e.getMessage());
                 }
             }
             return new ChunkResult(true, null, "Completed: " + intent.content(), linkedTo, null);
@@ -519,75 +581,9 @@ public class AgentService {
         return context.toString();
     }
 
-
-    /**
-     * Execute DELETE intent - create [DELETED] marker with SUPERSEDES relation (immutable)
-     */
-    private ChunkResult executeDelete(ChunkIntent intent, String projectId, String userId) {
-        // In immutable architecture: create marker node + SUPERSEDES relation
-        String content = intent.content();
-        String targetQuery = null;
-
-        // Get target query from relations
-        for (RelationIntent rel : intent.relations()) {
-            if ("SUPERSEDES".equals(rel.type())) {
-                targetQuery = rel.toQuery();
-                break;
-            }
-        }
-
-        if (content == null || content.isEmpty()) {
-            content = "[DELETED] " + (targetQuery != null ? targetQuery : "unknown");
-        }
-
-        // First, find the target item we're "deleting"
-        String targetId = null;
-        if (targetQuery != null) {
-            Map<String, Object> searchArgs = new HashMap<>();
-            searchArgs.put("query", targetQuery);
-            searchArgs.put("limit", 1);
-            toolExecutor.execute("search_knowledge", searchArgs, projectId, null);
-            List<String> foundIds = toolExecutor.getLastSearchIds();
-            if (!foundIds.isEmpty()) {
-                targetId = foundIds.get(0);
-            }
-        }
-
-        // Create the deletion marker
-        Map<String, Object> args = new HashMap<>();
-        args.put("content", content);
-        args.put("type", "NOTE");  // Markers are stored as NOTE type
-        String result = toolExecutor.execute("create_knowledge", args, projectId, userId);
-
-        // Parse marker ID from result "Created note: '...' (id: xxx)"
-        String markerId = null;
-        if (result != null && result.contains("(id: ")) {
-            int start = result.indexOf("(id: ") + 5;
-            int end = result.indexOf(")", start);
-            if (end > start) {
-                markerId = result.substring(start, end);
-            }
-        }
-
-        // Create SUPERSEDES relation using IDs directly
-        List<String> linkedTo = new ArrayList<>();
-        if (markerId != null && targetId != null) {
-            try {
-                Map<String, Object> relArgs = new HashMap<>();
-                relArgs.put("source_id", markerId);
-                relArgs.put("target_id", targetId);
-                relArgs.put("relation_type", "SUPERSEDES");
-                String linkResult = toolExecutor.execute("create_relation_by_id", relArgs, projectId, userId);
-                if (linkResult != null && linkResult.contains("Created relation")) {
-                    linkedTo.add("deleted: " + targetQuery);
-                }
-            } catch (Exception e) {
-                log.warn("Failed to create SUPERSEDES relation for delete: {}", e.getMessage());
-            }
-        }
-
-        return new ChunkResult(true, null, "Marked as deleted: " + content, linkedTo, null);
-    }
+    // NOTE: No executeDelete method - system is IMMUTABLE
+    // DELETE is handled via SAVE intent with [DELETED] content + SUPERSEDES relation
+    // The LLM returns SAVE intent when user wants to delete something
 
     /**
      * Create a relation between items using semantic search
@@ -1361,13 +1357,8 @@ public class AgentService {
                 args.put("limit", 10);
                 yield toolExecutor.execute("search_tasks", args, projectId, userId);
             }
-            // NOTE: No update_knowledge case - system is immutable
-            // Updates create NEW items with SUPERSEDES relations
-            case "delete_knowledge" -> {
-                Map<String, Object> args = new HashMap<>();
-                args.put("query", content);
-                yield toolExecutor.execute("delete_knowledge", args, projectId, userId);
-            }
+            // NOTE: No update_knowledge/delete_knowledge cases - system is immutable
+            // All changes create NEW items with SUPERSEDES/CONTRADICTS relations
             case "create_task" -> {
                 // Handle multiple tasks
                 List<IntentResult.TaskInfo> tasks = intent.tasks();

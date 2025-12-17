@@ -58,26 +58,90 @@ public interface KnowledgeRepository extends Neo4jRepository<KnowledgeItem, Stri
     @Query("MATCH (k:KnowledgeItem) WHERE k.type = 'TASK' AND k.ownerId = $ownerId AND k.status IN ['TODO', 'IN_PROGRESS'] AND k.deletedAt IS NULL RETURN k ORDER BY k.deadline")
     List<KnowledgeItem> findActiveTasksByOwner(String ownerId);
 
+    // Relation creation methods - each with proper Neo4j relationship type
+    // SUPERSEDES: new item replaces old (for updates, deletes, task completion)
     @Query("MATCH (source:KnowledgeItem {id: $sourceId}), (target:KnowledgeItem {id: $targetId}) " +
-           "CREATE (source)-[r:RELATES_TO {type: $relationType, description: $description, weight: $weight, createdAt: datetime()}]->(target) " +
-           "RETURN source, collect(r), collect(target)")
-    KnowledgeItem createRelation(String sourceId, String targetId, String relationType, String description, Double weight);
+           "CREATE (source)-[r:SUPERSEDES {description: $description, weight: $weight, createdAt: datetime()}]->(target) " +
+           "RETURN source")
+    KnowledgeItem createSupersedes(String sourceId, String targetId, String description, Double weight);
 
-    @Query("MATCH (source:KnowledgeItem {id: $sourceId})-[r:RELATES_TO]->(target:KnowledgeItem {id: $targetId}) DELETE r")
+    // CONTRADICTS: items cancel out (refunds cancel purchases)
+    @Query("MATCH (source:KnowledgeItem {id: $sourceId}), (target:KnowledgeItem {id: $targetId}) " +
+           "CREATE (source)-[r:CONTRADICTS {description: $description, weight: $weight, createdAt: datetime()}]->(target) " +
+           "RETURN source")
+    KnowledgeItem createContradicts(String sourceId, String targetId, String description, Double weight);
+
+    // BELONGS_TO: item belongs to category/group
+    @Query("MATCH (source:KnowledgeItem {id: $sourceId}), (target:KnowledgeItem {id: $targetId}) " +
+           "CREATE (source)-[r:BELONGS_TO {description: $description, weight: $weight, createdAt: datetime()}]->(target) " +
+           "RETURN source")
+    KnowledgeItem createBelongsTo(String sourceId, String targetId, String description, Double weight);
+
+    // ASSIGNED_TO: task assigned to person
+    @Query("MATCH (source:KnowledgeItem {id: $sourceId}), (target:KnowledgeItem {id: $targetId}) " +
+           "CREATE (source)-[r:ASSIGNED_TO {description: $description, weight: $weight, createdAt: datetime()}]->(target) " +
+           "RETURN source")
+    KnowledgeItem createAssignedTo(String sourceId, String targetId, String description, Double weight);
+
+    // DEPENDS_ON: item depends on another
+    @Query("MATCH (source:KnowledgeItem {id: $sourceId}), (target:KnowledgeItem {id: $targetId}) " +
+           "CREATE (source)-[r:DEPENDS_ON {description: $description, weight: $weight, createdAt: datetime()}]->(target) " +
+           "RETURN source")
+    KnowledgeItem createDependsOn(String sourceId, String targetId, String description, Double weight);
+
+    // RELATES_TO: general relation (default)
+    @Query("MATCH (source:KnowledgeItem {id: $sourceId}), (target:KnowledgeItem {id: $targetId}) " +
+           "CREATE (source)-[r:RELATES_TO {description: $description, weight: $weight, createdAt: datetime()}]->(target) " +
+           "RETURN source")
+    KnowledgeItem createRelatesTo(String sourceId, String targetId, String description, Double weight);
+
+    // SUPPORTS: item supports/reinforces another
+    @Query("MATCH (source:KnowledgeItem {id: $sourceId}), (target:KnowledgeItem {id: $targetId}) " +
+           "CREATE (source)-[r:SUPPORTS {description: $description, weight: $weight, createdAt: datetime()}]->(target) " +
+           "RETURN source")
+    KnowledgeItem createSupports(String sourceId, String targetId, String description, Double weight);
+
+    // SIMILAR_TO: items are similar
+    @Query("MATCH (source:KnowledgeItem {id: $sourceId}), (target:KnowledgeItem {id: $targetId}) " +
+           "CREATE (source)-[r:SIMILAR_TO {description: $description, weight: $weight, createdAt: datetime()}]->(target) " +
+           "RETURN source")
+    KnowledgeItem createSimilarTo(String sourceId, String targetId, String description, Double weight);
+
+    // SUBTASK_OF: subtask of parent task (legacy, prefer PART_OF)
+    @Query("MATCH (source:KnowledgeItem {id: $sourceId}), (target:KnowledgeItem {id: $targetId}) " +
+           "CREATE (source)-[r:SUBTASK_OF {description: $description, weight: $weight, createdAt: datetime()}]->(target) " +
+           "RETURN source")
+    KnowledgeItem createSubtaskOf(String sourceId, String targetId, String description, Double weight);
+
+    // PART_OF: item is part of another (sprint part of project, etc.)
+    @Query("MATCH (source:KnowledgeItem {id: $sourceId}), (target:KnowledgeItem {id: $targetId}) " +
+           "CREATE (source)-[r:PART_OF {description: $description, weight: $weight, createdAt: datetime()}]->(target) " +
+           "RETURN source")
+    KnowledgeItem createPartOf(String sourceId, String targetId, String description, Double weight);
+
+    // CONTAINS: parent contains child (recipe contains ingredient)
+    @Query("MATCH (source:KnowledgeItem {id: $sourceId}), (target:KnowledgeItem {id: $targetId}) " +
+           "CREATE (source)-[r:CONTAINS {description: $description, weight: $weight, createdAt: datetime()}]->(target) " +
+           "RETURN source")
+    KnowledgeItem createContains(String sourceId, String targetId, String description, Double weight);
+
+    // Delete relations (all types)
+    @Query("MATCH (source:KnowledgeItem {id: $sourceId})-[r]->(target:KnowledgeItem {id: $targetId}) DELETE r")
     void deleteRelation(String sourceId, String targetId);
 
-    @Query("MATCH (k:KnowledgeItem {id: $id})-[r:RELATES_TO]->(related:KnowledgeItem) RETURN related, r")
+    // Find relations (all types)
+    @Query("MATCH (k:KnowledgeItem {id: $id})-[r]->(related:KnowledgeItem) RETURN related, r")
     List<KnowledgeItem> findDirectRelations(String id);
 
-    @Query("MATCH (k:KnowledgeItem {id: $id})<-[r:RELATES_TO]-(related:KnowledgeItem) RETURN related, r")
+    @Query("MATCH (k:KnowledgeItem {id: $id})<-[r]-(related:KnowledgeItem) RETURN related, r")
     List<KnowledgeItem> findIncomingRelations(String id);
 
-    @Query("MATCH path = (source:KnowledgeItem {id: $sourceId})-[:RELATES_TO*1..$maxDepth]-(target:KnowledgeItem {id: $targetId}) " +
+    @Query("MATCH path = (source:KnowledgeItem {id: $sourceId})-[*1..$maxDepth]-(target:KnowledgeItem {id: $targetId}) " +
            "RETURN path LIMIT 1")
     List<KnowledgeItem> findPath(String sourceId, String targetId, int maxDepth);
 
     @Query("MATCH (k:KnowledgeItem {id: $id}) " +
-           "OPTIONAL MATCH (k)-[r:RELATES_TO]->(related:KnowledgeItem) " +
+           "OPTIONAL MATCH (k)-[r]->(related:KnowledgeItem) " +
            "RETURN k, collect(r), collect(related)")
     KnowledgeItem findByIdWithRelations(String id);
 }

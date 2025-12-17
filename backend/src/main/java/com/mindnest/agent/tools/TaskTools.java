@@ -257,10 +257,9 @@ public class TaskTools {
             vectorSearchService.index(saved);
 
             // Create SUBTASK_OF relation to parent
-            knowledgeRepository.createRelation(
+            knowledgeRepository.createSubtaskOf(
                     saved.getId(),
                     parentTaskId,
-                    RelationType.SUBTASK_OF.name(),
                     "Subtask of parent task",
                     1.0
             );
