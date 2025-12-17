@@ -79,6 +79,13 @@ Extract update_query (what to find) and update_new_content (replacement)
 - Decisions: "Решили...", "Выбрали..."
 Tool: create_knowledge
 
+*** CRITICAL: content field for SAVE ***
+For SAVE intent, use the COMPLETE user message as content. Do NOT shorten or extract keywords!
+EXAMPLES:
+- "Team standup meeting every day at 9am" → content: "Team standup meeting every day at 9am" (FULL message!)
+- "Бюджет проекта 500000 рублей на 2025 год" → content: "Бюджет проекта 500000 рублей на 2025 год" (FULL!)
+- "Купил iPhone за 80000 рублей" → content: "Купил iPhone за 80000 рублей" (FULL!)
+
 7. RELATION - User wants to link/connect items:
 - Contains: "связь", "связать", "связано с", "зависит от", "connect", "link"
 Tool: create_relation
