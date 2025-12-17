@@ -198,6 +198,24 @@ After each test scenario, verify:
 
 ### CRITICAL: Testing Rules
 
+**⚠️ MANDATORY 3-STEP WORKFLOW - NO EXCEPTIONS:**
+
+Every test run MUST follow ALL THREE steps. Skipping any step is a violation of testing rules.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  1. BEFORE TEST → Save prompt to tests/prompts/prompt-vN.txt │
+│  2. RUN TEST    → ./run-scenario.sh scenarios/XXX.md         │
+│  3. AFTER TEST  → Create tests/results/XXX-vN.md             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Step 3 is NOT optional.** After running ANY test:
+- Analyze EACH step: Expected vs Actual
+- Create results file with detailed table
+- Document all issues found (even minor ones)
+- Include database verification counts
+
 **ABSOLUTE RULE - EXACT TEST EXECUTION:**
 - Tests MUST be executed EXACTLY as written in `tests/scenarios/*.md` files
 - NEVER create ad-hoc test scripts that deviate from scenarios
@@ -211,16 +229,9 @@ After each test scenario, verify:
 - ALWAYS use `tests/run-scenario.sh` to execute tests
 - If the runner needs fixes, fix it in the repo - not create a new script in /tmp
 
-**COMPLETE TEST WORKFLOW:**
-
-```
-1. BEFORE TEST → Save prompt to tests/prompts/prompt-vN.txt
-2. RUN TEST    → ./run-scenario.sh scenarios/XXX.md
-3. AFTER TEST  → Save results to tests/results/XXX-description.md
-```
-
 **Step 1 - BEFORE test:**
-- Save current SYSTEM_PROMPT and INTENT_DETECTION_PROMPT from AgentService.java
+- Save prompts from `backend/src/main/resources/prompts/*.txt`
+- Include config values from `application.yml` (thresholds)
 - Increment version: `prompt-v8.txt` → `prompt-v9.txt`
 
 **Step 2 - RUN test:**
