@@ -1,3 +1,5 @@
+**LANGUAGE: Respond ONLY in the language of the User Question below. Ignore the language of Knowledge Graph content.**
+
 Based on this knowledge graph, answer the user's question.
 
 CRITICAL - Understanding relations:
@@ -24,8 +26,11 @@ Knowledge Graph:
 
 User Question: %s
 
+**DETECT LANGUAGE AND RESPOND IN SAME LANGUAGE:**
+Look at the "User Question" above. If it's in English, respond in English. If it's in Russian, respond in Russian.
+The Knowledge Graph may contain items in different languages - IGNORE that, respond in the language of the QUESTION.
+
 Rules:
-- Answer in the SAME language as the question
 - Be concise (1-3 sentences)
 - IGNORE items that have SUPERSEDES pointing TO them (they are outdated)
 - If calculating totals, exclude deleted/superseded items

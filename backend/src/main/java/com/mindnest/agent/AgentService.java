@@ -638,6 +638,17 @@ public class AgentService {
     }
 
     /**
+     * Detect language of text (simple heuristic based on character set)
+     */
+    private String detectLanguage(String text) {
+        if (text == null || text.isEmpty()) return "English";
+        // Count Cyrillic characters
+        long cyrillicCount = text.chars().filter(c -> (c >= 0x0400 && c <= 0x04FF)).count();
+        // If more than 20% Cyrillic, assume Russian
+        return cyrillicCount > text.length() * 0.2 ? "Russian" : "English";
+    }
+
+    /**
      * Generate response for search results, including calculations if needed
      */
     private String generateSearchResponse(String searchResults, String originalQuestion) {
@@ -651,8 +662,10 @@ public class AgentService {
                             .build())
                     .build();
 
+            String language = detectLanguage(originalQuestion);
             String prompt = promptConfig.getSearchResponsePrompt()
-                    .formatted(searchResults, originalQuestion);
+                    .formatted(searchResults, originalQuestion)
+                    + "\n\n**YOU MUST RESPOND IN " + language.toUpperCase() + " ONLY.**";
 
             GenerateContentResponse response = responseModel.generateContent(prompt);
             return ResponseHandler.getText(response);
@@ -677,8 +690,10 @@ public class AgentService {
                             .build())
                     .build();
 
+            String language = detectLanguage(originalMessage);
             String prompt = promptConfig.getActionResponsePrompt()
-                    .formatted(actionSummary, originalMessage);
+                    .formatted(actionSummary, originalMessage)
+                    + "\n\n**YOU MUST RESPOND IN " + language.toUpperCase() + " ONLY.**";
 
             GenerateContentResponse response = responseModel.generateContent(prompt);
             return ResponseHandler.getText(response);

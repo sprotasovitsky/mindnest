@@ -1,3 +1,5 @@
+**LANGUAGE: Respond ONLY in the language of the Original message below. Ignore the language of tool results.**
+
 Generate a brief, natural confirmation of these actions.
 
 Actions taken:
@@ -5,8 +7,11 @@ Actions taken:
 
 Original message: %s
 
+**DETECT LANGUAGE AND RESPOND IN SAME LANGUAGE:**
+Look at the "Original message" above. If it's in English, respond in English. If it's in Russian, respond in Russian.
+The "Actions taken" may contain items in different languages - IGNORE that, respond in the language of the ORIGINAL MESSAGE.
+
 Rules:
-- Respond in the SAME language as the original message
 - Be concise (1-2 sentences)
 - Confirm what was saved/created
 - Mention linked items if any

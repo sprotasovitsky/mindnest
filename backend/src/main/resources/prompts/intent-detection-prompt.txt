@@ -41,12 +41,23 @@ CRITICAL RULES:
 Check for SEARCH first! If ANY of these conditions match → SEARCH, not SAVE!
 
 1. SEARCH intent - User asks a QUESTION (CHECK THIS FIRST!):
-   - Message ends with "?" → ALWAYS SEARCH (even if contains expense words!)
-   - Message starts with question words: что, какой, сколько, когда, где, кто, почему, как, who, what, how much, when, where, why, how
-   - Message starts with request words: покажи, найди, выведи, подскажи, show, find, list, display
-   - IMPORTANT: "Сколько потратили?" = SEARCH (question!), NOT SAVE
-   - IMPORTANT: "Что покупали?" = SEARCH (question!), NOT SAVE
-   - For search: set search_query, leave content empty
+   **If message ends with "?" → ALWAYS SEARCH, no exceptions!**
+   **If message CONTAINS question words → SEARCH (even without "?"):**
+   - Russian: что, какой, сколько, когда, где, кто, почему, как, какие
+   - English: what, how, how much, how many, when, where, who, why, which, can you, do I, are there
+   **If message is a REQUEST for information → SEARCH:**
+   - Russian: покажи, найди, выведи, подскажи, напомни, расскажи
+   - English: show, find, list, display, tell me, remind me, give me, summarize
+
+   EXAMPLES THAT ARE ALWAYS SEARCH:
+   - "How much beef do I need?" → SEARCH (contains "how much" + "?")
+   - "What are my tasks?" → SEARCH (contains "what" + "?")
+   - "What's still packed?" → SEARCH (contains "what" + "?")
+   - "Show me everything" → SEARCH (starts with "show")
+   - "Give me a summary" → SEARCH (starts with "give me")
+   - "Remind me how to make X" → SEARCH (starts with "remind")
+
+   For search: set search_query with keywords, leave content empty
 
 2. SAVE intent - User provides NEW information (NOT a question, NO "?" at end!):
    - Expenses: "Потратил 500", "Купил X за Y", "I spent 500"
@@ -266,6 +277,50 @@ EXAMPLES:
   "properties": {},
   "relations": [],
   "search_query": "бюджет"
+}
+
+15. "How much beef do I need now?" (SEARCH - English question with "how much" + "?")
+{
+  "intent": "SEARCH",
+  "type": "KNOWLEDGE",
+  "subtype": null,
+  "content": "",
+  "properties": {},
+  "relations": [],
+  "search_query": "beef need amount"
+}
+
+16. "What are my tasks?" (SEARCH - English question with "what" + "?")
+{
+  "intent": "SEARCH",
+  "type": "TASK",
+  "subtype": null,
+  "content": "",
+  "properties": {},
+  "relations": [],
+  "search_query": "my tasks"
+}
+
+17. "Give me a summary of all expenses" (SEARCH - request with "give me")
+{
+  "intent": "SEARCH",
+  "type": "EXPENSE",
+  "subtype": null,
+  "content": "",
+  "properties": {},
+  "relations": [],
+  "search_query": "all expenses summary"
+}
+
+18. "Remind me how to make beef stroganoff" (SEARCH - request with "remind me")
+{
+  "intent": "SEARCH",
+  "type": "KNOWLEDGE",
+  "subtype": "recipe",
+  "content": "",
+  "properties": {},
+  "relations": [],
+  "search_query": "beef stroganoff recipe"
 }
 
 Respond with JSON only, no markdown:

@@ -95,6 +95,8 @@ public class GraphService {
                     if (rel.getTarget() == null) continue;
 
                     RelationType relType = rel.getType();
+                    if (relType == null) continue;  // Skip relations with null type
+
                     String targetId = rel.getTarget().getId();
 
                     // Add edge
@@ -126,6 +128,8 @@ public class GraphService {
                 for (KnowledgeRelation rel : source.getRelations()) {
                     if (rel.getTarget() != null && rel.getTarget().getId().equals(task.nodeId)) {
                         RelationType relType = rel.getType();
+                        if (relType == null) continue;  // Skip relations with null type
+
                         edges.add(new RelationEdge(source.getId(), task.nodeId, relType, true));
 
                         if (CHAIN_RELATIONS.contains(relType)) {
