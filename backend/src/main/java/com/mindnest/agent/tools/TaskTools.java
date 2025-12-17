@@ -182,12 +182,41 @@ public class TaskTools {
         // First try exact match in content
         List<KnowledgeItem> tasks = knowledgeRepository.findByProjectIdAndType(projectId, KnowledgeType.TASK);
 
-        // Find task that matches the query (case-insensitive, partial match)
-        String queryLower = titleQuery.toLowerCase();
+        log.debug("Found {} tasks in project", tasks.size());
+
+        // Extract keywords from the query for fuzzy matching
+        String queryLower = titleQuery.toLowerCase()
+                .replaceAll("(my |the |task |is |done|complete|finished|shopping |mark |as )", "")
+                .trim();
+        String[] queryWords = queryLower.split("\\s+");
+
+        log.debug("Query keywords: {}", java.util.Arrays.toString(queryWords));
+
+        // Find task that matches the query
+        // 1. Direct content match
+        // 2. Keywords matching
+        // 3. Fuzzy word overlap
         Optional<KnowledgeItem> matchingTask = tasks.stream()
                 .filter(t -> t.getStatus() != TaskStatus.DONE && t.getStatus() != TaskStatus.CANCELLED)
-                .filter(t -> t.getContent().toLowerCase().contains(queryLower) ||
-                            queryLower.contains(getTaskTitle(t).toLowerCase()))
+                .filter(t -> {
+                    String contentLower = t.getContent().toLowerCase();
+                    String titleLower = getTaskTitle(t).toLowerCase();
+
+                    // Direct match
+                    if (contentLower.contains(queryLower) || queryLower.contains(titleLower)) {
+                        return true;
+                    }
+
+                    // Keyword match - count how many query words match
+                    int matchCount = 0;
+                    for (String word : queryWords) {
+                        if (word.length() > 2 && contentLower.contains(word)) {
+                            matchCount++;
+                        }
+                    }
+                    // At least 50% of query words should match
+                    return matchCount > 0 && matchCount >= queryWords.length / 2.0;
+                })
                 .findFirst();
 
         if (matchingTask.isPresent()) {
@@ -198,6 +227,25 @@ public class TaskTools {
             vectorSearchService.reindex(updated);
             log.info("Completed task: {} - '{}'", updated.getId(), getTaskTitle(updated));
             return Optional.of(updated);
+        }
+
+        // Try semantic search as fallback
+        log.debug("No direct match, trying semantic search for: '{}'", titleQuery);
+        List<SearchResult> semanticResults = vectorSearchService.searchTasks(titleQuery, 3, projectId);
+        for (SearchResult result : semanticResults) {
+            if (result.score() > 0.5) {  // At least 50% similarity
+                String taskId = result.id();
+                Optional<KnowledgeItem> foundTask = knowledgeRepository.findById(taskId);
+                if (foundTask.isPresent() && foundTask.get().getStatus() != TaskStatus.DONE) {
+                    KnowledgeItem task = foundTask.get();
+                    task.setStatus(TaskStatus.DONE);
+                    task.setUpdatedAt(Instant.now());
+                    KnowledgeItem updated = knowledgeRepository.save(task);
+                    vectorSearchService.reindex(updated);
+                    log.info("Completed task via semantic search: {} - '{}'", updated.getId(), getTaskTitle(updated));
+                    return Optional.of(updated);
+                }
+            }
         }
 
         log.warn("No matching task found for: '{}'", titleQuery);

@@ -8,6 +8,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,6 +47,9 @@ public class VectorSearchService {
             }
             if (item.getStatus() != null) {
                 metadata.put("status", item.getStatus().name());
+            }
+            if (item.getCreatedAt() != null) {
+                metadata.put("createdAt", String.valueOf(item.getCreatedAt().toEpochMilli()));
             }
 
             // Store in vector database
@@ -94,26 +100,60 @@ public class VectorSearchService {
     }
 
     /**
-     * Search for facts/decisions (knowledge)
+     * Search for all knowledge types including tasks.
+     * Applies recency boost to prioritize recent items when similarity is close.
      */
     public List<SearchResult> searchKnowledge(String query, int limit, String projectId) {
-        // Search for FACT, DECISION, NOTE types
+        // Search for all types: FACT, DECISION, NOTE, TASK, QUESTION
         try {
             List<Float> queryEmbedding = embeddingService.embed(query);
 
-            // Get results without type filter, then filter manually for multiple types
-            List<SearchResult> allResults = vectorRepository.search(queryEmbedding, limit * 3, projectId, null);
+            // Get all results - no type filtering
+            List<SearchResult> allResults = vectorRepository.search(queryEmbedding, limit * 2, projectId, null);
 
-            return allResults.stream()
-                    .filter(r -> {
-                        String type = r.payload().get("type");
-                        return "FACT".equals(type) || "DECISION".equals(type) || "NOTE".equals(type);
-                    })
+            // Apply recency boost and re-sort
+            List<SearchResult> boostedResults = allResults.stream()
+                    .map(this::applyRecencyBoost)
+                    .sorted(Comparator.comparingDouble(SearchResult::score).reversed())
                     .limit(limit)
                     .toList();
+
+            log.debug("Search '{}' returned {} results (with recency boost)", truncate(query, 30), boostedResults.size());
+            return boostedResults;
         } catch (IOException e) {
             log.error("Knowledge search failed", e);
             throw new RuntimeException("Search failed", e);
+        }
+    }
+
+    /**
+     * Apply recency boost to a search result.
+     * Items created within the last 7 days get up to 5% boost.
+     * The boost decays linearly over 30 days.
+     */
+    private SearchResult applyRecencyBoost(SearchResult result) {
+        String createdAtStr = (String) result.payload().get("createdAt");
+        if (createdAtStr == null) {
+            return result; // No timestamp, no boost
+        }
+
+        try {
+            long createdAtMillis = Long.parseLong(createdAtStr);
+            Instant createdAt = Instant.ofEpochMilli(createdAtMillis);
+            long ageInDays = ChronoUnit.DAYS.between(createdAt, Instant.now());
+
+            // Recency boost: max 5% for items < 1 day old, decaying over 30 days
+            double maxBoost = 0.05;
+            double decayDays = 30.0;
+            double recencyBoost = Math.max(0, (decayDays - ageInDays) / decayDays * maxBoost);
+
+            double boostedScore = result.score() * (1 + recencyBoost);
+
+            // Create new result with boosted score
+            return new SearchResult(result.id(), (float) boostedScore, result.payload());
+        } catch (NumberFormatException e) {
+            log.warn("Invalid createdAt timestamp: {}", createdAtStr);
+            return result;
         }
     }
 

@@ -1,0 +1,57 @@
+# Prompt Version 7
+Date: 2025-12-17
+
+## Changes from v6:
+1. Added Graph relations tools (Option B - explicit tools):
+   - create_relation: Create relation between two knowledge items
+   - get_related: Get items related to a knowledge item
+   - find_path: Find path/connection between two items
+   - Relation types: RELATES_TO, DEPENDS_ON, SUPPORTS, CONTRADICTS, REFERENCES, DERIVED_FROM, SIMILAR_TO
+
+2. Added RELATION intent to intent detection:
+   - Keywords EN: "connect", "link", "relates to", "depends on", "related to"
+   - Keywords RU: "связь", "связать", "связано с", "зависит от", "относится к"
+
+3. Added recency boost to search:
+   - Items created within 30 days get up to 5% score boost
+   - Most recent items (< 1 day) get full 5% boost
+   - Boost decays linearly over 30 days
+
+4. Added self-loop prevention in createRelation:
+   - Checks if source and target are the same item
+   - Returns error message if same item found for both queries
+
+5. Improved delete precision with keyword matching:
+   - Delete if: very high similarity (>0.8) OR (moderate similarity >0.6 AND keyword match)
+   - Keywords must be >= 4 characters to match
+   - This prevents accidental deletion of related but different items
+
+6. Improved UPDATE intent detection:
+   - Added `update_query` and `update_new_content` to JSON response
+   - Added Russian patterns: "на самом деле", "измени", "поменяй", "не X а Y", "вместо"
+   - Added English patterns: "actually", "change X to Y", "update X to Y"
+   - UPDATE threshold 0.7 (same-language works, cross-language ~0.4 won't match anyway)
+   - Note: Cross-language UPDATE limited by embedding model (EN query → RU content ~0.4 similarity)
+
+## Files Modified:
+- AgentService.java: Added graph tools, RELATION intent, UPDATE improvements (patterns, JSON fields)
+- ToolExecutor.java: Added graph tool executors
+- KnowledgeTools.java: Self-loop check, delete precision, UPDATE threshold 0.6
+- IntentResult.java: Added RELATION enum, updateQuery/updateNewContent fields
+- VectorSearchService.java: Recency boost, createdAt in metadata
+
+## Tools now available:
+1. create_knowledge - Save facts, decisions, notes
+2. search_knowledge - Find information
+3. update_knowledge - Correct existing info
+4. delete_knowledge - Remove items
+5. preview_delete - Preview items to delete
+6. confirm_delete - Confirm deletion by IDs
+7. create_task - Create tasks with assignee
+8. complete_task_by_title - Mark task as done
+9. get_active_tasks - List active tasks
+10. search_tasks - Find tasks
+11. create_relation - Link two items (NEW)
+12. get_related - Find related items (NEW)
+13. find_path - Find connection path (NEW)
+14. get_current_date - Current date/time

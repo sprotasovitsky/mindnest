@@ -41,9 +41,10 @@ vertex-ai:
   project-id: ${VERTEX_AI_PROJECT_ID:}
   location: ${VERTEX_AI_LOCATION:us-central1}
   models:
-    chat: gemini-2.0-flash-001
-    chat-pro: gemini-1.5-pro-002
-    embedding: text-embedding-004
+    chat: gemini-2.5-flash-lite
+    chat-pro: gemini-2.5-pro
+    flash: gemini-2.5-flash-lite  # Fast model for intent detection
+    embedding: gemini-embedding-001  # 3072 dimensions, 100+ languages
 
 # JWT
 jwt:

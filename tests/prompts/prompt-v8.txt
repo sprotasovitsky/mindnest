@@ -1,0 +1,82 @@
+# Prompt Version 8
+Date: 2025-12-17
+
+## Changes from v7:
+
+### Model Updates (MAJOR)
+1. **Chat model**: `gemini-2.0-flash` → `gemini-2.5-flash-lite`
+   - Same price ($0.10/1M input, $0.40/1M output)
+   - Better quality and lower latency
+   - Reasoning capabilities with controllable thinking budget
+
+2. **Embedding model**: `text-embedding-004` → `gemini-embedding-001`
+   - Dimensions: 768 → 3072
+   - Languages: Limited → 100+
+   - MTEB Multilingual: #1 ranking
+   - **CRITICAL**: Cross-language search now works!
+
+### Code Changes
+- `application.yml`: Updated all model names
+- `VectorRepository.java`: VECTOR_SIZE 768 → 3072
+- Qdrant collection recreated with new dimensions
+
+## Cross-Language Search (NEW CAPABILITY!)
+
+Previously (text-embedding-004):
+- EN query vs RU content: ~0.40 similarity (below threshold)
+- Cross-language search did NOT work
+
+Now (gemini-embedding-001):
+- EN query vs RU content: HIGH similarity
+- RU query vs EN content: HIGH similarity
+- Cross-language search WORKS perfectly!
+
+Tested scenarios:
+| Query (EN) | Content (RU) | Result |
+|------------|--------------|--------|
+| "client meeting" | "Встреча с клиентом" | FOUND |
+| "project budget" | "Бюджет проекта" | FOUND |
+| "release deadline" | "Дедлайн релиза" | FOUND |
+
+| Query (RU) | Content (EN) | Result |
+|------------|--------------|--------|
+| "стэндап команды" | "Team standup" | FOUND |
+| "бюджет на маркетинг" | "Marketing budget" | FOUND |
+| "запуск продукта" | "Product launch" | FOUND |
+
+Cross-language UPDATE also works:
+- EN update "project budget is 600000" → Updates RU content
+
+## Files Modified:
+- `application.yml`: Model configuration
+- `VectorRepository.java`: Vector dimensions
+
+## Current Model Configuration:
+```yaml
+models:
+  chat: gemini-2.5-flash-lite
+  chat-pro: gemini-2.5-pro
+  flash: gemini-2.5-flash-lite
+  embedding: gemini-embedding-001  # 3072 dimensions, 100+ languages
+```
+
+## Tools Available (unchanged from v7):
+1. create_knowledge - Save facts, decisions, notes
+2. search_knowledge - Find information
+3. update_knowledge - Correct existing info
+4. delete_knowledge - Remove items
+5. preview_delete - Preview items to delete
+6. confirm_delete - Confirm deletion by IDs
+7. create_task - Create tasks with assignee
+8. complete_task_by_title - Mark task as done
+9. get_active_tasks - List active tasks
+10. search_tasks - Find tasks
+11. create_relation - Link two items
+12. get_related - Find related items
+13. find_path - Find connection path
+14. get_current_date - Current date/time
+
+## Migration Notes:
+- text-embedding-004 deprecated August 2025
+- Must recreate Qdrant collection (dimension change)
+- All existing data needs re-embedding

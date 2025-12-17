@@ -107,11 +107,16 @@ public class TimeTools {
         }
 
         // Try formats without year - use current or next year
+        // Both full month names (December) and abbreviated (Dec)
         String[] formatsWithoutYear = {
-                "d MMMM",
-                "MMMM d",
-                "MMMM dd",
-                "dd MMMM"
+                "d MMMM",      // "30 December"
+                "MMMM d",      // "December 30"
+                "MMMM dd",     // "December 30"
+                "dd MMMM",     // "30 December"
+                "d MMM",       // "30 Dec"
+                "MMM d",       // "Dec 30"
+                "MMM dd",      // "Dec 30"
+                "dd MMM"       // "30 Dec"
         };
 
         for (String format : formatsWithoutYear) {

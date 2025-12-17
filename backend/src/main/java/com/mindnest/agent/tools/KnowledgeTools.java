@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -94,6 +95,46 @@ public class KnowledgeTools {
     }
 
     /**
+     * Find and update knowledge item by query
+     */
+    public Optional<KnowledgeItem> updateKnowledgeByQuery(String query, String newContent, String projectId) {
+        log.info("Updating knowledge by query: '{}' in project: {}", query, projectId);
+
+        // Search for matching items
+        List<SearchResult> results = vectorSearchService.searchKnowledge(query, 5, projectId);
+
+        if (results.isEmpty()) {
+            log.warn("No items found to update for query: '{}'", query);
+            return Optional.empty();
+        }
+
+        // Log search results for debugging
+        log.info("Update search results for '{}': {}", query,
+                results.stream()
+                        .map(r -> String.format("'%s' (%.2f)", truncate((String)r.payload().get("content"), 30), r.score()))
+                        .toList());
+
+        // Find the best match (contains query or high similarity)
+        String queryLower = query.toLowerCase();
+        for (SearchResult result : results) {
+            String content = (String) result.payload().get("content");
+            // Update if: content contains query keywords OR high semantic match (>0.7)
+            // Note: cross-language queries have ~0.4 similarity, so they won't match anyway
+            boolean containsQuery = content != null && content.toLowerCase().contains(queryLower);
+            boolean highSemanticMatch = result.score() > 0.7;
+            if (content != null && (containsQuery || highSemanticMatch)) {
+                log.info("Found match for update: '{}' (score: {}, contains: {})",
+                        truncate(content, 50), result.score(), containsQuery);
+                String itemId = result.id();
+                return updateKnowledge(itemId, newContent);
+            }
+        }
+
+        log.warn("No matching item found for update query: '{}'", query);
+        return Optional.empty();
+    }
+
+    /**
      * Search knowledge semantically
      */
     public List<SearchResult> searchKnowledge(String query, String projectId, int limit) {
@@ -129,7 +170,45 @@ public class KnowledgeTools {
     }
 
     /**
+     * Preview items that would be deleted by query (for confirmation)
+     * Returns list of matching items without deleting them.
+     */
+    public List<DeletePreview> previewDelete(String query, String projectId) {
+        log.info("Preview delete by query: '{}' in project: {}", query, projectId);
+
+        List<SearchResult> results = vectorSearchService.searchKnowledge(query, 10, projectId);
+        List<DeletePreview> previews = new ArrayList<>();
+
+        for (SearchResult result : results) {
+            String content = (String) result.payload().get("content");
+            String type = (String) result.payload().get("type");
+
+            // Include if similarity > 0.75 (very high threshold for safe deletion)
+            if (content != null && result.score() > 0.75) {
+                previews.add(new DeletePreview(result.id(), type, content, result.score()));
+            }
+        }
+
+        log.info("Preview found {} items to delete for query: '{}'", previews.size(), query);
+        return previews;
+    }
+
+    /**
+     * Delete items by their IDs (used after preview confirmation)
+     */
+    public int deleteByIds(List<String> ids) {
+        int deleted = 0;
+        for (String id : ids) {
+            if (deleteKnowledge(id)) {
+                deleted++;
+            }
+        }
+        return deleted;
+    }
+
+    /**
      * Find and delete knowledge items by query
+     * Uses semantic similarity + keyword matching for safe deletion
      */
     public int deleteKnowledgeByQuery(String query, String projectId) {
         log.info("Deleting knowledge by query: '{}' in project: {}", query, projectId);
@@ -142,18 +221,33 @@ public class KnowledgeTools {
             return 0;
         }
 
-        // Delete items that match well (score > 0.5)
+        // Extract keywords from query for additional matching
+        String[] queryKeywords = query.toLowerCase().split("\\s+");
+
+        // Delete items with high semantic similarity OR keyword match
         int deleted = 0;
-        String queryLower = query.toLowerCase();
         for (SearchResult result : results) {
             String content = (String) result.payload().get("content");
-            // Only delete if content contains the query or has high similarity
-            if (content != null && (content.toLowerCase().contains(queryLower) || result.score() > 0.7)) {
+            if (content == null) continue;
+
+            // Check if content contains any query keyword (case-insensitive)
+            String contentLower = content.toLowerCase();
+            boolean hasKeywordMatch = false;
+            for (String keyword : queryKeywords) {
+                if (keyword.length() >= 4 && contentLower.contains(keyword)) {
+                    hasKeywordMatch = true;
+                    break;
+                }
+            }
+
+            // Delete if: high similarity (>0.8) OR (moderate similarity >0.6 AND keyword match)
+            boolean shouldDelete = result.score() > 0.8 || (result.score() > 0.6 && hasKeywordMatch);
+            if (shouldDelete) {
                 String itemId = result.id();
                 if (knowledgeRepository.existsById(itemId)) {
                     knowledgeRepository.deleteById(itemId);
                     vectorSearchService.remove(itemId);
-                    log.info("Deleted knowledge item: {} - '{}'", itemId, truncate(content, 50));
+                    log.info("Deleted knowledge item: {} - '{}' (score: {})", itemId, truncate(content, 50), result.score());
                     deleted++;
                 }
             }
@@ -162,6 +256,11 @@ public class KnowledgeTools {
         log.info("Deleted {} items for query: '{}'", deleted, query);
         return deleted;
     }
+
+    /**
+     * Preview record for delete confirmation
+     */
+    public record DeletePreview(String id, String type, String content, double score) {}
 
     private String truncate(String text, int maxLen) {
         return text != null && text.length() > maxLen ? text.substring(0, maxLen) + "..." : text;
@@ -172,6 +271,12 @@ public class KnowledgeTools {
      */
     public Optional<KnowledgeItem> createRelation(String sourceId, String targetId, RelationType relationType, String description) {
         log.info("Creating relation: {} -[{}]-> {}", sourceId, relationType, targetId);
+
+        // Prevent self-loops
+        if (sourceId.equals(targetId)) {
+            log.warn("Cannot create self-referencing relation");
+            return Optional.empty();
+        }
 
         // Verify both items exist
         if (!knowledgeRepository.existsById(sourceId) || !knowledgeRepository.existsById(targetId)) {

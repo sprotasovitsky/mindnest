@@ -26,7 +26,7 @@ import static io.qdrant.client.ConditionFactory.matchKeyword;
 @Slf4j
 public class VectorRepository {
 
-    private static final int VECTOR_SIZE = 768; // text-embedding-004 dimension
+    private static final int VECTOR_SIZE = 3072; // gemini-embedding-001 dimension
 
     private final QdrantClient qdrantClient;
 

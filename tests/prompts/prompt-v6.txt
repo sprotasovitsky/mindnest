@@ -1,0 +1,21 @@
+# Prompt Version 6
+Date: 2025-12-17
+
+## Changes from v5:
+1. Fixed DELETE threshold from 0.7 to 0.5 (semantic matching)
+2. Added Russian keywords to INTENT_DETECTION_PROMPT:
+   - TASK: "создай задачу", "добавь задачу", "задача для", "назначь"
+   - COMPLETE: "выполнена", "сделана", "готово", "завершена"
+   - DELETE: "удали", "убери", "отмени", "верни"
+   - SEARCH: "сколько", "что", "когда", "где", "какой", "покажи", "найди"
+   - SAVE: "Потратил", "Купил", "Бюджет", "Решили"
+3. Added preview_delete and confirm_delete tools for safe deletion
+4. Fixed task assignee handling - assignee now included in task content
+
+## Files Modified:
+- AgentService.java: INTENT_DETECTION_PROMPT with Russian keywords
+- KnowledgeTools.java: previewDelete(), deleteByIds(), threshold 0.5
+- ToolExecutor.java: executePreviewDelete(), executeConfirmDelete(), assignee in createTask
+
+## Additional Fix (after initial v6):
+5. Fixed searchKnowledge to include TASK type (was filtering out tasks!)

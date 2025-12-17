@@ -10,6 +10,7 @@ import com.mindnest.agent.tools.TimeTools;
 import com.mindnest.model.entity.KnowledgeItem;
 import com.mindnest.model.entity.KnowledgeItem.KnowledgeType;
 import com.mindnest.model.entity.KnowledgeItem.TaskStatus;
+import com.mindnest.model.entity.KnowledgeRelation.RelationType;
 import com.mindnest.model.entity.Project;
 import com.mindnest.repository.VectorRepository.SearchResult;
 import lombok.RequiredArgsConstructor;
@@ -70,7 +71,10 @@ public class ToolExecutor {
                 // Knowledge tools
                 case "create_knowledge" -> executeCreateKnowledge(args, projectId, userId);
                 case "search_knowledge" -> executeSearchKnowledge(args, projectId);
+                case "update_knowledge" -> executeUpdateKnowledge(args, projectId);
                 case "delete_knowledge" -> executeDeleteKnowledge(args, projectId);
+                case "preview_delete" -> executePreviewDelete(args, projectId);
+                case "confirm_delete" -> executeConfirmDelete(args);
                 case "get_knowledge" -> executeGetKnowledge(args);
 
                 // Task tools
@@ -88,6 +92,11 @@ public class ToolExecutor {
 
                 // Time tools
                 case "get_current_date" -> executeGetCurrentDate();
+
+                // Graph relation tools
+                case "create_relation" -> executeCreateRelation(args, projectId);
+                case "get_related" -> executeGetRelated(args, projectId);
+                case "find_path" -> executeFindPath(args, projectId);
 
                 default -> "Unknown function: " + functionName;
             };
@@ -144,6 +153,17 @@ public class ToolExecutor {
                 .orElse("Knowledge item not found: " + id);
     }
 
+    private String executeUpdateKnowledge(Map<String, Object> args, String projectId) {
+        String query = (String) args.get("query");
+        String newContent = (String) args.get("new_content");
+
+        Optional<KnowledgeItem> updated = knowledgeTools.updateKnowledgeByQuery(query, newContent, projectId);
+
+        return updated
+                .map(item -> String.format("Updated: '%s' → '%s'", query, truncate(newContent, 50)))
+                .orElse("No item found matching '" + query + "' to update");
+    }
+
     private String executeDeleteKnowledge(Map<String, Object> args, String projectId) {
         String query = (String) args.get("query");
 
@@ -156,21 +176,72 @@ public class ToolExecutor {
         }
     }
 
+    private String executePreviewDelete(Map<String, Object> args, String projectId) {
+        String query = (String) args.get("query");
+
+        var previews = knowledgeTools.previewDelete(query, projectId);
+
+        if (previews.isEmpty()) {
+            return "No items found matching '" + query + "' to delete";
+        }
+
+        StringBuilder result = new StringBuilder();
+        result.append(String.format("Found %d item(s) matching '%s':\n", previews.size(), query));
+
+        for (var preview : previews) {
+            result.append(String.format("- [%s] %s (id: %s, match: %.0f%%)\n",
+                    preview.type(),
+                    truncate(preview.content(), 60),
+                    preview.id(),
+                    preview.score() * 100));
+        }
+
+        result.append("\nTo delete these items, call confirm_delete with the IDs.");
+        return result.toString();
+    }
+
+    @SuppressWarnings("unchecked")
+    private String executeConfirmDelete(Map<String, Object> args) {
+        List<String> ids = (List<String>) args.get("ids");
+
+        if (ids == null || ids.isEmpty()) {
+            return "No IDs provided to delete";
+        }
+
+        int deleted = knowledgeTools.deleteByIds(ids);
+
+        if (deleted > 0) {
+            return String.format("Successfully deleted %d item(s)", deleted);
+        } else {
+            return "No items were deleted - IDs may not exist";
+        }
+    }
+
     // Task tool implementations
 
     private String executeCreateTask(Map<String, Object> args, String projectId, String userId) {
         String title = (String) args.get("title");
         String description = (String) args.get("description");
         String deadlineStr = (String) args.get("deadline");
+        String assignee = (String) args.get("assignee");
 
         LocalDate deadline = deadlineStr != null ? timeTools.parseDate(deadlineStr) : null;
 
-        KnowledgeItem task = taskTools.createTask(title, description, deadline, projectId, userId);
+        // Include assignee in task content for searchability
+        String taskTitle = title;
+        if (assignee != null && !assignee.isBlank()) {
+            taskTitle = title + " [assigned to: " + assignee + "]";
+        }
+
+        KnowledgeItem task = taskTools.createTask(taskTitle, description, deadline, projectId, userId);
 
         String deadlineInfo = deadline != null
                 ? " (deadline: " + timeTools.formatDate(deadline) + ")"
                 : "";
-        return String.format("Created task: '%s'%s", title, deadlineInfo);
+        String assigneeInfo = assignee != null && !assignee.isBlank()
+                ? " (assigned to: " + assignee + ")"
+                : "";
+        return String.format("Created task: '%s'%s%s", title, assigneeInfo, deadlineInfo);
     }
 
     private String executeGetTasksForToday(String userId) {
@@ -293,6 +364,122 @@ public class ToolExecutor {
     private String executeGetCurrentDate() {
         Map<String, Object> info = timeTools.getCurrentDateTimeInfo();
         return String.format("Today is %s (%s)", info.get("formatted"), info.get("dayOfWeek"));
+    }
+
+    // Graph relation tool implementations
+
+    private String executeCreateRelation(Map<String, Object> args, String projectId) {
+        String sourceQuery = (String) args.get("source_query");
+        String targetQuery = (String) args.get("target_query");
+        String relationTypeStr = (String) args.get("relation_type");
+        String description = (String) args.get("description");
+
+        // Find source item
+        List<SearchResult> sourceResults = knowledgeTools.searchKnowledge(sourceQuery, projectId, 1);
+        if (sourceResults.isEmpty()) {
+            return "Cannot create relation: source item not found for query '" + sourceQuery + "'";
+        }
+        String sourceId = sourceResults.get(0).id();
+        String sourceContent = (String) sourceResults.get(0).payload().get("content");
+
+        // Find target item
+        List<SearchResult> targetResults = knowledgeTools.searchKnowledge(targetQuery, projectId, 1);
+        if (targetResults.isEmpty()) {
+            return "Cannot create relation: target item not found for query '" + targetQuery + "'";
+        }
+        String targetId = targetResults.get(0).id();
+        String targetContent = (String) targetResults.get(0).payload().get("content");
+
+        // Check for self-reference
+        if (sourceId.equals(targetId)) {
+            return "Cannot create relation: both queries found the same item. Please use more specific queries.";
+        }
+
+        // Parse relation type
+        RelationType relationType;
+        try {
+            relationType = RelationType.valueOf(relationTypeStr.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return "Invalid relation type: " + relationTypeStr + ". Valid types: RELATES_TO, DEPENDS_ON, SUPPORTS, CONTRADICTS, REFERENCES, DERIVED_FROM, SIMILAR_TO";
+        }
+
+        // Create relation
+        return knowledgeTools.createRelation(sourceId, targetId, relationType, description)
+                .map(item -> String.format("Created relation: '%s' -[%s]-> '%s'",
+                        truncate(sourceContent, 30), relationType, truncate(targetContent, 30)))
+                .orElse("Failed to create relation between the items");
+    }
+
+    private String executeGetRelated(Map<String, Object> args, String projectId) {
+        String query = (String) args.get("query");
+        int depth = ((Number) args.getOrDefault("depth", 1)).intValue();
+        depth = Math.max(1, Math.min(3, depth)); // Clamp between 1 and 3
+
+        // Find the item
+        List<SearchResult> results = knowledgeTools.searchKnowledge(query, projectId, 1);
+        if (results.isEmpty()) {
+            return "Item not found for query: '" + query + "'";
+        }
+        String itemId = results.get(0).id();
+        String itemContent = (String) results.get(0).payload().get("content");
+
+        // Get related items
+        List<KnowledgeItem> related = knowledgeTools.getRelatedWithinDepth(itemId, depth);
+
+        if (related.isEmpty()) {
+            return "No related items found for '" + truncate(itemContent, 40) + "'";
+        }
+
+        // Build result
+        StringBuilder result = new StringBuilder();
+        result.append(String.format("Items related to '%s' (depth %d):\n", truncate(itemContent, 40), depth));
+
+        for (KnowledgeItem item : related) {
+            result.append(String.format("- [%s] %s\n", item.getType(), truncate(item.getContent(), 60)));
+        }
+
+        return result.toString().trim();
+    }
+
+    private String executeFindPath(Map<String, Object> args, String projectId) {
+        String sourceQuery = (String) args.get("source_query");
+        String targetQuery = (String) args.get("target_query");
+
+        // Find source item
+        List<SearchResult> sourceResults = knowledgeTools.searchKnowledge(sourceQuery, projectId, 1);
+        if (sourceResults.isEmpty()) {
+            return "Cannot find path: source item not found for query '" + sourceQuery + "'";
+        }
+        String sourceId = sourceResults.get(0).id();
+        String sourceContent = (String) sourceResults.get(0).payload().get("content");
+
+        // Find target item
+        List<SearchResult> targetResults = knowledgeTools.searchKnowledge(targetQuery, projectId, 1);
+        if (targetResults.isEmpty()) {
+            return "Cannot find path: target item not found for query '" + targetQuery + "'";
+        }
+        String targetId = targetResults.get(0).id();
+        String targetContent = (String) targetResults.get(0).payload().get("content");
+
+        // Find path
+        List<KnowledgeItem> path = knowledgeTools.findPath(sourceId, targetId, 5);
+
+        if (path.isEmpty()) {
+            return String.format("No path found between '%s' and '%s'",
+                    truncate(sourceContent, 30), truncate(targetContent, 30));
+        }
+
+        // Build result
+        StringBuilder result = new StringBuilder();
+        result.append(String.format("Path from '%s' to '%s':\n", truncate(sourceContent, 30), truncate(targetContent, 30)));
+
+        for (int i = 0; i < path.size(); i++) {
+            KnowledgeItem item = path.get(i);
+            String prefix = i == 0 ? "START" : (i == path.size() - 1 ? "END" : String.valueOf(i));
+            result.append(String.format("%s. [%s] %s\n", prefix, item.getType(), truncate(item.getContent(), 50)));
+        }
+
+        return result.toString().trim();
     }
 
     // Helpers

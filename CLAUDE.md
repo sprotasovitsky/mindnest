@@ -171,6 +171,44 @@ After each test scenario, verify:
 - [ ] Vector count in Qdrant matches Neo4j count
 - [ ] Deleted items are actually removed
 
+### CRITICAL: Testing Rules
+
+**BEFORE starting a test iteration:**
+1. Save the current system prompt to `tests/prompts/prompt-vN.txt` (increment N)
+2. This ensures we know exactly which prompt version was used for each test
+
+**During test execution:**
+- Execute ALL steps in each scenario - no shortcuts
+- If issues are found, STOP and fix them BEFORE moving to next test
+- Do NOT just record issues and continue - FIX THEM FIRST
+- After ANY code change, rebuild backend and restart ALL tests from 001
+
+**After fixing issues:**
+1. Rebuild backend with `./gradlew build`
+2. Restart backend
+3. Run ALL tests from the beginning (001, 002, etc.)
+4. Do NOT skip tests - a fix might break something else
+
+**Test Results Format** (`tests/results/NNN-iteration-X.md`):
+```
+# Scenario NNN - Iteration X
+Date: YYYY-MM-DD
+
+## Prompt Version: N (see tests/prompts/prompt-vN.txt)
+
+## Results
+- Items to save: X, saved: Y (Z%)
+- Search works: Y/N
+- Update works: Y/N
+- Delete works: Y/N
+
+## Issues Found
+...
+
+## What Changed from Previous Iteration
+...
+```
+
 ## Agent Architecture
 
 ### Key Principle: Tools, Not Agents

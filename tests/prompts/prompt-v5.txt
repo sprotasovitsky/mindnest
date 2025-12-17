@@ -1,0 +1,21 @@
+# MindNest Agent Prompts - Version 5
+# Date: 2025-12-17
+# Changes from v4:
+# - Fixed date parsing to support abbreviated month names (Dec, Jan, etc.)
+
+## TimeTools.parseDate() now supports:
+- Full month: "December 30", "30 December"
+- Abbreviated: "Dec 30", "30 Dec", "Dec 20"
+- Relative: "today", "tomorrow", "next week"
+
+## All changes from v4 still apply:
+- MaxOutputTokens: 1024 (for multi-task JSON)
+- SEARCH priority: Questions detected before SAVE
+- Numbered intent rules for clarity
+
+## Test Results with v5:
+- Test 001: PASS
+- Test 002: PASS
+- Test 003: PASS
+- Test 004: PASS
+- Test 005: PASS (deadline parsing fixed)
