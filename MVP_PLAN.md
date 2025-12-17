@@ -24,7 +24,7 @@
   ├── mobile/            # Flutter (iOS, Android, Web)
   ├── backend/           # Spring Boot
   ├── docker/            # Docker Compose
-  └── docs/              # Documentation
+  └── tests/             # Integration test scenarios
   ```
 - [x] Set up Docker Compose (dev environment)
 - [ ] Set up CI/CD (GitHub Actions)
@@ -97,8 +97,8 @@
 
 ### 1.4 Vertex AI Integration
 
-- [x] `LlmService` — Gemini calls
-- [x] `EmbeddingService` — text-embedding-004
+- [x] `LlmService` — Gemini calls (gemini-2.5-flash-lite, gemini-2.5-pro)
+- [x] `EmbeddingService` — gemini-embedding-001 (3072 dims, 100+ languages)
 - [x] `ModelRouter` — model selection by task type
 - [x] Rate limiting / error handling
 
@@ -321,10 +321,16 @@
 
 **Won't have (definitely not in MVP):**
 1. MCP server
-2. Team collaboration (multiple users)
+2. ~~Team collaboration~~ ✅ Implemented (project members)
 3. Reminders
 4. Voice input
 5. Migration from other systems
+
+**Added beyond initial plan:**
+- ✅ Multi-language support (Russian, English, cross-language search)
+- ✅ Team collaboration (project members can share knowledge)
+- ✅ Intent detection with force-check patterns
+- ✅ Configurable similarity thresholds (externalized to application.yml)
 
 ---
 

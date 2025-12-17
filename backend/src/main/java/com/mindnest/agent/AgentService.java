@@ -7,6 +7,7 @@ import com.google.cloud.vertexai.api.*;
 import com.google.cloud.vertexai.generativeai.GenerativeModel;
 import com.google.cloud.vertexai.generativeai.ResponseHandler;
 import com.mindnest.agent.IntentResult.Intent;
+import com.mindnest.config.PromptConfig;
 import com.mindnest.model.dto.ChatResponse;
 import com.mindnest.model.entity.Conversation;
 import com.mindnest.model.entity.Message;
@@ -30,161 +31,13 @@ public class AgentService {
     private final ToolExecutor toolExecutor;
     private final ConversationService conversationService;
     private final ObjectMapper objectMapper;
+    private final PromptConfig promptConfig;
 
     @Value("${vertex-ai.models.chat}")
     private String chatModel;
 
     @Value("${vertex-ai.models.flash}")
     private String flashModel;
-
-    private static final String SYSTEM_PROMPT = """
-            You are MindNest, a personal AI assistant for knowledge and task management.
-
-            Your role:
-            - You are a secretary-assistant who helps structure information
-            - You remember everything you are told and can find it later
-            - You help manage tasks and projects
-            - You respond concisely and to the point
-
-            IMPORTANT TOOL USAGE RULES:
-            1. SAVING INFORMATION:
-               - If user shares facts, shopping items, notes, expenses — use create_knowledge
-               - Use type: FACT for factual data, NOTE for general info, DECISION for decisions
-               - Save EACH item separately if user gives multiple items
-
-            2. TASKS:
-               - To create a new task — use create_task with title and optional deadline
-               - To mark a task as DONE — use complete_task_by_title with the task title/keywords
-               - To find tasks — use search_tasks
-               - To list active tasks — use get_active_tasks
-
-            3. DELETING/REMOVING:
-               - When user says "remove X from list" or "delete X" — use delete_knowledge with the item name
-               - When user says "returned" or "refund" — use delete_knowledge
-               - This is CRITICAL: always use delete_knowledge when asked to remove something
-
-            4. SEARCHING:
-               - To find information — use search_knowledge
-               - To find tasks — use search_tasks
-               - After searching, summarize and calculate based on results
-
-            5. UPDATING/CORRECTING:
-               - When user says "actually", "mistake", "correct" — use update_knowledge
-               - update_knowledge(query="item to find", new_content="corrected content")
-
-            6. DATES:
-               - If you need current date — use get_current_date
-               - Deadlines like "December 30" should be passed as-is to create_task
-
-            7. RELATIONS/CONNECTIONS:
-               - To link two items — use create_relation (e.g., "X depends on Y", "connect X and Y")
-               - To find related items — use get_related (e.g., "what is related to X?")
-               - To find path between items — use find_path (e.g., "how is X connected to Y?")
-               - Relation types: RELATES_TO, DEPENDS_ON, SUPPORTS, CONTRADICTS, REFERENCES, DERIVED_FROM, SIMILAR_TO
-
-            RESPONSE RULES:
-            - Respond in the same language the user is using
-            - After using a tool, provide a brief natural confirmation
-            - Always confirm what action was taken
-            - Be specific about what was saved/updated/deleted
-            """;
-
-    // Prompt for intent detection (Step 1)
-    // Supports both English and Russian keywords
-    private static final String INTENT_DETECTION_PROMPT = """
-            Analyze the user's message and determine their intent. Return JSON with:
-            - intent: one of SAVE, SEARCH, UPDATE, DELETE, TASK, COMPLETE, CHAT
-            - tool: which tool to call (or null for CHAT)
-            - content: the main content to save/search/update/delete (extracted from message)
-            - knowledgeType: for SAVE intent, one of FACT, NOTE, DECISION
-            - tasks: for TASK intent, array of task objects with {title, deadline, assignee}
-
-            INTENT RULES (check in this EXACT order - first match wins):
-
-            1. TASK - User explicitly creates task(s):
-            - Keywords EN: "create task", "task for", "add task", "assign task"
-            - Keywords RU: "создай задачу", "добавь задачу", "задача для", "назначь"
-            - Pattern: "Create task for X: do Y" / "Задача для X: сделать Y"
-            Tool: create_task
-            Extract each task with title, assignee, deadline
-
-            2. COMPLETE - User marks a task as done:
-            - Keywords EN: "mark as done", "completed task", "task is done", "task complete"
-            - Keywords RU: "выполнена", "сделана", "готово", "завершена", "закончил", "сделал"
-            - Pattern: "X task is done" / "Задача X выполнена"
-            Tool: complete_task_by_title
-
-            3. DELETE - User wants to remove information:
-            - Keywords EN: "remove", "delete", "cancel", "returned", "refund"
-            - Keywords RU: "удали", "убери", "отмени", "верни", "удалить"
-            - Example: "Remove boots from the list" / "Удали информацию про заправку"
-            Tool: delete_knowledge
-            IMPORTANT: Extract the search query for what to delete in "content" field
-
-            4. UPDATE - User corrects/changes existing information:
-            - Keywords EN: "actually", "mistake", "correct", "change", "update", "was wrong", "not X but Y", "instead of"
-            - Keywords RU: "на самом деле", "ошибка", "исправь", "измени", "обнови", "не X а Y", "вместо", "было неправильно", "поменяй"
-            - Patterns:
-              * "Actually it was 4200, not 4500" → query: "4500", new: "4200"
-              * "Change budget to 50000" → query: "budget", new: "budget 50000"
-              * "На самом деле потратили 3000, а не 2500" → query: "2500", new: "3000"
-              * "Измени бюджет на 40000" → query: "бюджет", new: "бюджет 40000"
-            Tool: update_knowledge
-            IMPORTANT: Extract update_query (what to find) and update_new_content (replacement) separately!
-
-            5. SEARCH - User asks a QUESTION or wants to find/retrieve info:
-            *** CRITICAL RULE - CHECK THIS FIRST: ***
-            If message STARTS with any of these words (case insensitive), it is ALWAYS SEARCH:
-            - "что " (what) - e.g. "Что мы покупали?" = SEARCH
-            - "какой" / "какие" / "какая" (which) - e.g. "Какие задачи?" = SEARCH
-            - "сколько" (how much/many) - e.g. "Сколько потратили?" = SEARCH
-            - "когда" (when) - e.g. "Когда встреча?" = SEARCH
-            - "где" (where) - e.g. "Где информация?" = SEARCH
-            - "кто" (who) - e.g. "Кто назначен?" = SEARCH
-            - "почему" / "зачем" (why) - e.g. "Почему так?" = SEARCH
-            - "как" (how) - e.g. "Как сделать?" = SEARCH
-            - "чё" / "че" (informal what) - e.g. "чё там?" = SEARCH
-            - "what" / "when" / "where" / "which" / "who" / "why" / "how"
-
-            If message ENDS with "?" it is SEARCH (even if it contains action words like "покупали", "купили").
-
-            *** EXAMPLES - ALWAYS SEARCH (even if they mention purchases/expenses): ***
-            - "Что мы покупали в этом месяце?" → SEARCH (starts with "что", ends with "?")
-            - "Что купили?" → SEARCH (starts with "что")
-            - "Какие у меня задачи?" → SEARCH (starts with "какие")
-            - "чё там по бюджету?" → SEARCH (starts with "чё")
-            - "Сколько потратили?" → SEARCH (starts with "сколько")
-            - "How much did we spend?" → SEARCH (starts with "how")
-
-            Additional search triggers:
-            - Requests EN: "show me", "list all", "find", "search", "tell me about"
-            - Requests RU: "покажи", "найди", "выведи", "подскажи", "расскажи"
-            Tool: search_knowledge
-
-            6. SAVE - User provides NEW factual information to store (NOT questions!):
-            - ONLY if NOT a question (no "?" at end, no question words at start)
-            - NEVER save if message starts with: что, какой, какие, сколько, когда, где, кто, как, чё, че
-            - NEVER save if message ends with "?"
-            - Expenses: "I spent 500" / "Потратил 500", "Купил X за Y"
-            - Facts: "Budget is..." / "Бюджет...", "Встреча в..."
-            - Decisions: "We decided..." / "Решили...", "Выбрали..."
-            Tool: create_knowledge
-
-            7. RELATION - User wants to link/connect items:
-            - Keywords EN: "connect", "link", "relates to", "depends on", "related to"
-            - Keywords RU: "связь", "связать", "связано с", "зависит от", "относится к"
-            - Pattern: "X depends on Y" / "Задача X зависит от Y"
-            Tool: create_relation
-
-            8. CHAT - General conversation:
-            - "Hello", "Thanks" / "Привет", "Спасибо", "Что ты умеешь?"
-            Tool: null
-
-            User message: "%s"
-
-            Respond with JSON only, no markdown:
-            {"intent":"...", "tool":"...", "content":"...", "knowledgeType":"...", "tasks":[{"title":"...","deadline":"...","assignee":"..."}], "update_query":"...", "update_new_content":"..."}
-            """;
 
     public ChatResponse processMessage(String message, String projectId, String userId) {
         log.info("Processing message for project: {}, user: {}", projectId, userId);
@@ -226,7 +79,7 @@ public class AgentService {
                 contents.set(contents.size() - 1, Content.newBuilder()
                     .setRole("user")
                     .addParts(Part.newBuilder().setText(
-                        SYSTEM_PROMPT + "\n\nUser request: " + enhancedMessage).build())
+                        promptConfig.getSystemPrompt() + "\n\nUser request: " + enhancedMessage).build())
                     .build());
             }
 
@@ -287,7 +140,7 @@ public class AgentService {
 
             // Embed system prompt in first user message
             if (isFirstUserMessage && msg.getRole() == Message.Role.user) {
-                content = SYSTEM_PROMPT + "\n\nUser request: " + content;
+                content = promptConfig.getSystemPrompt() + "\n\nUser request: " + content;
                 isFirstUserMessage = false;
             }
 
@@ -300,7 +153,7 @@ public class AgentService {
         // Add current message with system prompt if no history
         String currentContent = currentMessage;
         if (isFirstUserMessage || contents.isEmpty()) {
-            currentContent = SYSTEM_PROMPT + "\n\nUser request: " + currentMessage;
+            currentContent = promptConfig.getSystemPrompt() + "\n\nUser request: " + currentMessage;
         }
 
         contents.add(Content.newBuilder()
@@ -931,7 +784,7 @@ public class AgentService {
                             .build())
                     .build();
 
-            String prompt = INTENT_DETECTION_PROMPT.formatted(message);
+            String prompt = promptConfig.getIntentDetectionPrompt().formatted(message);
             GenerateContentResponse response = intentModel.generateContent(prompt);
             String jsonResponse = ResponseHandler.getText(response);
 

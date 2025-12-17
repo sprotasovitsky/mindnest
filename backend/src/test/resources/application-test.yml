@@ -1,0 +1,48 @@
+spring:
+  main:
+    allow-bean-definition-overriding: true
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    database-platform: org.hibernate.dialect.H2Dialect
+  neo4j:
+    uri: bolt://localhost:7687
+    authentication:
+      username: neo4j
+      password: test
+
+qdrant:
+  host: localhost
+  port: 6334
+  collection: test_vectors
+
+vertex-ai:
+  project-id: test-project
+  location: us-central1
+  models:
+    chat: gemini-2.5-flash-lite
+    chat-pro: gemini-2.5-pro
+    flash: gemini-2.5-flash-lite
+    embedding: gemini-embedding-001
+  generation:
+    temperature: 0.7
+    max-tokens: 2048
+
+agent:
+  thresholds:
+    deduplication: 0.85
+    update: 0.7
+    delete-high: 0.8
+    delete-with-keywords: 0.6
+    preview-delete: 0.75
+    task-search: 0.5
+  recency:
+    max-boost: 0.05
+    decay-days: 30
+
+jwt:
+  secret: dGVzdC1zZWNyZXQta2V5LWZvci10ZXN0aW5nLW9ubHk=
+  expiration: 86400000

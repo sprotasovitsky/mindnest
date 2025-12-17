@@ -8,6 +8,7 @@ import com.mindnest.repository.VectorRepository.SearchResult;
 import com.mindnest.service.VectorSearchService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -26,6 +27,21 @@ public class KnowledgeTools {
     private final KnowledgeRepository knowledgeRepository;
     private final VectorSearchService vectorSearchService;
 
+    @Value("${agent.thresholds.deduplication}")
+    private double deduplicationThreshold;
+
+    @Value("${agent.thresholds.update}")
+    private double updateThreshold;
+
+    @Value("${agent.thresholds.preview-delete}")
+    private double previewDeleteThreshold;
+
+    @Value("${agent.thresholds.delete-high}")
+    private double deleteHighThreshold;
+
+    @Value("${agent.thresholds.delete-with-keywords}")
+    private double deleteWithKeywordsThreshold;
+
     /**
      * Create a new knowledge item (with deduplication)
      */
@@ -38,8 +54,8 @@ public class KnowledgeTools {
             String existingContent = (String) result.payload().get("content");
             String existingType = (String) result.payload().get("type");
 
-            // If same type and very similar content (>85% similarity), skip creation
-            if (existingType != null && existingType.equals(type.name()) && result.score() > 0.85) {
+            // If same type and very similar content, skip creation
+            if (existingType != null && existingType.equals(type.name()) && result.score() > deduplicationThreshold) {
                 log.info("Skipping duplicate - existing item with similar content found: {}", result.id());
                 return knowledgeRepository.findById(result.id()).orElse(null);
             }
@@ -118,10 +134,10 @@ public class KnowledgeTools {
         String queryLower = query.toLowerCase();
         for (SearchResult result : results) {
             String content = (String) result.payload().get("content");
-            // Update if: content contains query keywords OR high semantic match (>0.7)
+            // Update if: content contains query keywords OR high semantic match
             // Note: cross-language queries have ~0.4 similarity, so they won't match anyway
             boolean containsQuery = content != null && content.toLowerCase().contains(queryLower);
-            boolean highSemanticMatch = result.score() > 0.7;
+            boolean highSemanticMatch = result.score() > updateThreshold;
             if (content != null && (containsQuery || highSemanticMatch)) {
                 log.info("Found match for update: '{}' (score: {}, contains: {})",
                         truncate(content, 50), result.score(), containsQuery);
@@ -183,8 +199,8 @@ public class KnowledgeTools {
             String content = (String) result.payload().get("content");
             String type = (String) result.payload().get("type");
 
-            // Include if similarity > 0.75 (very high threshold for safe deletion)
-            if (content != null && result.score() > 0.75) {
+            // Include if similarity above preview threshold for safe deletion
+            if (content != null && result.score() > previewDeleteThreshold) {
                 previews.add(new DeletePreview(result.id(), type, content, result.score()));
             }
         }
@@ -240,8 +256,8 @@ public class KnowledgeTools {
                 }
             }
 
-            // Delete if: high similarity (>0.8) OR (moderate similarity >0.6 AND keyword match)
-            boolean shouldDelete = result.score() > 0.8 || (result.score() > 0.6 && hasKeywordMatch);
+            // Delete if: high similarity OR (moderate similarity AND keyword match)
+            boolean shouldDelete = result.score() > deleteHighThreshold || (result.score() > deleteWithKeywordsThreshold && hasKeywordMatch);
             if (shouldDelete) {
                 String itemId = result.id();
                 if (knowledgeRepository.existsById(itemId)) {

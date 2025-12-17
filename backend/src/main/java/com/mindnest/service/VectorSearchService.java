@@ -5,6 +5,7 @@ import com.mindnest.repository.VectorRepository;
 import com.mindnest.repository.VectorRepository.SearchResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -25,6 +26,12 @@ public class VectorSearchService {
 
     private final EmbeddingService embeddingService;
     private final VectorRepository vectorRepository;
+
+    @Value("${agent.recency.max-boost}")
+    private double maxRecencyBoost;
+
+    @Value("${agent.recency.decay-days}")
+    private double recencyDecayDays;
 
     /**
      * Index a knowledge item for semantic search
@@ -128,8 +135,8 @@ public class VectorSearchService {
 
     /**
      * Apply recency boost to a search result.
-     * Items created within the last 7 days get up to 5% boost.
-     * The boost decays linearly over 30 days.
+     * Items created recently get up to maxRecencyBoost (configurable).
+     * The boost decays linearly over recencyDecayDays (configurable).
      */
     private SearchResult applyRecencyBoost(SearchResult result) {
         String createdAtStr = (String) result.payload().get("createdAt");
@@ -142,10 +149,8 @@ public class VectorSearchService {
             Instant createdAt = Instant.ofEpochMilli(createdAtMillis);
             long ageInDays = ChronoUnit.DAYS.between(createdAt, Instant.now());
 
-            // Recency boost: max 5% for items < 1 day old, decaying over 30 days
-            double maxBoost = 0.05;
-            double decayDays = 30.0;
-            double recencyBoost = Math.max(0, (decayDays - ageInDays) / decayDays * maxBoost);
+            // Recency boost: decays linearly over configured days
+            double recencyBoost = Math.max(0, (recencyDecayDays - ageInDays) / recencyDecayDays * maxRecencyBoost);
 
             double boostedScore = result.score() * (1 + recencyBoost);
 

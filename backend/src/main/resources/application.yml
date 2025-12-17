@@ -45,6 +45,22 @@ vertex-ai:
     chat-pro: gemini-2.5-pro
     flash: gemini-2.5-flash-lite  # Fast model for intent detection
     embedding: gemini-embedding-001  # 3072 dimensions, 100+ languages
+  generation:
+    temperature: 0.7
+    max-tokens: 2048
+
+# Agent thresholds (similarity scores 0.0-1.0)
+agent:
+  thresholds:
+    deduplication: 0.85      # Skip saving if existing item has same type and higher similarity
+    update: 0.7              # Minimum similarity for semantic update match
+    delete-high: 0.8         # Delete without keyword check if above this
+    delete-with-keywords: 0.6  # Delete with keyword check if above this
+    preview-delete: 0.75     # Minimum similarity for preview delete
+    task-search: 0.5         # Minimum similarity for task semantic search
+  recency:
+    max-boost: 0.05          # Maximum recency boost (5%)
+    decay-days: 30           # Days over which boost decays to 0
 
 # JWT
 jwt:

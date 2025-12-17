@@ -9,6 +9,7 @@ import com.mindnest.repository.VectorRepository.SearchResult;
 import com.mindnest.service.VectorSearchService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -27,6 +28,9 @@ public class TaskTools {
 
     private final KnowledgeRepository knowledgeRepository;
     private final VectorSearchService vectorSearchService;
+
+    @Value("${agent.thresholds.task-search}")
+    private double taskSearchThreshold;
 
     /**
      * Create a new task
@@ -233,7 +237,7 @@ public class TaskTools {
         log.debug("No direct match, trying semantic search for: '{}'", titleQuery);
         List<SearchResult> semanticResults = vectorSearchService.searchTasks(titleQuery, 3, projectId);
         for (SearchResult result : semanticResults) {
-            if (result.score() > 0.5) {  // At least 50% similarity
+            if (result.score() > taskSearchThreshold) {  // Minimum similarity threshold
                 String taskId = result.id();
                 Optional<KnowledgeItem> foundTask = knowledgeRepository.findById(taskId);
                 if (foundTask.isPresent() && foundTask.get().getStatus() != TaskStatus.DONE) {
