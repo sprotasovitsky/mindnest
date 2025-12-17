@@ -86,12 +86,13 @@ register_user() {
     fi
 }
 
-# Function to create a project
+# Function to create a project and auto-add all registered users as members
 create_project() {
     local user="$1"
     local name="$2"
     local description="$3"
     local token=$(get_token "$user")
+    local owner_email=$(get_email "$user")
 
     echo "Creating project: $name (by $user)"
     RESP=$(curl -s -X POST "$BASE_URL/api/projects" \
@@ -102,6 +103,22 @@ create_project() {
     PROJECT_ID=$(echo "$RESP" | jq -r '.id')
     if [ "$PROJECT_ID" != "null" ] && [ -n "$PROJECT_ID" ]; then
         echo "  ✓ Project created: $PROJECT_ID"
+
+        # Auto-add all other registered users as members
+        for entry in "${USER_DATA[@]}"; do
+            local member_name="${entry%%:*}"
+            local member_email=$(echo "$entry" | cut -d: -f2)
+
+            # Skip the owner
+            if [ "$member_email" != "$owner_email" ]; then
+                echo "  Adding member: $member_email"
+                curl -s -X POST "$BASE_URL/api/projects/$PROJECT_ID/members" \
+                    -H "Content-Type: application/json" \
+                    -H "Authorization: Bearer $token" \
+                    -d "{\"email\":\"$member_email\"}" > /dev/null
+            fi
+        done
+        echo "  ✓ All members added"
     else
         echo "  ✗ Failed to create project"
         echo "  Response: $RESP"
@@ -152,21 +169,49 @@ echo ""
 echo "=== Phase 1: Setup ==="
 echo ""
 
-# Read users from markdown table (format: | Name | Email | Password |)
-while IFS='|' read -r _ name email password _; do
-    name=$(echo "$name" | xargs 2>/dev/null || echo "$name" | tr -d ' ')
-    email=$(echo "$email" | xargs 2>/dev/null || echo "$email" | tr -d ' ')
-    password=$(echo "$password" | xargs 2>/dev/null || echo "$password" | tr -d ' ')
+# Read users from markdown table
+# Supports both formats:
+# | Name | Email | Password |          (3 columns)
+# | Name | Role | Email | Password |   (4 columns)
+while IFS='|' read -r line; do
+    # Skip empty lines and separators
+    [[ -z "$line" ]] && continue
+    [[ "$line" =~ ^[[:space:]]*-+[[:space:]]*$ ]] && continue
 
-    # Skip header and separator rows
-    if [[ "$name" =~ ^-+$ ]] || [ "$name" = "Name" ] || [ -z "$name" ]; then
-        continue
-    fi
+    # Split by | and clean up
+    IFS='|' read -ra cols <<< "$line"
 
-    if [ -n "$email" ] && [[ "$email" == *"@"* ]]; then
-        register_user "$name" "$email" "${password:-test123}"
+    # Find email column (contains @)
+    email=""
+    email_idx=-1
+    for i in "${!cols[@]}"; do
+        col=$(echo "${cols[$i]}" | xargs 2>/dev/null || echo "${cols[$i]}" | tr -d ' ')
+        if [[ "$col" == *"@"* ]]; then
+            email="$col"
+            email_idx=$i
+            break
+        fi
+    done
+
+    # Skip if no email found
+    [[ -z "$email" ]] && continue
+
+    # Name is always first non-empty column
+    name=$(echo "${cols[1]}" | xargs 2>/dev/null || echo "${cols[1]}" | tr -d ' ')
+
+    # Skip header row
+    [[ "$name" == "Name" ]] && continue
+    [[ -z "$name" ]] && continue
+
+    # Password is column after email, or default
+    password_idx=$((email_idx + 1))
+    if [ $password_idx -lt ${#cols[@]} ]; then
+        password=$(echo "${cols[$password_idx]}" | xargs 2>/dev/null || echo "${cols[$password_idx]}" | tr -d ' ')
     fi
-done < <(grep -E "^\|.*@.*\|" "$SCENARIO_FILE" 2>/dev/null || grep -E "^\|[^|]+\|[^|]+@[^|]+\|" "$SCENARIO_FILE" 2>/dev/null || true)
+    password="${password:-test123}"
+
+    register_user "$name" "$email" "$password"
+done < <(grep -E "^\|.*@.*\|" "$SCENARIO_FILE" 2>/dev/null || true)
 
 echo ""
 
@@ -177,6 +222,8 @@ echo ""
 # Find all Chat: lines with their User context
 current_user=""
 step_num=0
+in_chat=false
+chat_message=""
 
 while IFS= read -r line; do
     # Check for User: line
@@ -185,17 +232,49 @@ while IFS= read -r line; do
         current_user=$(echo "$current_user" | xargs 2>/dev/null || echo "$current_user" | tr -d ' ')
     fi
 
-    # Check for Chat: line
-    if [[ "$line" =~ ^Chat:\ \"(.+)\"$ ]]; then
-        message="${BASH_REMATCH[1]}"
-        step_num=$((step_num + 1))
+    # Check for Chat: line start (may be single or multi-line)
+    if [[ "$line" =~ ^Chat:\ \"(.*)$ ]]; then
+        chat_content="${BASH_REMATCH[1]}"
+        # Check if message ends on same line
+        if [[ "$chat_content" =~ ^(.*)\"$ ]]; then
+            # Single line message
+            message="${BASH_REMATCH[1]}"
+            step_num=$((step_num + 1))
 
-        token=$(get_token "$current_user")
-        if [ -n "$current_user" ] && [ -n "$token" ]; then
-            echo "--- Step $step_num ---"
-            send_chat "$current_user" "$message"
+            token=$(get_token "$current_user")
+            if [ -n "$current_user" ] && [ -n "$token" ]; then
+                echo "--- Step $step_num ---"
+                send_chat "$current_user" "$message"
+            else
+                echo "Warning: No token for user '$current_user', skipping message"
+            fi
         else
-            echo "Warning: No token for user '$current_user', skipping message"
+            # Multi-line message starts
+            in_chat=true
+            chat_message="$chat_content"
+        fi
+    elif [ "$in_chat" = true ]; then
+        # Continue collecting multi-line message
+        if [[ "$line" =~ ^(.*)\"$ ]]; then
+            # Message ends
+            chat_message="$chat_message ${BASH_REMATCH[1]}"
+            in_chat=false
+            step_num=$((step_num + 1))
+
+            # Truncate long messages for display but send full to API
+            display_msg="${chat_message:0:100}"
+            [ ${#chat_message} -gt 100 ] && display_msg="${display_msg}..."
+
+            token=$(get_token "$current_user")
+            if [ -n "$current_user" ] && [ -n "$token" ]; then
+                echo "--- Step $step_num ---"
+                send_chat "$current_user" "$chat_message"
+            else
+                echo "Warning: No token for user '$current_user', skipping message"
+            fi
+            chat_message=""
+        else
+            chat_message="$chat_message $line"
         fi
     fi
 

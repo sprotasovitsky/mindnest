@@ -1,5 +1,6 @@
 package com.mindnest.agent;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.cloud.vertexai.VertexAI;
@@ -11,7 +12,9 @@ import com.mindnest.config.PromptConfig;
 import com.mindnest.model.dto.ChatResponse;
 import com.mindnest.model.entity.Conversation;
 import com.mindnest.model.entity.Message;
+import com.mindnest.model.entity.ProjectMember;
 import com.mindnest.service.ConversationService;
+import com.mindnest.service.GraphService;
 import com.mindnest.service.ModelRouter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,6 +22,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.util.*;
 
 @Service
@@ -30,14 +34,53 @@ public class AgentService {
     private final ModelRouter modelRouter;
     private final ToolExecutor toolExecutor;
     private final ConversationService conversationService;
+    private final GraphService graphService;
     private final ObjectMapper objectMapper;
     private final PromptConfig promptConfig;
+    private final com.mindnest.repository.UserRepository userRepository;
+    private final com.mindnest.agent.tools.ProjectTools projectTools;
 
     @Value("${vertex-ai.models.chat}")
     private String chatModel;
 
     @Value("${vertex-ai.models.flash}")
     private String flashModel;
+
+    // Records for the new chunk-based architecture
+    record ChunkIntent(
+        String intent,           // SAVE, SEARCH, TASK, DELETE, CHAT
+        String type,             // EXPENSE, TASK, KNOWLEDGE, PERSON, EVENT, CATEGORY
+        String subtype,          // fact, note, decision, recipe, etc.
+        String content,          // Full text to save
+        Map<String, Object> properties,  // Extracted structured data
+        List<RelationIntent> relations,  // Links to create
+        String searchQuery       // For SEARCH intent
+    ) {}
+
+    record RelationIntent(
+        String toQuery,          // Search query to find target
+        String type              // SUPERSEDES, CONTRADICTS, BELONGS_TO, etc.
+    ) {}
+
+    record ChunkResult(
+        boolean success,
+        String itemId,
+        String description,
+        List<String> linkedTo,
+        String searchResults     // For SEARCH intent
+    ) {
+        static ChunkResult chat() {
+            return new ChunkResult(true, null, "chat", List.of(), null);
+        }
+
+        static ChunkResult saved(String id, String desc) {
+            return new ChunkResult(true, id, desc, List.of(), null);
+        }
+
+        static ChunkResult search(String results) {
+            return new ChunkResult(true, null, "search", List.of(), results);
+        }
+    }
 
     public ChatResponse processMessage(String message, String projectId, String userId) {
         log.info("Processing message for project: {}, user: {}", projectId, userId);
@@ -54,56 +97,26 @@ public class AgentService {
             // Clear sources before processing
             toolExecutor.clearSources();
 
-            // STEP 1: Detect intent using fast model
-            IntentResult intentResult = detectIntent(message);
-            log.info("Detected intent: {} -> tool: {}", intentResult.intent(), intentResult.toolToCall());
+            // Get conversation context for intent detection
+            List<Message> context = conversationService.getContextMessages(conversation.getId());
+            String contextSummary = buildContextSummary(context);
 
-            // STEP 2: Force tool execution based on detected intent
-            String toolResult = null;
-            if (intentResult.requiresToolCall() && intentResult.toolToCall() != null) {
-                toolResult = executeIntentBasedTool(intentResult, message, projectId, userId);
-                log.info("Tool execution result: {}", toolResult);
+            // === NEW ARCHITECTURE: Chunk-based processing ===
+
+            // STEP 1: Decompose message into chunks
+            List<String> chunks = decompose(message);
+            log.info("Decomposed message into {} chunks: {}", chunks.size(), chunks);
+
+            // STEP 2: Process each chunk through full flow
+            List<ChunkResult> results = new ArrayList<>();
+            for (String chunk : chunks) {
+                ChunkResult result = processChunk(chunk, contextSummary, projectId, userId);
+                results.add(result);
+                log.info("Chunk '{}' -> result: {}", truncate(chunk, 50), result);
             }
 
-            // STEP 3: Generate response using main model
-            // If tool was already executed by intent detection, use model WITHOUT tools
-            // to prevent the model from making conflicting function calls
-            GenerativeModel model;
-            List<Content> contents = buildConversationContents(conversation.getId(), message);
-
-            if (toolResult != null) {
-                // Tool already executed - use model without tools to generate response
-                model = buildModelForResponse();  // Lower temperature for consistent responses
-                String enhancedMessage = "=== MANDATORY INSTRUCTION - READ CAREFULLY ===\n\n" +
-                    "A tool was ALREADY executed. You MUST respond about THIS result ONLY.\n\n" +
-                    "TOOL: " + intentResult.toolToCall() + "\n" +
-                    "RESULT: " + toolResult + "\n" +
-                    "USER MESSAGE: " + message + "\n\n" +
-                    "=== ABSOLUTE RULES ===\n" +
-                    "1. DO NOT mention ANY information from conversation history\n" +
-                    "2. DO NOT repeat previous responses\n" +
-                    "3. ONLY describe what is in RESULT above\n" +
-                    "4. If RESULT contains 'Created note' → say you saved it\n" +
-                    "5. If RESULT contains search results → summarize them\n" +
-                    "6. If RESULT contains 'Marked task' → confirm completion\n" +
-                    "7. If RESULT contains 'Found item to delete' → ask for confirmation\n" +
-                    "8. Respond in the SAME language as USER MESSAGE\n\n" +
-                    "YOUR RESPONSE (1-2 sentences about the RESULT only):";
-                contents.set(contents.size() - 1, Content.newBuilder()
-                    .setRole("user")
-                    .addParts(Part.newBuilder().setText(
-                        promptConfig.getSystemPrompt() + "\n\nUser request: " + enhancedMessage).build())
-                    .build());
-            } else {
-                // No tool executed yet - model can use tools
-                model = buildModelWithTools();
-            }
-
-            // Generate response
-            GenerateContentResponse response = model.generateContent(contents);
-
-            // Process response - handle any additional function calls
-            String finalResponse = processResponse(response, projectId, userId, model, contents);
+            // STEP 3: Generate combined response
+            String finalResponse = generateCombinedResponse(results, message, contextSummary);
 
             // Get sources collected during tool execution
             List<String> sources = toolExecutor.getSources();
@@ -133,6 +146,576 @@ public class AgentService {
                     .sources(List.of())
                     .confidence(0.0)
                     .build();
+        }
+    }
+
+    /**
+     * STEP 1: Decompose message into independent logical chunks using LLM
+     */
+    private List<String> decompose(String message) {
+        try {
+            GenerativeModel decomposeModel = new GenerativeModel.Builder()
+                    .setModelName(flashModel)
+                    .setVertexAi(vertexAI)
+                    .setGenerationConfig(GenerationConfig.newBuilder()
+                            .setMaxOutputTokens(1024)
+                            .setTemperature(0.0f)
+                            .build())
+                    .build();
+
+            String prompt = promptConfig.getDecompositionPrompt().formatted(message);
+            GenerateContentResponse response = decomposeModel.generateContent(prompt);
+            String jsonResponse = ResponseHandler.getText(response);
+
+            log.debug("Decomposition raw response: {}", jsonResponse);
+
+            // Parse JSON array of strings
+            return parseChunkArray(jsonResponse);
+
+        } catch (Exception e) {
+            log.error("Decomposition failed, treating as single chunk: {}", e.getMessage());
+            return List.of(message);
+        }
+    }
+
+    /**
+     * Parse JSON array of strings from decomposition response
+     */
+    private List<String> parseChunkArray(String jsonResponse) {
+        try {
+            // Clean up response (remove markdown if present)
+            String cleaned = jsonResponse.trim();
+            if (cleaned.startsWith("```json")) {
+                cleaned = cleaned.substring(7);
+            }
+            if (cleaned.startsWith("```")) {
+                cleaned = cleaned.substring(3);
+            }
+            if (cleaned.endsWith("```")) {
+                cleaned = cleaned.substring(0, cleaned.length() - 3);
+            }
+            cleaned = cleaned.trim();
+
+            return objectMapper.readValue(cleaned, new TypeReference<List<String>>() {});
+        } catch (Exception e) {
+            log.error("Failed to parse chunk array: {}", e.getMessage());
+            return List.of(jsonResponse);
+        }
+    }
+
+    /**
+     * Build summary of conversation context for intent detection
+     */
+    private String buildContextSummary(List<Message> context) {
+        if (context.isEmpty()) {
+            return "No previous context";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        int count = 0;
+        for (Message msg : context) {
+            if (count >= 5) break;  // Last 5 messages max
+            String role = msg.getRole() == Message.Role.user ? "User" : "Assistant";
+            sb.append(role).append(": ").append(truncate(msg.getContent(), 100)).append("\n");
+            count++;
+        }
+        return sb.toString();
+    }
+
+    /**
+     * STEP 2: Process a single chunk through full agent flow
+     */
+    private ChunkResult processChunk(String chunk, String contextSummary, String projectId, String userId) {
+        // 2.1 Intent detection for this chunk
+        ChunkIntent intent = detectChunkIntent(chunk, contextSummary);
+        log.info("Chunk intent: {} -> type: {}", intent.intent(), intent.type());
+
+        // 2.2 Execute based on intent
+        // NOTE: No COMPLETE - task completion handled via TASK with status=DONE + SUPERSEDES
+        return switch (intent.intent().toUpperCase()) {
+            case "SAVE" -> executeSave(intent, projectId, userId);
+            case "TASK" -> executeTask(intent, projectId, userId);
+            case "SEARCH" -> executeSearch(intent, projectId, userId);
+            case "DELETE" -> executeDelete(intent, projectId, userId);
+            case "CHAT" -> ChunkResult.chat();
+            default -> {
+                log.warn("Unknown intent: {}", intent.intent());
+                yield ChunkResult.chat();
+            }
+        };
+    }
+
+    /**
+     * Detect intent for a single chunk using LLM
+     */
+    private ChunkIntent detectChunkIntent(String chunk, String contextSummary) {
+        try {
+            GenerativeModel intentModel = new GenerativeModel.Builder()
+                    .setModelName(flashModel)
+                    .setVertexAi(vertexAI)
+                    .setGenerationConfig(GenerationConfig.newBuilder()
+                            .setMaxOutputTokens(1024)
+                            .setTemperature(0.0f)
+                            .build())
+                    .build();
+
+            String prompt = promptConfig.getIntentDetectionPrompt().formatted(chunk, contextSummary);
+            GenerateContentResponse response = intentModel.generateContent(prompt);
+            String jsonResponse = ResponseHandler.getText(response);
+
+            log.debug("Chunk intent raw response: {}", jsonResponse);
+
+            return parseChunkIntent(jsonResponse);
+
+        } catch (Exception e) {
+            log.error("Chunk intent detection failed: {}", e.getMessage());
+            return new ChunkIntent("CHAT", null, null, chunk, Map.of(), List.of(), null);
+        }
+    }
+
+    /**
+     * Parse chunk intent JSON response
+     */
+    private ChunkIntent parseChunkIntent(String jsonResponse) {
+        try {
+            // Clean up response
+            String cleaned = jsonResponse.trim();
+            if (cleaned.startsWith("```json")) {
+                cleaned = cleaned.substring(7);
+            }
+            if (cleaned.startsWith("```")) {
+                cleaned = cleaned.substring(3);
+            }
+            if (cleaned.endsWith("```")) {
+                cleaned = cleaned.substring(0, cleaned.length() - 3);
+            }
+            cleaned = cleaned.trim();
+
+            JsonNode json = objectMapper.readTree(cleaned);
+
+            String intent = json.has("intent") ? json.get("intent").asText("CHAT") : "CHAT";
+            String type = json.has("type") && !json.get("type").isNull() ? json.get("type").asText() : null;
+            String subtype = json.has("subtype") && !json.get("subtype").isNull() ? json.get("subtype").asText() : null;
+            String content = json.has("content") && !json.get("content").isNull() ? json.get("content").asText() : "";
+            String searchQuery = json.has("search_query") && !json.get("search_query").isNull()
+                    ? json.get("search_query").asText() : null;
+
+            // Parse properties
+            Map<String, Object> properties = new HashMap<>();
+            if (json.has("properties") && json.get("properties").isObject()) {
+                JsonNode props = json.get("properties");
+                props.fieldNames().forEachRemaining(field -> {
+                    JsonNode value = props.get(field);
+                    if (!value.isNull()) {
+                        if (value.isNumber()) {
+                            properties.put(field, value.numberValue());
+                        } else if (value.isBoolean()) {
+                            properties.put(field, value.booleanValue());
+                        } else {
+                            properties.put(field, value.asText());
+                        }
+                    }
+                });
+            }
+
+            // Parse relations
+            List<RelationIntent> relations = new ArrayList<>();
+            if (json.has("relations") && json.get("relations").isArray()) {
+                for (JsonNode relNode : json.get("relations")) {
+                    String toQuery = relNode.has("to_query") ? relNode.get("to_query").asText() : null;
+                    String relType = relNode.has("type") ? relNode.get("type").asText() : null;
+                    if (toQuery != null && relType != null) {
+                        relations.add(new RelationIntent(toQuery, relType));
+                    }
+                }
+            }
+
+            return new ChunkIntent(intent, type, subtype, content, properties, relations, searchQuery);
+
+        } catch (Exception e) {
+            log.error("Failed to parse chunk intent JSON: {}", e.getMessage());
+            return new ChunkIntent("CHAT", null, null, "", Map.of(), List.of(), null);
+        }
+    }
+
+    /**
+     * Execute SAVE intent - create knowledge/expense item with relations
+     */
+    private ChunkResult executeSave(ChunkIntent intent, String projectId, String userId) {
+        Map<String, Object> args = new HashMap<>();
+        args.put("content", intent.content());
+
+        // Determine type based on intent type
+        String knowledgeType = switch (intent.type() != null ? intent.type().toUpperCase() : "KNOWLEDGE") {
+            case "EXPENSE" -> "FACT";  // Expenses stored as FACT for now (until we add EXPENSE type to tools)
+            case "KNOWLEDGE" -> intent.subtype() != null ? intent.subtype().toUpperCase() : "NOTE";
+            case "TASK" -> "TASK";
+            default -> "NOTE";
+        };
+        args.put("type", knowledgeType);
+
+        // Add structured properties
+        if (intent.properties() != null && !intent.properties().isEmpty()) {
+            // For now, append properties to content for searchability
+            // Future: store in separate fields
+        }
+
+        String result = toolExecutor.execute("create_knowledge", args, projectId, userId);
+
+        // Create relations if specified
+        List<String> linkedTo = new ArrayList<>();
+        for (RelationIntent rel : intent.relations()) {
+            try {
+                String linkResult = createRelation(intent.content(), rel.toQuery(), rel.type(), projectId, userId);
+                if (linkResult != null && linkResult.contains("Created relation")) {
+                    linkedTo.add(rel.toQuery() + " (" + rel.type() + ")");
+                }
+            } catch (Exception e) {
+                log.warn("Failed to create relation to '{}': {}", rel.toQuery(), e.getMessage());
+            }
+        }
+
+        return new ChunkResult(true, null, intent.content(), linkedTo, null);
+    }
+
+    /**
+     * Execute TASK intent - create task or complete existing task.
+     * status=TODO: create new task
+     * status=DONE: create completed task node + SUPERSEDES relation to original
+     */
+    private ChunkResult executeTask(ChunkIntent intent, String projectId, String userId) {
+        String status = intent.properties() != null
+                ? (String) intent.properties().get("status")
+                : "TODO";
+
+        // If completing a task (status=DONE), create new node with SUPERSEDES
+        if ("DONE".equalsIgnoreCase(status)) {
+            // Create completed task node
+            Map<String, Object> args = new HashMap<>();
+            args.put("title", intent.content() + " [DONE]");
+            String result = toolExecutor.execute("create_task", args, projectId, userId);
+
+            // Create SUPERSEDES relation to original task
+            List<String> linkedTo = new ArrayList<>();
+            for (RelationIntent rel : intent.relations()) {
+                if ("SUPERSEDES".equals(rel.type())) {
+                    try {
+                        String linkResult = createRelation(intent.content() + " [DONE]", rel.toQuery(), rel.type(), projectId, userId);
+                        if (linkResult != null && linkResult.contains("Created relation")) {
+                            linkedTo.add("completed: " + rel.toQuery());
+                        }
+                    } catch (Exception e) {
+                        log.warn("Failed to create SUPERSEDES relation: {}", e.getMessage());
+                    }
+                }
+            }
+            return new ChunkResult(true, null, "Completed: " + intent.content(), linkedTo, null);
+        }
+
+        // Create new task
+        Map<String, Object> args = new HashMap<>();
+        args.put("title", intent.content());
+
+        if (intent.properties() != null) {
+            if (intent.properties().containsKey("deadline")) {
+                args.put("deadline", intent.properties().get("deadline").toString());
+            }
+            if (intent.properties().containsKey("assignee")) {
+                args.put("assignee", intent.properties().get("assignee").toString());
+            }
+        }
+
+        String result = toolExecutor.execute("create_task", args, projectId, userId);
+
+        // Create relation to assignee if specified
+        List<String> linkedTo = new ArrayList<>();
+        for (RelationIntent rel : intent.relations()) {
+            if ("ASSIGNED_TO".equals(rel.type())) {
+                try {
+                    String linkResult = createRelation(intent.content(), rel.toQuery(), rel.type(), projectId, userId);
+                    if (linkResult != null) {
+                        linkedTo.add(rel.toQuery());
+                    }
+                } catch (Exception e) {
+                    log.warn("Failed to link task to assignee: {}", e.getMessage());
+                }
+            }
+        }
+
+        return new ChunkResult(true, null, "Task: " + intent.content(), linkedTo, null);
+    }
+
+    /**
+     * Execute SEARCH intent - search knowledge base with graph expansion
+     */
+    private ChunkResult executeSearch(ChunkIntent intent, String projectId, String userId) {
+        String query = intent.searchQuery() != null ? intent.searchQuery() : intent.content();
+
+        // Step 1: Semantic search to find seed nodes
+        Map<String, Object> args = new HashMap<>();
+        args.put("query", query);
+        args.put("limit", 10);
+
+        String tool = "TASK".equals(intent.type()) ? "search_tasks" : "search_knowledge";
+        String searchResult = toolExecutor.execute(tool, args, projectId, null);
+
+        // Step 2: Extract IDs from search results and expand graph
+        List<String> seedIds = toolExecutor.getLastSearchIds();
+        if (seedIds != null && !seedIds.isEmpty()) {
+            // Expand graph with proper depth per relation type
+            GraphService.GraphContext graphContext = graphService.expandGraph(seedIds, 50);
+
+            // Serialize graph for LLM
+            String graphText = graphService.serializeForLLM(graphContext);
+            log.debug("Expanded graph for search:\n{}", graphText);
+
+            // Build user context for LLM
+            String userContext = buildUserContext(userId, projectId);
+
+            return ChunkResult.search(graphText + "\n\n" + userContext);
+        }
+
+        return ChunkResult.search(searchResult);
+    }
+
+    /**
+     * Build user context string for LLM: current user + all project members
+     */
+    private String buildUserContext(String userId, String projectId) {
+        StringBuilder context = new StringBuilder();
+
+        try {
+            // Get current user name
+            String currentUserName = "Unknown";
+            if (userId != null) {
+                var userOpt = userRepository.findById(UUID.fromString(userId));
+                if (userOpt.isPresent()) {
+                    currentUserName = userOpt.get().getName();
+                }
+            }
+            context.append("Current user: ").append(currentUserName).append("\n");
+
+            // Get all project members with their names
+            if (projectId != null) {
+                List<ProjectMember> members = projectTools.getMembers(UUID.fromString(projectId));
+                if (!members.isEmpty()) {
+                    context.append("Project members: ");
+                    List<String> memberNames = new ArrayList<>();
+                    for (ProjectMember member : members) {
+                        var memberUser = userRepository.findById(member.getUserId());
+                        if (memberUser.isPresent()) {
+                            String name = memberUser.get().getName();
+                            String role = member.getRole().name().toLowerCase();
+                            memberNames.add(name + " (" + role + ")");
+                        }
+                    }
+                    context.append(String.join(", ", memberNames));
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to build user context: {}", e.getMessage());
+        }
+
+        return context.toString();
+    }
+
+
+    /**
+     * Execute DELETE intent - create [DELETED] marker with SUPERSEDES relation (immutable)
+     */
+    private ChunkResult executeDelete(ChunkIntent intent, String projectId, String userId) {
+        // In immutable architecture: create marker node + SUPERSEDES relation
+        String content = intent.content();
+        String targetQuery = null;
+
+        // Get target query from relations
+        for (RelationIntent rel : intent.relations()) {
+            if ("SUPERSEDES".equals(rel.type())) {
+                targetQuery = rel.toQuery();
+                break;
+            }
+        }
+
+        if (content == null || content.isEmpty()) {
+            content = "[DELETED] " + (targetQuery != null ? targetQuery : "unknown");
+        }
+
+        // First, find the target item we're "deleting"
+        String targetId = null;
+        if (targetQuery != null) {
+            Map<String, Object> searchArgs = new HashMap<>();
+            searchArgs.put("query", targetQuery);
+            searchArgs.put("limit", 1);
+            toolExecutor.execute("search_knowledge", searchArgs, projectId, null);
+            List<String> foundIds = toolExecutor.getLastSearchIds();
+            if (!foundIds.isEmpty()) {
+                targetId = foundIds.get(0);
+            }
+        }
+
+        // Create the deletion marker
+        Map<String, Object> args = new HashMap<>();
+        args.put("content", content);
+        args.put("type", "NOTE");  // Markers are stored as NOTE type
+        String result = toolExecutor.execute("create_knowledge", args, projectId, userId);
+
+        // Parse marker ID from result "Created note: '...' (id: xxx)"
+        String markerId = null;
+        if (result != null && result.contains("(id: ")) {
+            int start = result.indexOf("(id: ") + 5;
+            int end = result.indexOf(")", start);
+            if (end > start) {
+                markerId = result.substring(start, end);
+            }
+        }
+
+        // Create SUPERSEDES relation using IDs directly
+        List<String> linkedTo = new ArrayList<>();
+        if (markerId != null && targetId != null) {
+            try {
+                Map<String, Object> relArgs = new HashMap<>();
+                relArgs.put("source_id", markerId);
+                relArgs.put("target_id", targetId);
+                relArgs.put("relation_type", "SUPERSEDES");
+                String linkResult = toolExecutor.execute("create_relation_by_id", relArgs, projectId, userId);
+                if (linkResult != null && linkResult.contains("Created relation")) {
+                    linkedTo.add("deleted: " + targetQuery);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to create SUPERSEDES relation for delete: {}", e.getMessage());
+            }
+        }
+
+        return new ChunkResult(true, null, "Marked as deleted: " + content, linkedTo, null);
+    }
+
+    /**
+     * Create a relation between items using semantic search
+     */
+    private String createRelation(String sourceContent, String targetQuery, String relationType,
+                                   String projectId, String userId) {
+        Map<String, Object> args = new HashMap<>();
+        args.put("source_query", sourceContent);
+        args.put("target_query", targetQuery);
+        args.put("relation_type", relationType);
+        return toolExecutor.execute("create_relation", args, projectId, userId);
+    }
+
+    /**
+     * STEP 3: Generate combined response from all chunk results
+     */
+    private String generateCombinedResponse(List<ChunkResult> results, String originalMessage, String context) {
+        try {
+            // Build summary of what was done
+            StringBuilder actionSummary = new StringBuilder();
+            StringBuilder searchResults = new StringBuilder();
+
+            for (ChunkResult result : results) {
+                if (result.searchResults() != null) {
+                    searchResults.append(result.searchResults()).append("\n");
+                } else if (result.description() != null && !"chat".equals(result.description())) {
+                    actionSummary.append("- ").append(result.description());
+                    if (!result.linkedTo().isEmpty()) {
+                        actionSummary.append(" (linked to: ").append(String.join(", ", result.linkedTo())).append(")");
+                    }
+                    actionSummary.append("\n");
+                }
+            }
+
+            // If there are search results, use LLM to generate response with calculations
+            if (searchResults.length() > 0) {
+                return generateSearchResponse(searchResults.toString(), originalMessage);
+            }
+
+            // If there are actions, use LLM to generate natural response
+            if (actionSummary.length() > 0) {
+                return generateActionResponse(actionSummary.toString(), originalMessage);
+            }
+
+            // Chat response
+            return generateChatResponse(originalMessage, context);
+
+        } catch (Exception e) {
+            log.error("Failed to generate combined response: {}", e.getMessage());
+            return "Done.";
+        }
+    }
+
+    /**
+     * Generate response for search results, including calculations if needed
+     */
+    private String generateSearchResponse(String searchResults, String originalQuestion) {
+        try {
+            GenerativeModel responseModel = new GenerativeModel.Builder()
+                    .setModelName(flashModel)
+                    .setVertexAi(vertexAI)
+                    .setGenerationConfig(GenerationConfig.newBuilder()
+                            .setMaxOutputTokens(1024)
+                            .setTemperature(0.3f)
+                            .build())
+                    .build();
+
+            String prompt = promptConfig.getSearchResponsePrompt()
+                    .formatted(searchResults, originalQuestion);
+
+            GenerateContentResponse response = responseModel.generateContent(prompt);
+            return ResponseHandler.getText(response);
+
+        } catch (Exception e) {
+            log.error("Failed to generate search response: {}", e.getMessage());
+            return searchResults;
+        }
+    }
+
+    /**
+     * Generate natural response for actions taken
+     */
+    private String generateActionResponse(String actionSummary, String originalMessage) {
+        try {
+            GenerativeModel responseModel = new GenerativeModel.Builder()
+                    .setModelName(flashModel)
+                    .setVertexAi(vertexAI)
+                    .setGenerationConfig(GenerationConfig.newBuilder()
+                            .setMaxOutputTokens(512)
+                            .setTemperature(0.3f)
+                            .build())
+                    .build();
+
+            String prompt = promptConfig.getActionResponsePrompt()
+                    .formatted(actionSummary, originalMessage);
+
+            GenerateContentResponse response = responseModel.generateContent(prompt);
+            return ResponseHandler.getText(response);
+
+        } catch (Exception e) {
+            log.error("Failed to generate action response: {}", e.getMessage());
+            return "Saved.";
+        }
+    }
+
+    /**
+     * Generate chat response (no tools needed)
+     */
+    private String generateChatResponse(String message, String context) {
+        try {
+            GenerativeModel chatModel = new GenerativeModel.Builder()
+                    .setModelName(flashModel)
+                    .setVertexAi(vertexAI)
+                    .setGenerationConfig(GenerationConfig.newBuilder()
+                            .setMaxOutputTokens(512)
+                            .setTemperature(0.7f)
+                            .build())
+                    .build();
+
+            String prompt = promptConfig.getSystemPrompt() + "\n\nContext:\n" + context +
+                    "\n\nUser message: " + message + "\n\nRespond briefly:";
+
+            GenerateContentResponse response = chatModel.generateContent(prompt);
+            return ResponseHandler.getText(response);
+
+        } catch (Exception e) {
+            log.error("Failed to generate chat response: {}", e.getMessage());
+            return "I understand.";
         }
     }
 
@@ -182,13 +765,11 @@ public class AgentService {
 
     private GenerativeModel buildModelWithTools() throws IOException {
         // Define available tools
+        // NOTE: No update/delete functions - system is immutable
+        // All changes create NEW items with relations (SUPERSEDES, CONTRADICTS)
         Tool tools = Tool.newBuilder()
                 .addFunctionDeclarations(buildCreateKnowledgeFunction())
                 .addFunctionDeclarations(buildSearchKnowledgeFunction())
-                .addFunctionDeclarations(buildUpdateKnowledgeFunction())
-                .addFunctionDeclarations(buildDeleteKnowledgeFunction())
-                .addFunctionDeclarations(buildPreviewDeleteFunction())
-                .addFunctionDeclarations(buildConfirmDeleteFunction())
                 .addFunctionDeclarations(buildCreateTaskFunction())
                 .addFunctionDeclarations(buildGetTasksForTodayFunction())
                 .addFunctionDeclarations(buildGetActiveTasksFunction())
@@ -396,71 +977,8 @@ public class AgentService {
                 .build();
     }
 
-    private FunctionDeclaration buildUpdateKnowledgeFunction() {
-        return FunctionDeclaration.newBuilder()
-                .setName("update_knowledge")
-                .setDescription("Update/correct an existing item in the knowledge base. Use when user says 'actually it was X not Y' or 'correct the amount'")
-                .setParameters(Schema.newBuilder()
-                        .setType(Type.OBJECT)
-                        .putProperties("query", Schema.newBuilder()
-                                .setType(Type.STRING)
-                                .setDescription("Search query to find the item to update (e.g. 'Auchan', 'groceries')")
-                                .build())
-                        .putProperties("new_content", Schema.newBuilder()
-                                .setType(Type.STRING)
-                                .setDescription("The corrected/updated content")
-                                .build())
-                        .addRequired("query")
-                        .addRequired("new_content")
-                        .build())
-                .build();
-    }
-
-    private FunctionDeclaration buildDeleteKnowledgeFunction() {
-        return FunctionDeclaration.newBuilder()
-                .setName("delete_knowledge")
-                .setDescription("Delete/remove an item from the knowledge base by searching for it. Use when user says 'remove X from the list' or 'delete X'")
-                .setParameters(Schema.newBuilder()
-                        .setType(Type.OBJECT)
-                        .putProperties("query", Schema.newBuilder()
-                                .setType(Type.STRING)
-                                .setDescription("Search query to find the item to delete (e.g. 'Christmas tree', 'champagne')")
-                                .build())
-                        .addRequired("query")
-                        .build())
-                .build();
-    }
-
-    private FunctionDeclaration buildPreviewDeleteFunction() {
-        return FunctionDeclaration.newBuilder()
-                .setName("preview_delete")
-                .setDescription("Preview items that would be deleted without actually deleting them. Shows matching items and their IDs for confirmation. Use this FIRST when user wants to delete something, then use confirm_delete.")
-                .setParameters(Schema.newBuilder()
-                        .setType(Type.OBJECT)
-                        .putProperties("query", Schema.newBuilder()
-                                .setType(Type.STRING)
-                                .setDescription("Search query to find items to delete")
-                                .build())
-                        .addRequired("query")
-                        .build())
-                .build();
-    }
-
-    private FunctionDeclaration buildConfirmDeleteFunction() {
-        return FunctionDeclaration.newBuilder()
-                .setName("confirm_delete")
-                .setDescription("Confirm deletion of items by their IDs. Use after preview_delete when user confirms they want to delete the shown items.")
-                .setParameters(Schema.newBuilder()
-                        .setType(Type.OBJECT)
-                        .putProperties("ids", Schema.newBuilder()
-                                .setType(Type.ARRAY)
-                                .setItems(Schema.newBuilder().setType(Type.STRING).build())
-                                .setDescription("List of item IDs to delete")
-                                .build())
-                        .addRequired("ids")
-                        .build())
-                .build();
-    }
+    // NOTE: No update/delete function declarations - system is immutable
+    // All changes create NEW items with relations (SUPERSEDES, CONTRADICTS)
 
     private FunctionDeclaration buildCreateTaskFunction() {
         return FunctionDeclaration.newBuilder()
@@ -843,17 +1361,8 @@ public class AgentService {
                 args.put("limit", 10);
                 yield toolExecutor.execute("search_tasks", args, projectId, userId);
             }
-            case "update_knowledge" -> {
-                // For update, use LLM-extracted query and new content
-                // Semantic search handles morphology and language variations
-                Map<String, Object> args = new HashMap<>();
-                String query = intent.updateQuery() != null ? intent.updateQuery() : content;
-                String newContent = intent.updateNewContent() != null ? intent.updateNewContent() : content;
-                args.put("query", query);
-                args.put("new_content", newContent);
-                log.info("UPDATE: query='{}', new_content='{}'", query, truncate(newContent, 50));
-                yield toolExecutor.execute("update_knowledge", args, projectId, userId);
-            }
+            // NOTE: No update_knowledge case - system is immutable
+            // Updates create NEW items with SUPERSEDES relations
             case "delete_knowledge" -> {
                 Map<String, Object> args = new HashMap<>();
                 args.put("query", content);

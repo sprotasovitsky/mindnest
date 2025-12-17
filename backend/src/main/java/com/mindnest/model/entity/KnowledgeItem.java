@@ -10,6 +10,7 @@ import org.springframework.data.neo4j.core.schema.GeneratedValue;
 import org.springframework.data.neo4j.core.schema.Relationship;
 import org.springframework.data.neo4j.core.support.UUIDStringGenerator;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -28,11 +29,21 @@ public class KnowledgeItem {
 
     private KnowledgeType type;
 
+    private String subtype;  // For KNOWLEDGE: "fact", "note", "decision", "recipe", etc.
+
     private String content;
 
     private TaskStatus status;  // for tasks
 
     private LocalDate deadline;  // for tasks
+
+    private String assignee;  // Person name/id for tasks
+
+    private BigDecimal amount;  // For EXPENSE type
+
+    private String currency;  // "RUB", "USD", "EUR", etc.
+
+    private Instant eventDate;  // For EVENT type
 
     private String ownerId;
 
@@ -49,8 +60,17 @@ public class KnowledgeItem {
     private List<KnowledgeRelation> relations = new ArrayList<>();
 
     public enum KnowledgeType {
+        // Core types
+        KNOWLEDGE,    // Generic: facts, notes, decisions, recipes, etc. (use subtype for specifics)
+        TASK,         // With status lifecycle
+        EXPENSE,      // With amount for calculations
+        PERSON,       // Can be assignee, payer, voter
+        PROJECT,      // Container
+        EVENT,        // With date/time
+        CATEGORY,     // For grouping
+
+        // Legacy types (kept for backward compatibility)
         FACT,
-        TASK,
         DECISION,
         NOTE,
         QUESTION

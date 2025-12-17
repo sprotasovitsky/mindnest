@@ -81,15 +81,72 @@ docker-compose logs -f       # View logs
 ```
 
 ### Data Model
-- **KnowledgeItem** (Neo4j): Central entity with types `fact`, `task`, `decision`, `note`, `question`
+- **KnowledgeItem** (Neo4j): Central entity with types `FACT`, `TASK`, `NOTE`, `DECISION`
+- **KnowledgeRelation** (Neo4j): Relations between items (SUPERSEDES, CONTRADICTS, BELONGS_TO, etc.)
 - **User/Project** (PostgreSQL): Auth and project management
-- **Vectors** (Qdrant): Embeddings for semantic search
+- **Vectors** (Qdrant): Embeddings for semantic search (items are NEVER deleted from Qdrant)
 
 ### AI Agent Flow
 1. User message → `ChatController`
-2. `AgentService` → `ModelRouter` (selects appropriate Gemini model)
-3. `LlmService` calls Vertex AI
-4. Response includes confidence score and sources
+2. `AgentService.decompose()` → Splits message into logical chunks
+3. For each chunk: `detectChunkIntent()` → Determines SAVE/SEARCH/TASK/DELETE/CHAT
+4. Execute intent → Tools create/search items, expand graph
+5. `generateCombinedResponse()` → LLM generates natural response
+6. Response includes confidence score and sources
+
+## Immutable Architecture
+
+**CRITICAL PRINCIPLE**: The system is fully immutable. There are NO UPDATE or DELETE operations at the database level. All changes create NEW items with relations.
+
+### How Operations Work
+
+| User Action | What Happens in DB |
+|-------------|-------------------|
+| Create item | CREATE new KnowledgeItem |
+| Update item | CREATE new item + SUPERSEDES relation to old |
+| Delete item | CREATE `[DELETED] description` marker + SUPERSEDES relation to original |
+| Complete task | CREATE `task [DONE]` node + SUPERSEDES relation to original |
+| Refund purchase | CREATE refund item + CONTRADICTS relation to original purchase |
+
+### Relation Types
+
+| Relation | Meaning | Graph Depth |
+|----------|---------|-------------|
+| `SUPERSEDES` | New item replaces old (update, delete, complete) | ∞ (follow chain to end) |
+| `CONTRADICTS` | Items cancel out (refund cancels purchase) | ∞ (follow chain to end) |
+| `DEPENDS_ON` | Item depends on another | ∞ (follow chain to end) |
+| `BLOCKS` | Item blocks another | ∞ (follow chain to end) |
+| `BELONGS_TO` | Item belongs to category | 1 level |
+| `ASSIGNED_TO` | Task assigned to person | 1 level |
+| `RELATES_TO` | General relation | 1 level |
+
+### Graph Expansion (GraphService)
+
+When searching, the system:
+1. Finds seed nodes via semantic search (Qdrant)
+2. Expands graph from seed nodes following relations
+3. **Chain relations** (SUPERSEDES, CONTRADICTS, etc.): Follow to the end of chain
+4. **Single-level relations** (BELONGS_TO, ASSIGNED_TO): Only 1 hop
+5. Serializes expanded graph for LLM to understand context
+
+### LLM Understanding of Relations
+
+The search response prompt teaches LLM to:
+- **SUPERSEDES**: Item A → SUPERSEDES → B means A is NEWER, B is OUTDATED. Ignore B.
+- **[DELETED] markers**: If `[DELETED] X` → SUPERSEDES → `original X`, then X was deleted
+- **[DONE] markers**: If `task [DONE]` → SUPERSEDES → `task`, then task is completed
+- **CONTRADICTS**: Subtract from totals (refunds cancel purchases)
+
+### User Context in Search
+
+Search responses include:
+- **Current user**: Who is asking the question
+- **Project members**: All people in the project with roles
+
+This allows LLM to filter appropriately:
+- "My tasks" → Shows only current user's tasks
+- "Boris's tasks" → Shows only Boris's tasks
+- "All tasks" → Shows all tasks
 
 ## AI Models Configuration
 
@@ -106,7 +163,8 @@ Key features:
 - **Cross-language search**: EN query finds RU content and vice versa
 - **Recency boost**: Recent items get up to 5% score boost (decays over 30 days)
 - **Semantic similarity only**: All matching uses embeddings, no keyword matching
-- **Similarity thresholds**: Search 0.5, Update 0.6, Delete 0.55
+- **Similarity thresholds**: Search 0.5, Relation matching 0.6
+- **Immutable storage**: Items are NEVER deleted from Qdrant, only marked via relations
 
 ## Environment Variables
 
@@ -166,18 +224,60 @@ curl -s "http://localhost:6333/collections/knowledge_vectors/points/scroll" \
 
 ### Test Scenarios
 
-**Full documentation: [`tests/README.md`](tests/README.md)**
-
 ```
 tests/
-├── README.md              # Full test documentation
 ├── run-scenario.sh        # Test runner (macOS compatible)
 ├── scenarios/             # Test scenario files
 │   ├── 012-russian-language.md
 │   └── 015-cross-language.md
-├── prompts/               # Saved system prompts
+├── prompts/               # Saved prompts (ONE file per version)
+│   └── prompt-vN.md       # All prompts + config for version N
 └── results/               # Test results (committed)
+    └── NNN-vN-description.md
 ```
+
+### Prompt Version File Format
+
+Each version is stored in a single file `prompt-vN.md` containing:
+
+```markdown
+# Prompt Version N
+Date: YYYY-MM-DD
+Time: HH:MM
+
+## Changes from vN-1
+- What changed and why
+
+## Configuration (application.yml)
+- Models, thresholds, etc.
+
+## Prompts
+### 1. System Prompt
+### 2. Decomposition Prompt
+### 3. Intent Detection Prompt
+### 4. Search Response Prompt
+### 5. Action Response Prompt
+```
+
+### Prompt Files in Backend
+
+All prompts are stored in `backend/src/main/resources/prompts/`:
+- `system-prompt.txt`
+- `decomposition-prompt.txt`
+- `intent-detection-prompt.txt`
+- `search-response-prompt.txt`
+- `action-response-prompt.txt`
+
+Loaded via `PromptConfig.java` at startup.
+
+### Prompt Version History
+
+| Version | Changes |
+|---------|---------|
+| v17 | Immutable architecture: no UPDATE/DELETE, only CREATE + relations |
+| v18 | Added SUPERSEDES semantics to search response (LLM ignores outdated items) |
+| v19 | Added user context (current user + project members) for task filtering |
+| v20 | Extracted all prompts to external files, unified version format |
 
 ### Running Tests
 
@@ -191,13 +291,69 @@ The runner parses the markdown file and executes all steps automatically.
 
 ### Post-Test Analysis Checklist
 After each test scenario, verify:
-- [ ] All tasks have correct status (DONE/TODO)
+- [ ] All tasks have correct status (TODO or `[DONE]` marker with SUPERSEDES)
 - [ ] Dates/deadlines have correct year (not 2023!)
-- [ ] No duplicate data in Neo4j
-- [ ] Vector count in Qdrant matches Neo4j count
-- [ ] Deleted items are actually removed
+- [ ] No duplicate data in Neo4j (85% similarity check should prevent)
+- [ ] Vector count in Qdrant >= Neo4j count (items never deleted from Qdrant)
+- [ ] Deleted items have `[DELETED]` markers with SUPERSEDES relations
+- [ ] LLM correctly ignores superseded items in responses
+
+### Database Verification Commands
+
+```bash
+# Neo4j: Check items by type
+docker exec mindnest-neo4j cypher-shell -u neo4j -p mindnest \
+  "MATCH (k:KnowledgeItem {projectId: '<PROJECT_ID>'}) RETURN k.type, count(*)"
+
+# Neo4j: Check tasks
+docker exec mindnest-neo4j cypher-shell -u neo4j -p mindnest \
+  "MATCH (k:KnowledgeItem {projectId: '<PROJECT_ID>', type: 'TASK'}) RETURN k.content, k.status"
+
+# Neo4j: Check relations
+docker exec mindnest-neo4j cypher-shell -u neo4j -p mindnest \
+  "MATCH (a)-[r]->(b) WHERE a.projectId = '<PROJECT_ID>' RETURN type(r), count(*)"
+
+# Qdrant: Count vectors for project
+curl -s "http://localhost:6333/collections/knowledge_vectors/points/count" \
+  -H "Content-Type: application/json" \
+  -d '{"filter":{"must":[{"key":"projectId","match":{"value":"<PROJECT_ID>"}}]}}'
+```
+
+### Test Cleanup Commands
+
+```bash
+# PostgreSQL: Remove test users
+docker exec mindnest-postgres psql -U mindnest -d mindnest -c \
+  "DELETE FROM project_members WHERE user_id IN (SELECT id FROM users WHERE email LIKE '%@test.com');
+   DELETE FROM projects WHERE owner_id IN (SELECT id FROM users WHERE email LIKE '%@test.com');
+   DELETE FROM users WHERE email LIKE '%@test.com';"
+
+# Neo4j: Remove all knowledge items (CAREFUL!)
+docker exec mindnest-neo4j cypher-shell -u neo4j -p mindnest \
+  "MATCH (k:KnowledgeItem) DETACH DELETE k;"
+
+# Qdrant: Delete all points (CAREFUL!)
+curl -X POST "http://localhost:6333/collections/knowledge_vectors/points/delete" \
+  -H "Content-Type: application/json" \
+  -d '{"filter":{"must":[{"key":"projectId","match":{"any":["*"]}}]}}'
+```
 
 ### CRITICAL: Testing Rules
+
+**🛑 PRE-TEST CHECKLIST - STOP AND VERIFY BEFORE ANY TEST:**
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│  BEFORE running ./run-scenario.sh, VERIFY:                     │
+│                                                                │
+│  □ Saved intent-detection-prompt.txt to tests/prompts/         │
+│  □ Saved system-prompt.txt to tests/prompts/                   │
+│  □ Version number incremented (check last file in prompts/)    │
+│  □ Created prompt-vN.txt with ALL current prompts              │
+│                                                                │
+│  IF ANY BOX IS UNCHECKED → DO NOT RUN TEST                     │
+└────────────────────────────────────────────────────────────────┘
+```
 
 **⚠️ MANDATORY 3-STEP WORKFLOW - NO EXCEPTIONS:**
 
@@ -318,34 +474,40 @@ String updateQuery = intent.updateQuery();    // LLM extracted this, not regex
 
 ### Tool Structure
 ```
-AgentService.java          # Orchestrates LLM calls, defines function declarations
+AgentService.java          # Orchestrates chunk processing, intent detection, response generation
     ↓
 ToolExecutor.java          # Routes function calls to appropriate tool class
     ↓
 *Tools.java                # Actual implementations
-├── KnowledgeTools.java    # create, search, update, delete knowledge + graph relations
+├── KnowledgeTools.java    # create, search knowledge + graph relations (NO delete/update)
 ├── TaskTools.java         # create, complete, search tasks
 ├── ProjectTools.java      # project/member management
 └── TimeTools.java         # date parsing
 ```
 
-### Available Tools (14 total)
+### Key Services
+```
+GraphService.java          # Graph expansion with depth per relation type
+VectorSearchService.java   # Qdrant semantic search with recency boost
+EmbeddingService.java      # Generate embeddings via Gemini
+```
+
+### Available Tools (11 total)
 | Tool | Description |
 |------|-------------|
 | `create_knowledge` | Save facts, decisions, notes |
 | `search_knowledge` | Find information (supports cross-language) |
-| `update_knowledge` | Correct existing info |
-| `delete_knowledge` | Remove items |
-| `preview_delete` | Preview items before deletion |
-| `confirm_delete` | Confirm deletion by IDs |
 | `create_task` | Create tasks with assignee and deadline |
-| `complete_task_by_title` | Mark task as done by title |
+| `complete_task_by_title` | Mark task as done (creates [DONE] marker + SUPERSEDES) |
 | `get_active_tasks` | List active tasks |
 | `search_tasks` | Find tasks |
-| `create_relation` | Link two knowledge items |
+| `create_relation` | Link two knowledge items by search query |
+| `create_relation_by_id` | Link two items by their IDs |
 | `get_related` | Find related items |
 | `find_path` | Find connection path between items |
 | `get_current_date` | Get current date/time |
+
+**Note**: There are NO `update_knowledge`, `delete_knowledge`, or `confirm_delete` tools. All modifications happen through the immutable architecture (new items + relations).
 
 ### Adding New Tool
 1. Add method to appropriate `*Tools.java` class
@@ -353,28 +515,35 @@ ToolExecutor.java          # Routes function calls to appropriate tool class
 3. Add executor method in `ToolExecutor.java`
 4. Update system prompt in `AgentService.java` if needed
 
-### Intent Detection
-Agent uses two-step processing:
-1. **Intent Detection** (Gemini Flash): Classifies user message into SAVE, SEARCH, UPDATE, DELETE, TASK, COMPLETE, RELATION, or CHAT
-2. **Response Generation** (Gemini Flash-Lite): Executes tools and generates response
+### Intent Detection (Chunk-Based)
+
+Agent uses chunk-based processing for complex messages:
+
+1. **Decomposition** (Gemini Flash): Splits message into independent logical chunks
+   - "Budget 50000 and buy milk" → ["Budget 50000", "buy milk"]
+2. **Intent Detection** (Gemini Flash): For each chunk, determines intent and extracts structured data
+3. **Execution**: Each chunk processed through appropriate flow
+4. **Response Generation** (Gemini Flash): Combines results into natural response
 
 Supported intents:
-- `SAVE` - Save new information
-- `SEARCH` - Find existing information
-- `UPDATE` - Correct/modify existing info
-- `DELETE` - Remove items
-- `TASK` - Create new task
-- `COMPLETE` - Mark task as done
-- `RELATION` - Create link between items
-- `CHAT` - General conversation
+- `SAVE` - Save new information (creates KnowledgeItem)
+- `SEARCH` - Find existing information (expands graph, returns to LLM)
+- `TASK` - Create or complete task
+  - status=TODO: Creates new task
+  - status=DONE: Creates `[DONE]` marker + SUPERSEDES relation
+- `DELETE` - Mark item as deleted (creates `[DELETED]` marker + SUPERSEDES relation)
+- `CHAT` - General conversation (no tools)
+
+**Note**: There is no UPDATE intent. Updates are handled by SAVE with SUPERSEDES relation to old item.
 
 ### Common Issues Fixed
-- **Tasks not completing**: Use `complete_task_by_title` (searches by name, not ID)
+- **Tasks not completing**: Use `complete_task_by_title` which creates `[DONE]` marker + SUPERSEDES
 - **Empty responses**: Fallback returns function call results if LLM returns empty text
-- **Delete not working**: Use `delete_knowledge` tool with query-based search
 - **Wrong year in dates**: TimeTools uses current/next year for dates without year
 - **Data duplication**: 85% similarity check before creating new items
-- **Cross-language search**: Now works with gemini-embedding-001 (100+ languages)
+- **Cross-language search**: Works with gemini-embedding-001 (100+ languages)
+- **Deleted items showing**: LLM taught to ignore items with SUPERSEDES from `[DELETED]` markers
+- **User task filtering**: User context (current user + members) passed to LLM for filtering
 
 ## State Management (Mobile)
 

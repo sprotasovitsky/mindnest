@@ -1,0 +1,196 @@
+Analyze this SINGLE piece of information (already decomposed from a larger message).
+Determine intent, extract structured data, identify relations to existing items.
+
+Chunk: "%s"
+Conversation context (last messages): %s
+
+Output format:
+{
+  "intent": "SAVE" | "SEARCH" | "TASK" | "COMPLETE" | "DELETE" | "CHAT",
+  "type": "EXPENSE" | "TASK" | "KNOWLEDGE" | "PERSON" | "EVENT" | "CATEGORY",
+  "subtype": "fact" | "note" | "decision" | "recipe" | null,
+  "content": "full text to save (preserve original language exactly)",
+  "properties": {
+    "amount": number or null,
+    "currency": "RUB" | "USD" | "EUR" | null,
+    "item": "item name" or null,
+    "quantity": number or null,
+    "assignee": "person name" or null,
+    "deadline": "YYYY-MM-DD" or null,
+    "category": "category name" or null,
+    "is_refund": boolean or null
+  },
+  "relations": [
+    {
+      "to_query": "search query to find existing item to link to",
+      "type": "SUPERSEDES" | "CONTRADICTS" | "BELONGS_TO" | "ASSIGNED_TO" | "DEPENDS_ON" | "RELATES_TO"
+    }
+  ],
+  "search_query": "query for SEARCH intent" or null
+}
+
+CRITICAL RULES:
+
+1. SEARCH intent - User asks a QUESTION:
+   - Message starts with question words (что, какой, сколько, когда, где, who, what, how much, etc.)
+   - Message ends with "?"
+   - Message starts with request words (покажи, найди, show, find, list)
+   - For search: set search_query, leave content empty
+
+2. SAVE intent - User provides NEW information (NOT a question):
+   - Expenses: "Потратил 500", "Купил X за Y", "I spent 500"
+   - Facts: "Бюджет 50000", "Встреча в 3 часа"
+   - Decisions: "Решили...", "Выбрали..."
+   - For EXPENSE: extract amount, currency, item from text
+   - content = FULL original text, never truncate
+
+3. TASK intent - Create a new task:
+   - Pattern: "Задача для X: сделать Y" / "Task for X: do Y"
+   - Extract assignee, deadline from context
+   - content = task description only
+
+4. COMPLETE intent - Mark task as done:
+   - Contains: "выполнена", "сделана", "готово", "done", "completed"
+   - Set relation to find the task to complete
+
+5. DELETE intent - Remove information:
+   - Contains: "удали", "убери", "отмени", "remove", "delete"
+   - Extract search query to find item to delete
+
+6. RELATIONS - When to create links:
+
+   CONTRADICTS - use when:
+   - Returns/refunds: "вернула", "возврат", "returned", "refund"
+   - Cancel purchases: "отменил покупку", "cancelled"
+   - The relation should point to ORIGINAL item being contradicted
+   - to_query = search for original (e.g., "купил сапоги 7500")
+
+   SUPERSEDES - use when:
+   - Correction: "на самом деле было 60000 а не 50000"
+   - Update: "бюджет теперь 60000"
+   - New version replaces old
+   - to_query = search for old version
+
+   ASSIGNED_TO - use when:
+   - Task has assignee: "задача для Бориса"
+   - to_query = person name
+
+   BELONGS_TO - use when:
+   - Item belongs to category: "шампанское" -> "алкоголь"
+   - Optional, only if category is explicit in text
+
+7. DATES:
+   - If year not specified, assume current/next year appropriately
+   - "до 30 декабря" with current date in December → this December
+   - "до 15 января" with current date in December → next January
+
+EXAMPLES:
+
+1. "Купил шампанское 6 бутылок за 8500"
+{
+  "intent": "SAVE",
+  "type": "EXPENSE",
+  "subtype": null,
+  "content": "Купил шампанское 6 бутылок за 8500",
+  "properties": {"amount": 8500, "currency": "RUB", "item": "шампанское", "quantity": 6},
+  "relations": [],
+  "search_query": null
+}
+
+2. "Вернула сапоги, получила возврат 7500"
+{
+  "intent": "SAVE",
+  "type": "EXPENSE",
+  "subtype": null,
+  "content": "Вернула сапоги, получила возврат 7500",
+  "properties": {"amount": 7500, "currency": "RUB", "item": "сапоги", "is_refund": true},
+  "relations": [
+    {"to_query": "купил сапоги", "type": "CONTRADICTS"}
+  ],
+  "search_query": null
+}
+
+3. "Задача для Бориса: купить вино до 30 декабря"
+{
+  "intent": "TASK",
+  "type": "TASK",
+  "subtype": null,
+  "content": "купить вино",
+  "properties": {"assignee": "Борис", "deadline": "2024-12-30"},
+  "relations": [
+    {"to_query": "Борис", "type": "ASSIGNED_TO"}
+  ],
+  "search_query": null
+}
+
+4. "Задача выполнена: вино куплено"
+{
+  "intent": "COMPLETE",
+  "type": "TASK",
+  "subtype": null,
+  "content": "вино куплено",
+  "properties": {},
+  "relations": [
+    {"to_query": "купить вино", "type": "SUPERSEDES"}
+  ],
+  "search_query": null
+}
+
+5. "Сколько потратили на алкоголь?"
+{
+  "intent": "SEARCH",
+  "type": "EXPENSE",
+  "subtype": null,
+  "content": "",
+  "properties": {"category": "алкоголь"},
+  "relations": [],
+  "search_query": "расходы алкоголь"
+}
+
+6. "Бюджет был 50000, теперь 60000"
+{
+  "intent": "SAVE",
+  "type": "KNOWLEDGE",
+  "subtype": "fact",
+  "content": "Бюджет 60000",
+  "properties": {"amount": 60000},
+  "relations": [
+    {"to_query": "бюджет 50000", "type": "SUPERSEDES"}
+  ],
+  "search_query": null
+}
+
+7. "Team standup meeting every day at 9am"
+{
+  "intent": "SAVE",
+  "type": "KNOWLEDGE",
+  "subtype": "fact",
+  "content": "Team standup meeting every day at 9am",
+  "properties": {},
+  "relations": [],
+  "search_query": null
+}
+
+8. "Удали информацию о шампанском"
+{
+  "intent": "DELETE",
+  "type": "EXPENSE",
+  "subtype": null,
+  "content": "",
+  "properties": {},
+  "relations": [],
+  "search_query": "шампанское"
+}
+
+9. "Привет!"
+{
+  "intent": "CHAT",
+  "type": null,
+  "subtype": null,
+  "content": "",
+  "properties": {},
+  "relations": [],
+  "search_query": null
+}
+
+Respond with JSON only, no markdown:

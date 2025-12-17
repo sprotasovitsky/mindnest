@@ -41,12 +41,15 @@ public class ToolExecutor {
 
     // Thread-local storage for sources collected during execution
     private static final ThreadLocal<List<String>> sourcesThreadLocal = ThreadLocal.withInitial(ArrayList::new);
+    // Thread-local storage for IDs from last search (for graph expansion)
+    private static final ThreadLocal<List<String>> lastSearchIdsThreadLocal = ThreadLocal.withInitial(ArrayList::new);
 
     /**
      * Clear sources before processing a new message
      */
     public void clearSources() {
         sourcesThreadLocal.get().clear();
+        lastSearchIdsThreadLocal.get().clear();
     }
 
     /**
@@ -56,8 +59,20 @@ public class ToolExecutor {
         return new ArrayList<>(sourcesThreadLocal.get());
     }
 
+    /**
+     * Get IDs from last search (for graph expansion)
+     */
+    public List<String> getLastSearchIds() {
+        return new ArrayList<>(lastSearchIdsThreadLocal.get());
+    }
+
     private void addSource(String source) {
         sourcesThreadLocal.get().add(source);
+    }
+
+    private void setLastSearchIds(List<String> ids) {
+        lastSearchIdsThreadLocal.get().clear();
+        lastSearchIdsThreadLocal.get().addAll(ids);
     }
 
     /**
@@ -68,13 +83,9 @@ public class ToolExecutor {
 
         try {
             return switch (functionName) {
-                // Knowledge tools
+                // Knowledge tools (immutable: no update, no delete)
                 case "create_knowledge" -> executeCreateKnowledge(args, projectId, userId);
                 case "search_knowledge" -> executeSearchKnowledge(args, projectId);
-                case "update_knowledge" -> executeUpdateKnowledge(args, projectId);
-                case "delete_knowledge" -> executeDeleteKnowledge(args, projectId);
-                case "preview_delete" -> executePreviewDelete(args, projectId);
-                case "confirm_delete" -> executeConfirmDelete(args);
                 case "get_knowledge" -> executeGetKnowledge(args);
 
                 // Task tools
@@ -95,6 +106,7 @@ public class ToolExecutor {
 
                 // Graph relation tools
                 case "create_relation" -> executeCreateRelation(args, projectId);
+                case "create_relation_by_id" -> executeCreateRelationById(args);
                 case "get_related" -> executeGetRelated(args, projectId);
                 case "find_path" -> executeFindPath(args, projectId);
 
@@ -127,8 +139,12 @@ public class ToolExecutor {
         List<SearchResult> results = knowledgeTools.searchKnowledge(query, projectId, limit);
 
         if (results.isEmpty()) {
+            setLastSearchIds(List.of());
             return "No knowledge found matching: " + query;
         }
+
+        // Save IDs for graph expansion
+        setLastSearchIds(results.stream().map(SearchResult::id).toList());
 
         // Track sources for attribution
         for (SearchResult r : results) {
@@ -153,74 +169,8 @@ public class ToolExecutor {
                 .orElse("Knowledge item not found: " + id);
     }
 
-    private String executeUpdateKnowledge(Map<String, Object> args, String projectId) {
-        String query = (String) args.get("query");
-        String newContent = (String) args.get("new_content");
-
-        Optional<KnowledgeItem> updated = knowledgeTools.updateKnowledgeByQuery(query, newContent, projectId);
-
-        return updated
-                .map(item -> String.format("Updated: '%s' → '%s'", query, truncate(newContent, 50)))
-                .orElse("No item found matching '" + query + "' to update");
-    }
-
-    private String executeDeleteKnowledge(Map<String, Object> args, String projectId) {
-        String query = (String) args.get("query");
-
-        var result = knowledgeTools.deleteKnowledgeByQuery(query, projectId);
-
-        return switch (result.status()) {
-            case DELETED -> String.format("Deleted: '%s'", truncate(result.content(), 60));
-            case NEEDS_CONFIRMATION -> String.format(
-                    "Found item to delete: '%s' (%.0f%% match). Please confirm: should I delete this? [id: %s]",
-                    truncate(result.content(), 60),
-                    result.score() * 100,
-                    result.itemId()
-            );
-            case NOT_FOUND -> "No items found matching '" + query + "' to delete";
-        };
-    }
-
-    private String executePreviewDelete(Map<String, Object> args, String projectId) {
-        String query = (String) args.get("query");
-
-        var previews = knowledgeTools.previewDelete(query, projectId);
-
-        if (previews.isEmpty()) {
-            return "No items found matching '" + query + "' to delete";
-        }
-
-        StringBuilder result = new StringBuilder();
-        result.append(String.format("Found %d item(s) matching '%s':\n", previews.size(), query));
-
-        for (var preview : previews) {
-            result.append(String.format("- [%s] %s (id: %s, match: %.0f%%)\n",
-                    preview.type(),
-                    truncate(preview.content(), 60),
-                    preview.id(),
-                    preview.score() * 100));
-        }
-
-        result.append("\nTo delete these items, call confirm_delete with the IDs.");
-        return result.toString();
-    }
-
-    @SuppressWarnings("unchecked")
-    private String executeConfirmDelete(Map<String, Object> args) {
-        List<String> ids = (List<String>) args.get("ids");
-
-        if (ids == null || ids.isEmpty()) {
-            return "No IDs provided to delete";
-        }
-
-        int deleted = knowledgeTools.deleteByIds(ids);
-
-        if (deleted > 0) {
-            return String.format("Successfully deleted %d item(s)", deleted);
-        } else {
-            return "No items were deleted - IDs may not exist";
-        }
-    }
+    // NOTE: No update/delete methods - system is immutable
+    // All changes create NEW items with relations (SUPERSEDES, CONTRADICTS) via AgentService
 
     // Task tool implementations
 
@@ -331,8 +281,12 @@ public class ToolExecutor {
         List<SearchResult> results = taskTools.searchTasks(query, projectId, limit);
 
         if (results.isEmpty()) {
+            setLastSearchIds(List.of());
             return "No tasks found matching: " + query;
         }
+
+        // Save IDs for graph expansion
+        setLastSearchIds(results.stream().map(SearchResult::id).toList());
 
         // Track sources for attribution
         for (SearchResult r : results) {
@@ -433,13 +387,40 @@ public class ToolExecutor {
         try {
             relationType = RelationType.valueOf(relationTypeStr.toUpperCase());
         } catch (IllegalArgumentException e) {
-            return "Invalid relation type: " + relationTypeStr + ". Valid types: RELATES_TO, DEPENDS_ON, SUPPORTS, CONTRADICTS, REFERENCES, DERIVED_FROM, SIMILAR_TO";
+            return "Invalid relation type: " + relationTypeStr + ". Valid types: SUPERSEDES, CONTRADICTS, BELONGS_TO, ASSIGNED_TO, DEPENDS_ON, RELATES_TO, SUPPORTS, SIMILAR_TO";
         }
 
         // Create relation
         return knowledgeTools.createRelation(sourceId, targetId, relationType, description)
                 .map(item -> String.format("Created relation: '%s' -[%s]-> '%s'",
                         truncate(sourceContent, 30), relationType, truncate(targetContent, 30)))
+                .orElse("Failed to create relation between the items");
+    }
+
+    /**
+     * Create relation directly by IDs (used when we already have the IDs)
+     */
+    private String executeCreateRelationById(Map<String, Object> args) {
+        String sourceId = (String) args.get("source_id");
+        String targetId = (String) args.get("target_id");
+        String relationTypeStr = (String) args.get("relation_type");
+        String description = (String) args.get("description");
+
+        if (sourceId == null || targetId == null) {
+            return "Cannot create relation: source_id and target_id are required";
+        }
+
+        // Parse relation type
+        RelationType relationType;
+        try {
+            relationType = RelationType.valueOf(relationTypeStr.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return "Invalid relation type: " + relationTypeStr;
+        }
+
+        // Create relation
+        return knowledgeTools.createRelation(sourceId, targetId, relationType, description)
+                .map(item -> String.format("Created relation: %s -[%s]-> %s", sourceId, relationType, targetId))
                 .orElse("Failed to create relation between the items");
     }
 
