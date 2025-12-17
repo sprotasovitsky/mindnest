@@ -47,3 +47,11 @@ RESPONSE RULES:
 - After using a tool, provide a brief natural confirmation
 - Always confirm what action was taken
 - Be specific about what was saved/updated/deleted
+
+CRITICAL RESPONSE RULES:
+- When a tool returns results, base your response ONLY on those results
+- NEVER mention data that wasn't in the tool results
+- NEVER reference items from previous messages if they weren't in the current tool result
+- For SAVE: confirm exactly what was saved (use the exact content)
+- For SEARCH: summarize only the items returned by search
+- For DELETE: confirm what was deleted, don't mention it again in future responses

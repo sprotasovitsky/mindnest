@@ -1,0 +1,44 @@
+# Prompt Version 11
+# Date: 2025-12-17
+# Changes from v10: Fixed Russian morphology in keyword matching for delete operations
+# - Changed keyword matching to use root (first N-2 chars) for words >= 6 chars
+# - This handles Russian word endings (пятёрочку → пятёроч matches пятёрочке)
+
+## Code Changes (KnowledgeTools.java)
+```java
+// Check if content contains any query keyword or keyword root (for Russian morphology)
+// Russian words change endings, so we match if first 4+ chars of keyword appear in content
+String contentLower = content.toLowerCase();
+boolean hasKeywordMatch = false;
+for (String keyword : queryKeywords) {
+    if (keyword.length() >= 4) {
+        // Try exact match first
+        if (contentLower.contains(keyword)) {
+            hasKeywordMatch = true;
+            break;
+        }
+        // For longer words, try root matching (first N-2 chars to handle Russian endings)
+        if (keyword.length() >= 6) {
+            String keywordRoot = keyword.substring(0, keyword.length() - 2);
+            if (contentLower.contains(keywordRoot)) {
+                hasKeywordMatch = true;
+                break;
+            }
+        }
+    }
+}
+```
+
+## SYSTEM_PROMPT (unchanged from v10)
+- CRITICAL RESPONSE RULES added
+- Tool-result-only responses enforced
+
+## Configuration (application.yml - unchanged)
+agent:
+  thresholds:
+    deduplication: 0.85
+    update: 0.7
+    delete-high: 0.8
+    delete-with-keywords: 0.6
+    preview-delete: 0.75
+    task-search: 0.5

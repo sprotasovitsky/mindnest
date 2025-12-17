@@ -66,24 +66,35 @@ public class AgentService {
             }
 
             // STEP 3: Generate response using main model
-            GenerativeModel model = buildModelWithTools();
+            // If tool was already executed by intent detection, use model WITHOUT tools
+            // to prevent the model from making conflicting function calls
+            GenerativeModel model;
             List<Content> contents = buildConversationContents(conversation.getId(), message);
 
-            // If tool was executed, add context about what was done
-            String enhancedMessage = message;
             if (toolResult != null) {
-                enhancedMessage = message + "\n\n[System: Tool '" + intentResult.toolToCall() +
-                    "' was already executed with result: " + toolResult +
-                    ". Confirm this action to the user in a natural way.]";
-                // Replace last content with enhanced message
+                // Tool already executed - use model without tools to generate response
+                model = buildModelWithoutTools();
+                String enhancedMessage = "[CRITICAL INSTRUCTION]\n" +
+                    "Tool '" + intentResult.toolToCall() + "' was ALREADY EXECUTED for this request.\n" +
+                    "Tool result: " + toolResult + "\n\n" +
+                    "STRICT RULES:\n" +
+                    "1. Your response MUST describe THIS tool result, not previous operations\n" +
+                    "2. IGNORE all previous messages in conversation - they are NOT relevant\n" +
+                    "3. User said: \"" + message + "\"\n" +
+                    "4. Tool did: " + toolResult + "\n" +
+                    "5. Confirm EXACTLY what the tool did - use the SAME content from tool result\n\n" +
+                    "Generate a short natural response in user's language confirming the operation.";
                 contents.set(contents.size() - 1, Content.newBuilder()
                     .setRole("user")
                     .addParts(Part.newBuilder().setText(
                         promptConfig.getSystemPrompt() + "\n\nUser request: " + enhancedMessage).build())
                     .build());
+            } else {
+                // No tool executed yet - model can use tools
+                model = buildModelWithTools();
             }
 
-            // Generate response (may include additional function calls)
+            // Generate response
             GenerateContentResponse response = model.generateContent(contents);
 
             // Process response - handle any additional function calls
@@ -196,6 +207,22 @@ public class AgentService {
                         .setTemperature(0.7f)
                         .build())
                 .setTools(List.of(tools))
+                .build();
+    }
+
+    /**
+     * Build model WITHOUT tools - used when tool was already executed by intent detection.
+     * This prevents the model from making conflicting function calls.
+     */
+    private GenerativeModel buildModelWithoutTools() {
+        return new GenerativeModel.Builder()
+                .setModelName(chatModel)
+                .setVertexAi(vertexAI)
+                .setGenerationConfig(GenerationConfig.newBuilder()
+                        .setMaxOutputTokens(2048)
+                        .setTemperature(0.7f)
+                        .build())
+                // No tools - model can only generate text
                 .build();
     }
 
@@ -662,125 +689,20 @@ public class AgentService {
     }
 
     /**
-     * Pre-check for question patterns that MUST be SEARCH intent.
-     * This is a failsafe to ensure questions are never misclassified as SAVE.
-     * Returns IntentResult for SEARCH if pattern matches, null otherwise.
-     */
-    private IntentResult checkForceSearchPattern(String message) {
-        if (message == null || message.isBlank()) {
-            return null;
-        }
-
-        String lowerMessage = message.toLowerCase().trim();
-
-        // Skip task-related questions - let LLM handle them to use correct tool
-        if (lowerMessage.contains("задач") || lowerMessage.contains("task")) {
-            log.debug("Task-related question, letting LLM decide tool");
-            return null;
-        }
-
-        // Determine which tool to use based on context
-        String tool = "search_knowledge";
-
-        // Russian question word prefixes (with space to avoid matching word parts)
-        String[] russianQuestionStarts = {
-            "что ", "какой ", "какие ", "какая ", "каков ", "какое ",
-            "сколько ", "когда ", "где ", "кто ", "почему ", "зачем ",
-            "как ", "чё ", "че ", "чего "
-        };
-
-        // English question word prefixes
-        String[] englishQuestionStarts = {
-            "what ", "which ", "when ", "where ", "who ", "why ", "how "
-        };
-
-        // Check Russian question starts
-        for (String prefix : russianQuestionStarts) {
-            if (lowerMessage.startsWith(prefix)) {
-                log.debug("Matched Russian question pattern: '{}'", prefix);
-                return new IntentResult(
-                    Intent.SEARCH,
-                    tool,
-                    List.of(),
-                    message,  // Use the message as search query
-                    List.of(),
-                    null,
-                    null
-                );
-            }
-        }
-
-        // Check English question starts
-        for (String prefix : englishQuestionStarts) {
-            if (lowerMessage.startsWith(prefix)) {
-                log.debug("Matched English question pattern: '{}'", prefix);
-                return new IntentResult(
-                    Intent.SEARCH,
-                    tool,
-                    List.of(),
-                    message,
-                    List.of(),
-                    null,
-                    null
-                );
-            }
-        }
-
-        // Check if message ends with "?" (question mark)
-        if (message.trim().endsWith("?")) {
-            log.debug("Matched question mark pattern");
-            return new IntentResult(
-                Intent.SEARCH,
-                tool,
-                List.of(),
-                message,
-                List.of(),
-                null,
-                null
-            );
-        }
-
-        // Russian request words (also should be SEARCH)
-        String[] russianRequestStarts = {
-            "покажи ", "найди ", "выведи ", "подскажи ", "расскажи "
-        };
-        for (String prefix : russianRequestStarts) {
-            if (lowerMessage.startsWith(prefix)) {
-                log.debug("Matched Russian request pattern: '{}'", prefix);
-                return new IntentResult(
-                    Intent.SEARCH,
-                    tool,
-                    List.of(),
-                    message,
-                    List.of(),
-                    null,
-                    null
-                );
-            }
-        }
-
-        return null;  // No forced pattern matched, let LLM decide
-    }
-
-    /**
      * Step 1: Detect user intent using fast model with structured output
+     *
+     * NOTE: All intent detection is done by LLM. We do NOT use keyword matching
+     * because we need to support 100+ languages through embeddings only.
+     * The LLM handles morphology and language variations.
      */
     private IntentResult detectIntent(String message) {
-        // FAILSAFE: Pre-check for Russian question patterns that must ALWAYS be SEARCH
-        // This ensures questions are never misclassified as SAVE
-        IntentResult forcedSearch = checkForceSearchPattern(message);
-        if (forcedSearch != null) {
-            log.info("Force-detected SEARCH pattern: {}", message);
-            return forcedSearch;
-        }
-
         try {
             GenerativeModel intentModel = new GenerativeModel.Builder()
                     .setModelName(flashModel)
                     .setVertexAi(vertexAI)
                     .setGenerationConfig(GenerationConfig.newBuilder()
                             .setMaxOutputTokens(1024)  // Increased for multi-task JSON responses
-                            .setTemperature(0.1f)  // Low temperature for consistent classification
+                            .setTemperature(0.0f)  // Zero temperature for deterministic classification
                             .build())
                     .build();
 
@@ -894,10 +816,17 @@ public class AgentService {
                 args.put("limit", 10);
                 yield toolExecutor.execute("search_knowledge", args, projectId, userId);
             }
-            case "update_knowledge" -> {
-                // For update, use parsed update_query and update_new_content if available
+            case "search_tasks" -> {
                 Map<String, Object> args = new HashMap<>();
-                String query = intent.updateQuery() != null ? intent.updateQuery() : extractUpdateQuery(content);
+                args.put("query", content);  // Empty content = return all tasks
+                args.put("limit", 10);
+                yield toolExecutor.execute("search_tasks", args, projectId, userId);
+            }
+            case "update_knowledge" -> {
+                // For update, use LLM-extracted query and new content
+                // Semantic search handles morphology and language variations
+                Map<String, Object> args = new HashMap<>();
+                String query = intent.updateQuery() != null ? intent.updateQuery() : content;
                 String newContent = intent.updateNewContent() != null ? intent.updateNewContent() : content;
                 args.put("query", query);
                 args.put("new_content", newContent);
@@ -972,67 +901,6 @@ public class AgentService {
 
         // Default to NOTE for general information
         return "NOTE";
-    }
-
-    /**
-     * Extract query for update operation (find the thing being updated)
-     */
-    private String extractUpdateQuery(String content) {
-        // Simple heuristic: look for keywords and extract the subject
-        String lower = content.toLowerCase();
-
-        // English patterns
-        if (lower.contains(" was ")) {
-            int idx = lower.indexOf(" was ");
-            return content.substring(0, idx).trim();
-        }
-        if (lower.contains("change ")) {
-            int start = lower.indexOf("change ") + 7;
-            int end = lower.indexOf(" to ", start);
-            if (end > start) {
-                return content.substring(start, end).trim();
-            }
-        }
-        if (lower.contains("update ")) {
-            int start = lower.indexOf("update ") + 7;
-            int end = lower.indexOf(" to ", start);
-            if (end > start) {
-                return content.substring(start, end).trim();
-            }
-        }
-
-        // Russian patterns
-        // "измени X на Y" / "поменяй X на Y"
-        if (lower.contains("измени ") || lower.contains("поменяй ")) {
-            int start = Math.max(lower.indexOf("измени "), lower.indexOf("поменяй "));
-            start = start + (lower.charAt(start) == 'и' ? 7 : 8); // "измени " or "поменяй "
-            int end = lower.indexOf(" на ", start);
-            if (end > start) {
-                return content.substring(start, end).trim();
-            }
-        }
-        // "не X а Y" / "не X, а Y"
-        if (lower.contains(" не ") && (lower.contains(" а ") || lower.contains(", а "))) {
-            int start = lower.indexOf(" не ") + 4;
-            int end = lower.indexOf(" а ", start);
-            if (end < 0) end = lower.indexOf(", а ", start);
-            if (end > start) {
-                return content.substring(start, end).trim();
-            }
-        }
-        // "вместо X теперь Y"
-        if (lower.contains("вместо ")) {
-            int start = lower.indexOf("вместо ") + 7;
-            int end = lower.indexOf(" теперь", start);
-            if (end < 0) end = lower.indexOf(" сейчас", start);
-            if (end > start) {
-                return content.substring(start, end).trim();
-            }
-        }
-
-        // Fallback: return first few words as query
-        String[] words = content.split("\\s+");
-        return String.join(" ", Arrays.copyOf(words, Math.min(3, words.length)));
     }
 
     private String truncate(String text, int maxLen) {

@@ -5,85 +5,86 @@ Analyze the user's message and determine their intent. Return JSON with:
 - knowledgeType: for SAVE intent, one of FACT, NOTE, DECISION
 - tasks: for TASK intent, array of task objects with {title, deadline, assignee}
 
-INTENT RULES (check in this EXACT order - first match wins):
+*** MOST IMPORTANT RULE - CHECK FIRST ***
 
-1. TASK - User explicitly creates task(s):
-- Keywords EN: "create task", "task for", "add task", "assign task"
-- Keywords RU: "создай задачу", "добавь задачу", "задача для", "назначь"
-- Pattern: "Create task for X: do Y" / "Задача для X: сделать Y"
+1. SEARCH - User asks a QUESTION or wants to find/retrieve info:
+
+STOP! Before checking any other intent, check if the message is a QUESTION.
+If ANY of these conditions are true, the intent is ALWAYS SEARCH (never SAVE!):
+
+A) Message STARTS with a question word (any language):
+   - Russian: что, какой, какие, какая, какое, сколько, когда, где, кто, почему, зачем, как, чё, че, чего
+   - English: what, when, where, which, who, why, how, how much, how many
+
+B) Message ENDS with "?" (question mark)
+
+C) Message STARTS with a request word:
+   - Russian: покажи, найди, выведи, подскажи, расскажи, скажи
+   - English: show, find, list, tell me, search
+
+*** EXAMPLES - ALL OF THESE ARE SEARCH, NOT SAVE: ***
+- "Что мы покупали в этом месяце?" → SEARCH (starts with "что")
+- "Какие у меня задачи?" → SEARCH (starts with "какие")
+- "Сколько мы потратили?" → SEARCH (starts with "сколько")
+- "чё там по бюджету?" → SEARCH (starts with "чё")
+- "Покажи все расходы" → SEARCH (starts with "покажи")
+- "What did we buy?" → SEARCH (starts with "what")
+- "How much did we spend?" → SEARCH (starts with "how")
+- "У меня есть задачи?" → SEARCH (ends with "?")
+
+*** CRITICAL: Choosing the right SEARCH tool ***
+- Use search_tasks ONLY if question explicitly mentions "задача", "задачи", "task", "tasks", "to-do"
+- Use search_knowledge for EVERYTHING else: expenses, budget, purchases, spending, facts, notes
+
+*** CRITICAL: content field for SEARCH ***
+- For search_tasks: leave content EMPTY ("") for "show all tasks", or use specific task name
+- For search_knowledge: use keywords describing what to find
+
+EXAMPLES (tool + content):
+- "Какие у меня задачи?" → tool: search_tasks, content: ""
+- "Сколько мы потратили?" → tool: search_knowledge, content: "потратили расходы"
+- "Что мы покупали?" → tool: search_knowledge, content: "покупки"
+- "Покажи расходы" → tool: search_knowledge, content: "расходы"
+- "чё там по бюджету?" → tool: search_knowledge, content: "бюджет"
+
+*** OTHER INTENTS (check only if NOT a question) ***
+
+2. TASK - User explicitly creates task(s):
+- Pattern: "Create task for X: do Y" / "Задача для X: сделать Y" / "Создай задачу"
+- Contains explicit task creation words: "задача:", "задачу", "create task", "add task"
 Tool: create_task
 Extract each task with title, assignee, deadline
 
-2. COMPLETE - User marks a task as done:
-- Keywords EN: "mark as done", "completed task", "task is done", "task complete"
-- Keywords RU: "выполнена", "сделана", "готово", "завершена", "закончил", "сделал"
+3. COMPLETE - User marks a task as done:
+- Contains: "выполнена", "сделана", "готово", "завершена", "закончил", "сделал задачу"
 - Pattern: "X task is done" / "Задача X выполнена"
 Tool: complete_task_by_title
 
-3. DELETE - User wants to remove information:
-- Keywords EN: "remove", "delete", "cancel", "returned", "refund"
-- Keywords RU: "удали", "убери", "отмени", "верни", "удалить"
-- Example: "Remove boots from the list" / "Удали информацию про заправку"
+4. DELETE - User wants to remove information:
+- Contains: "удали", "убери", "отмени", "удалить", "remove", "delete"
+- Example: "Удали информацию про заправку"
 Tool: delete_knowledge
-IMPORTANT: Extract the search query for what to delete in "content" field
+Extract search query in "content" field
 
-4. UPDATE - User corrects/changes existing information:
-- Keywords EN: "actually", "mistake", "correct", "change", "update", "was wrong", "not X but Y", "instead of"
-- Keywords RU: "на самом деле", "ошибка", "исправь", "измени", "обнови", "не X а Y", "вместо", "было неправильно", "поменяй"
-- Patterns:
-  * "Actually it was 4200, not 4500" → query: "4500", new: "4200"
-  * "Change budget to 50000" → query: "budget", new: "budget 50000"
-  * "На самом деле потратили 3000, а не 2500" → query: "2500", new: "3000"
-  * "Измени бюджет на 40000" → query: "бюджет", new: "бюджет 40000"
+5. UPDATE - User corrects/changes existing information:
+- Contains: "на самом деле", "исправь", "измени", "не X а Y", "actually", "correct", "change"
+- Patterns: "Actually it was 4200, not 4500"
 Tool: update_knowledge
-IMPORTANT: Extract update_query (what to find) and update_new_content (replacement) separately!
+Extract update_query (what to find) and update_new_content (replacement)
 
-5. SEARCH - User asks a QUESTION or wants to find/retrieve info:
-*** CRITICAL RULE - CHECK THIS FIRST: ***
-If message STARTS with any of these words (case insensitive), it is ALWAYS SEARCH:
-- "что " (what) - e.g. "Что мы покупали?" = SEARCH
-- "какой" / "какие" / "какая" (which) - e.g. "Какие задачи?" = SEARCH
-- "сколько" (how much/many) - e.g. "Сколько потратили?" = SEARCH
-- "когда" (when) - e.g. "Когда встреча?" = SEARCH
-- "где" (where) - e.g. "Где информация?" = SEARCH
-- "кто" (who) - e.g. "Кто назначен?" = SEARCH
-- "почему" / "зачем" (why) - e.g. "Почему так?" = SEARCH
-- "как" (how) - e.g. "Как сделать?" = SEARCH
-- "чё" / "че" (informal what) - e.g. "чё там?" = SEARCH
-- "what" / "when" / "where" / "which" / "who" / "why" / "how"
-
-If message ENDS with "?" it is SEARCH (even if it contains action words like "покупали", "купили").
-
-*** EXAMPLES - ALWAYS SEARCH (even if they mention purchases/expenses): ***
-- "Что мы покупали в этом месяце?" → SEARCH (starts with "что", ends with "?")
-- "Что купили?" → SEARCH (starts with "что")
-- "Какие у меня задачи?" → SEARCH (starts with "какие")
-- "чё там по бюджету?" → SEARCH (starts with "чё")
-- "Сколько потратили?" → SEARCH (starts with "сколько")
-- "How much did we spend?" → SEARCH (starts with "how")
-
-Additional search triggers:
-- Requests EN: "show me", "list all", "find", "search", "tell me about"
-- Requests RU: "покажи", "найди", "выведи", "подскажи", "расскажи"
-Tool: search_knowledge
-
-6. SAVE - User provides NEW factual information to store (NOT questions!):
-- ONLY if NOT a question (no "?" at end, no question words at start)
-- NEVER save if message starts with: что, какой, какие, сколько, когда, где, кто, как, чё, че
-- NEVER save if message ends with "?"
-- Expenses: "I spent 500" / "Потратил 500", "Купил X за Y"
-- Facts: "Budget is..." / "Бюджет...", "Встреча в..."
-- Decisions: "We decided..." / "Решили...", "Выбрали..."
+6. SAVE - User provides NEW factual information (NOT a question!):
+*** NEVER use SAVE if message is a question (check rule 1 first!) ***
+- Expenses: "Потратил 500", "Купил X за Y", "I spent 500"
+- Facts: "Бюджет 50000", "Встреча в 3 часа"
+- Decisions: "Решили...", "Выбрали..."
 Tool: create_knowledge
 
 7. RELATION - User wants to link/connect items:
-- Keywords EN: "connect", "link", "relates to", "depends on", "related to"
-- Keywords RU: "связь", "связать", "связано с", "зависит от", "относится к"
-- Pattern: "X depends on Y" / "Задача X зависит от Y"
+- Contains: "связь", "связать", "связано с", "зависит от", "connect", "link"
 Tool: create_relation
 
 8. CHAT - General conversation:
-- "Hello", "Thanks" / "Привет", "Спасибо", "Что ты умеешь?"
+- "Привет", "Спасибо", "Hello", "Thanks"
 Tool: null
 
 User message: "%s"

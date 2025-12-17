@@ -13,6 +13,22 @@ import java.util.List;
 @Repository
 public interface KnowledgeRepository extends Neo4jRepository<KnowledgeItem, String> {
 
+    // Active items only (soft-delete aware)
+    List<KnowledgeItem> findByProjectIdAndDeletedAtIsNull(String projectId);
+
+    List<KnowledgeItem> findByTypeAndDeletedAtIsNull(KnowledgeType type);
+
+    List<KnowledgeItem> findByTypeAndStatusAndDeletedAtIsNull(KnowledgeType type, TaskStatus status);
+
+    List<KnowledgeItem> findByProjectIdAndTypeAndDeletedAtIsNull(String projectId, KnowledgeType type);
+
+    List<KnowledgeItem> findByProjectIdAndTypeAndStatusAndDeletedAtIsNull(String projectId, KnowledgeType type, TaskStatus status);
+
+    List<KnowledgeItem> findByOwnerIdAndDeletedAtIsNull(String ownerId);
+
+    List<KnowledgeItem> findByOwnerIdAndTypeAndDeletedAtIsNull(String ownerId, KnowledgeType type);
+
+    // Legacy methods (include deleted items)
     List<KnowledgeItem> findByProjectId(String projectId);
 
     List<KnowledgeItem> findByType(KnowledgeType type);
@@ -30,16 +46,16 @@ public interface KnowledgeRepository extends Neo4jRepository<KnowledgeItem, Stri
     @Query("MATCH (k:KnowledgeItem {id: $id})-[r*1..$depth]-(related:KnowledgeItem) RETURN DISTINCT related")
     List<KnowledgeItem> findRelated(String id, int depth);
 
-    @Query("MATCH (k:KnowledgeItem) WHERE k.type = 'TASK' AND k.status IN ['TODO', 'IN_PROGRESS'] AND k.deadline <= date() RETURN k")
+    @Query("MATCH (k:KnowledgeItem) WHERE k.type = 'TASK' AND k.status IN ['TODO', 'IN_PROGRESS'] AND k.deadline <= date() AND k.deletedAt IS NULL RETURN k")
     List<KnowledgeItem> findOverdueTasks();
 
-    @Query("MATCH (k:KnowledgeItem) WHERE k.type = 'TASK' AND k.projectId = $projectId AND k.deadline = $deadline RETURN k")
+    @Query("MATCH (k:KnowledgeItem) WHERE k.type = 'TASK' AND k.projectId = $projectId AND k.deadline = $deadline AND k.deletedAt IS NULL RETURN k")
     List<KnowledgeItem> findTasksByDeadline(String projectId, LocalDate deadline);
 
-    @Query("MATCH (k:KnowledgeItem) WHERE k.type = 'TASK' AND k.ownerId = $ownerId AND k.deadline = $deadline RETURN k")
+    @Query("MATCH (k:KnowledgeItem) WHERE k.type = 'TASK' AND k.ownerId = $ownerId AND k.deadline = $deadline AND k.deletedAt IS NULL RETURN k")
     List<KnowledgeItem> findTasksByOwnerAndDeadline(String ownerId, LocalDate deadline);
 
-    @Query("MATCH (k:KnowledgeItem) WHERE k.type = 'TASK' AND k.ownerId = $ownerId AND k.status IN ['TODO', 'IN_PROGRESS'] RETURN k ORDER BY k.deadline")
+    @Query("MATCH (k:KnowledgeItem) WHERE k.type = 'TASK' AND k.ownerId = $ownerId AND k.status IN ['TODO', 'IN_PROGRESS'] AND k.deletedAt IS NULL RETURN k ORDER BY k.deadline")
     List<KnowledgeItem> findActiveTasksByOwner(String ownerId);
 
     @Query("MATCH (source:KnowledgeItem {id: $sourceId}), (target:KnowledgeItem {id: $targetId}) " +

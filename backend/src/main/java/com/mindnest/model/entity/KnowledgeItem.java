@@ -42,6 +42,8 @@ public class KnowledgeItem {
 
     private Instant updatedAt;
 
+    private Instant deletedAt;  // Soft-delete: null = active, non-null = deleted
+
     @Relationship(type = "RELATES_TO", direction = Relationship.Direction.OUTGOING)
     @Builder.Default
     private List<KnowledgeRelation> relations = new ArrayList<>();

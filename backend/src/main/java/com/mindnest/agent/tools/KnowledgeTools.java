@@ -33,14 +33,11 @@ public class KnowledgeTools {
     @Value("${agent.thresholds.update}")
     private double updateThreshold;
 
-    @Value("${agent.thresholds.preview-delete}")
-    private double previewDeleteThreshold;
+    @Value("${agent.thresholds.delete-auto}")
+    private double deleteAutoThreshold;  // > this = delete without confirmation
 
-    @Value("${agent.thresholds.delete-high}")
-    private double deleteHighThreshold;
-
-    @Value("${agent.thresholds.delete-with-keywords}")
-    private double deleteWithKeywordsThreshold;
+    @Value("${agent.thresholds.delete-confirm}")
+    private double deleteConfirmThreshold;  // > this = ask for confirmation
 
     /**
      * Create a new knowledge item (with deduplication)
@@ -130,23 +127,18 @@ public class KnowledgeTools {
                         .map(r -> String.format("'%s' (%.2f)", truncate((String)r.payload().get("content"), 30), r.score()))
                         .toList());
 
-        // Find the best match (contains query or high similarity)
-        String queryLower = query.toLowerCase();
+        // Find the best match by semantic similarity only
+        // Embeddings handle morphology and language variations
         for (SearchResult result : results) {
             String content = (String) result.payload().get("content");
-            // Update if: content contains query keywords OR high semantic match
-            // Note: cross-language queries have ~0.4 similarity, so they won't match anyway
-            boolean containsQuery = content != null && content.toLowerCase().contains(queryLower);
-            boolean highSemanticMatch = result.score() > updateThreshold;
-            if (content != null && (containsQuery || highSemanticMatch)) {
-                log.info("Found match for update: '{}' (score: {}, contains: {})",
-                        truncate(content, 50), result.score(), containsQuery);
-                String itemId = result.id();
-                return updateKnowledge(itemId, newContent);
+            if (content != null && result.score() > updateThreshold) {
+                log.info("Found match for update: '{}' (score: {})", truncate(content, 50), result.score());
+                return updateKnowledge(result.id(), newContent);
             }
         }
 
-        log.warn("No matching item found for update query: '{}'", query);
+        log.warn("No matching item found for update query: '{}' (best score: {})",
+                query, results.isEmpty() ? "none" : results.get(0).score());
         return Optional.empty();
     }
 
@@ -159,58 +151,36 @@ public class KnowledgeTools {
     }
 
     /**
-     * Get all knowledge for a project
+     * Get all active knowledge for a project (excludes soft-deleted)
      */
     public List<KnowledgeItem> getKnowledgeByProject(String projectId) {
-        return knowledgeRepository.findByProjectId(projectId);
+        return knowledgeRepository.findByProjectIdAndDeletedAtIsNull(projectId);
     }
 
     /**
-     * Get knowledge by type
+     * Get active knowledge by type (excludes soft-deleted)
      */
     public List<KnowledgeItem> getKnowledgeByType(String projectId, KnowledgeType type) {
-        return knowledgeRepository.findByProjectIdAndType(projectId, type);
+        return knowledgeRepository.findByProjectIdAndTypeAndDeletedAtIsNull(projectId, type);
     }
 
     /**
-     * Delete knowledge item
+     * Soft-delete knowledge item by ID
      */
     public boolean deleteKnowledge(String id) {
-        if (knowledgeRepository.existsById(id)) {
-            knowledgeRepository.deleteById(id);
-            vectorSearchService.remove(id);
-            log.info("Deleted knowledge item: {}", id);
-            return true;
-        }
-        return false;
+        return knowledgeRepository.findById(id)
+                .map(item -> {
+                    item.setDeletedAt(Instant.now());
+                    knowledgeRepository.save(item);
+                    vectorSearchService.remove(id);  // Remove from vector search
+                    log.info("Soft-deleted knowledge item: {}", id);
+                    return true;
+                })
+                .orElse(false);
     }
 
     /**
-     * Preview items that would be deleted by query (for confirmation)
-     * Returns list of matching items without deleting them.
-     */
-    public List<DeletePreview> previewDelete(String query, String projectId) {
-        log.info("Preview delete by query: '{}' in project: {}", query, projectId);
-
-        List<SearchResult> results = vectorSearchService.searchKnowledge(query, 10, projectId);
-        List<DeletePreview> previews = new ArrayList<>();
-
-        for (SearchResult result : results) {
-            String content = (String) result.payload().get("content");
-            String type = (String) result.payload().get("type");
-
-            // Include if similarity above preview threshold for safe deletion
-            if (content != null && result.score() > previewDeleteThreshold) {
-                previews.add(new DeletePreview(result.id(), type, content, result.score()));
-            }
-        }
-
-        log.info("Preview found {} items to delete for query: '{}'", previews.size(), query);
-        return previews;
-    }
-
-    /**
-     * Delete items by their IDs (used after preview confirmation)
+     * Delete items by their IDs (used after confirmation)
      */
     public int deleteByIds(List<String> ids) {
         int deleted = 0;
@@ -223,10 +193,13 @@ public class KnowledgeTools {
     }
 
     /**
-     * Find and delete knowledge items by query
-     * Uses semantic similarity + keyword matching for safe deletion
+     * Find and delete knowledge items by query.
+     * Uses semantic similarity with two thresholds:
+     * - > deleteAutoThreshold (0.85): delete immediately without confirmation
+     * - > deleteConfirmThreshold (0.65): needs confirmation, returns preview
+     * - <= deleteConfirmThreshold: no match found
      */
-    public int deleteKnowledgeByQuery(String query, String projectId) {
+    public DeleteResult deleteKnowledgeByQuery(String query, String projectId) {
         log.info("Deleting knowledge by query: '{}' in project: {}", query, projectId);
 
         // Search for matching items
@@ -234,43 +207,95 @@ public class KnowledgeTools {
 
         if (results.isEmpty()) {
             log.warn("No items found to delete for query: '{}'", query);
-            return 0;
+            return DeleteResult.notFound(query);
         }
 
-        // Extract keywords from query for additional matching
-        String[] queryKeywords = query.toLowerCase().split("\\s+");
+        // Log search results for debugging
+        log.info("Delete search results for '{}': {}", query,
+                results.stream()
+                        .map(r -> String.format("'%s' (%.2f)", truncate((String)r.payload().get("content"), 30), r.score()))
+                        .toList());
 
-        // Delete items with high semantic similarity OR keyword match
-        int deleted = 0;
+        // Get the best match
+        SearchResult bestMatch = results.get(0);
+        String content = (String) bestMatch.payload().get("content");
+
+        if (content == null) {
+            return DeleteResult.notFound(query);
+        }
+
+        double score = bestMatch.score();
+
+        // High confidence: delete immediately
+        if (score > deleteAutoThreshold) {
+            String itemId = bestMatch.id();
+            if (deleteKnowledge(itemId)) {
+                log.info("Auto-deleted (score {}): {}", score, truncate(content, 50));
+                return DeleteResult.deleted(itemId, content, score);
+            }
+        }
+
+        // Medium confidence: needs confirmation
+        if (score > deleteConfirmThreshold) {
+            log.info("Needs confirmation (score {}): {}", score, truncate(content, 50));
+            return DeleteResult.needsConfirmation(bestMatch.id(), content, score);
+        }
+
+        // Low confidence: no good match
+        log.warn("Best match score {} is below threshold {} for query: '{}'",
+                score, deleteConfirmThreshold, query);
+        return DeleteResult.notFound(query);
+    }
+
+    /**
+     * Result of a delete operation
+     */
+    public record DeleteResult(
+            Status status,
+            String itemId,
+            String content,
+            double score,
+            String query
+    ) {
+        public enum Status {
+            DELETED,           // Item was deleted
+            NEEDS_CONFIRMATION, // Item found but needs user confirmation
+            NOT_FOUND          // No matching item found
+        }
+
+        public static DeleteResult deleted(String id, String content, double score) {
+            return new DeleteResult(Status.DELETED, id, content, score, null);
+        }
+
+        public static DeleteResult needsConfirmation(String id, String content, double score) {
+            return new DeleteResult(Status.NEEDS_CONFIRMATION, id, content, score, null);
+        }
+
+        public static DeleteResult notFound(String query) {
+            return new DeleteResult(Status.NOT_FOUND, null, null, 0, query);
+        }
+    }
+
+    /**
+     * Preview items that would be deleted by query (for confirmation)
+     */
+    public List<DeletePreview> previewDelete(String query, String projectId) {
+        log.info("Preview delete by query: '{}' in project: {}", query, projectId);
+
+        List<SearchResult> results = vectorSearchService.searchKnowledge(query, 10, projectId);
+        List<DeletePreview> previews = new ArrayList<>();
+
         for (SearchResult result : results) {
             String content = (String) result.payload().get("content");
-            if (content == null) continue;
+            String type = (String) result.payload().get("type");
 
-            // Check if content contains any query keyword (case-insensitive)
-            String contentLower = content.toLowerCase();
-            boolean hasKeywordMatch = false;
-            for (String keyword : queryKeywords) {
-                if (keyword.length() >= 4 && contentLower.contains(keyword)) {
-                    hasKeywordMatch = true;
-                    break;
-                }
-            }
-
-            // Delete if: high similarity OR (moderate similarity AND keyword match)
-            boolean shouldDelete = result.score() > deleteHighThreshold || (result.score() > deleteWithKeywordsThreshold && hasKeywordMatch);
-            if (shouldDelete) {
-                String itemId = result.id();
-                if (knowledgeRepository.existsById(itemId)) {
-                    knowledgeRepository.deleteById(itemId);
-                    vectorSearchService.remove(itemId);
-                    log.info("Deleted knowledge item: {} - '{}' (score: {})", itemId, truncate(content, 50), result.score());
-                    deleted++;
-                }
+            if (content != null && result.score() > deleteConfirmThreshold) {
+                previews.add(new DeletePreview(result.id(), type, content, result.score()));
             }
         }
 
-        log.info("Deleted {} items for query: '{}'", deleted, query);
-        return deleted;
+        log.info("Preview found {} items to delete for query: '{}'", previews.size(), query);
+        return previews;
     }
 
     /**

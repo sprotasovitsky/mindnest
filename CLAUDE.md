@@ -105,7 +105,8 @@ models:
 Key features:
 - **Cross-language search**: EN query finds RU content and vice versa
 - **Recency boost**: Recent items get up to 5% score boost (decays over 30 days)
-- **Similarity thresholds**: Search 0.5, Update 0.7, Delete 0.6+keywords or 0.8
+- **Semantic similarity only**: All matching uses embeddings, no keyword matching
+- **Similarity thresholds**: Search 0.5, Update 0.6, Delete 0.55
 
 ## Environment Variables
 
@@ -274,6 +275,46 @@ Date: YYYY-MM-DD
 
 ### Key Principle: Tools, Not Agents
 When adding new AI capabilities, **add new tools to existing agent** rather than creating new agents. The single `AgentService` handles all interactions.
+
+### CRITICAL: No Keyword Matching in Code
+
+**NEVER use keyword/pattern matching in Java code for language processing.** This is a strict architectural rule.
+
+Why:
+- We must support **many languages simultaneously** without language-specific code
+- Keyword matching breaks on morphology (e.g., Russian word endings: "пятёрочку" ≠ "пятёрочке")
+- It creates maintenance burden for each new language
+
+What to use instead:
+1. **Semantic similarity (embeddings)** - `gemini-embedding-001` handles 100+ languages and morphology
+2. **LLM intent detection** - Let the model extract queries, entities, intents from natural language
+3. **User confirmation** - If uncertain, ask the user to confirm before destructive operations
+
+Examples of **FORBIDDEN** patterns:
+```java
+// ❌ WRONG - Language-specific keyword matching
+if (content.toLowerCase().contains("удали")) { ... }
+if (message.startsWith("что") || message.endsWith("?")) { ... }
+String[] keywords = query.split("\\s+");
+for (String keyword : keywords) { if (content.contains(keyword)) ... }
+
+// ❌ WRONG - Hardcoded patterns for parsing
+if (lower.contains(" was ")) { return content.substring(0, idx); }
+if (lower.contains("измени ") || lower.contains("поменяй ")) { ... }
+```
+
+Correct approach:
+```java
+// ✅ CORRECT - Semantic similarity only
+List<SearchResult> results = vectorSearchService.search(query, limit, projectId);
+for (SearchResult r : results) {
+    if (r.score() > threshold) { /* process */ }
+}
+
+// ✅ CORRECT - LLM extracts structured data
+IntentResult intent = detectIntent(message);  // LLM returns intent, entities
+String updateQuery = intent.updateQuery();    // LLM extracted this, not regex
+```
 
 ### Tool Structure
 ```

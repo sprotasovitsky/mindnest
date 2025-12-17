@@ -50,13 +50,13 @@ vertex-ai:
     max-tokens: 2048
 
 # Agent thresholds (similarity scores 0.0-1.0)
+# All matching uses semantic similarity only - embeddings handle morphology and language variations
 agent:
   thresholds:
     deduplication: 0.85      # Skip saving if existing item has same type and higher similarity
-    update: 0.7              # Minimum similarity for semantic update match
-    delete-high: 0.8         # Delete without keyword check if above this
-    delete-with-keywords: 0.6  # Delete with keyword check if above this
-    preview-delete: 0.75     # Minimum similarity for preview delete
+    update: 0.6              # Minimum similarity for semantic update match
+    delete-auto: 0.85        # > this = delete without confirmation
+    delete-confirm: 0.65     # > this = ask for confirmation before deleting
     task-search: 0.5         # Minimum similarity for task semantic search
   recency:
     max-boost: 0.05          # Maximum recency boost (5%)

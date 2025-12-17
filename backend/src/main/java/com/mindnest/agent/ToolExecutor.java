@@ -167,13 +167,18 @@ public class ToolExecutor {
     private String executeDeleteKnowledge(Map<String, Object> args, String projectId) {
         String query = (String) args.get("query");
 
-        int deleted = knowledgeTools.deleteKnowledgeByQuery(query, projectId);
+        var result = knowledgeTools.deleteKnowledgeByQuery(query, projectId);
 
-        if (deleted > 0) {
-            return String.format("Deleted %d item(s) matching '%s' from the knowledge base", deleted, query);
-        } else {
-            return "No items found matching '" + query + "' to delete";
-        }
+        return switch (result.status()) {
+            case DELETED -> String.format("Deleted: '%s'", truncate(result.content(), 60));
+            case NEEDS_CONFIRMATION -> String.format(
+                    "Found item to delete: '%s' (%.0f%% match). Please confirm: should I delete this? [id: %s]",
+                    truncate(result.content(), 60),
+                    result.score() * 100,
+                    result.itemId()
+            );
+            case NOT_FOUND -> "No items found matching '" + query + "' to delete";
+        };
     }
 
     private String executePreviewDelete(Map<String, Object> args, String projectId) {
@@ -273,6 +278,29 @@ public class ToolExecutor {
                 .collect(Collectors.joining("\n"));
     }
 
+    private String executeGetActiveTasksByProject(String projectId) {
+        // Get both TODO and IN_PROGRESS tasks for the project
+        List<KnowledgeItem> todoTasks = taskTools.getTasksByStatus(projectId, TaskStatus.TODO);
+        List<KnowledgeItem> inProgressTasks = taskTools.getTasksByStatus(projectId, TaskStatus.IN_PROGRESS);
+
+        List<KnowledgeItem> tasks = new ArrayList<>();
+        tasks.addAll(todoTasks);
+        tasks.addAll(inProgressTasks);
+
+        if (tasks.isEmpty()) {
+            return "No active tasks in this project.";
+        }
+
+        return "Active tasks:\n" + tasks.stream()
+                .map(t -> {
+                    String deadline = t.getDeadline() != null
+                            ? " (due: " + timeTools.formatDate(t.getDeadline()) + ")"
+                            : "";
+                    return String.format("- [%s] %s%s", t.getStatus(), getTaskTitle(t), deadline);
+                })
+                .collect(Collectors.joining("\n"));
+    }
+
     private String executeUpdateTaskStatus(Map<String, Object> args) {
         String taskId = (String) args.get("task_id");
         String statusStr = (String) args.get("status");
@@ -294,6 +322,11 @@ public class ToolExecutor {
     private String executeSearchTasks(Map<String, Object> args, String projectId) {
         String query = (String) args.get("query");
         int limit = ((Number) args.getOrDefault("limit", 5)).intValue();
+
+        // Handle empty/null query - return all active tasks
+        if (query == null || query.isBlank()) {
+            return executeGetActiveTasksByProject(projectId);
+        }
 
         List<SearchResult> results = taskTools.searchTasks(query, projectId, limit);
 
