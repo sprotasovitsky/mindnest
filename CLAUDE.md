@@ -198,6 +198,18 @@ After each test scenario, verify:
 - If a scenario has 2 users (e.g., Алексей and Мария), use BOTH users
 - If a scenario has specific messages, use those EXACT messages
 
+**ABSOLUTE RULE - NO /tmp SCRIPTS:**
+- NEVER create test scripts in `/tmp/` folder
+- ALWAYS use `tests/run-scenario.sh` to execute tests
+- If the runner needs fixes, fix it in the repo - not create a new script in /tmp
+
+**How to run tests:**
+```bash
+cd /Users/siarheipratasavitski/Projects/MindNest/tests
+./run-scenario.sh scenarios/012-russian-language.md
+./run-scenario.sh scenarios/015-cross-language.md
+```
+
 **BEFORE starting a test iteration:**
 1. Save the current system prompt to `tests/prompts/prompt-vN.txt` (increment N)
 2. This ensures we know exactly which prompt version was used for each test
