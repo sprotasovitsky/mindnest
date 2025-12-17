@@ -133,16 +133,38 @@ public class AgentService {
             IMPORTANT: Extract update_query (what to find) and update_new_content (replacement) separately!
 
             5. SEARCH - User asks a QUESTION or wants to find/retrieve info:
-            CRITICAL: If message ends with "?" OR contains question words, this is SEARCH!
-            - Question words EN: "how", "what", "when", "where", "which", "who", "why", "how much"
-            - Question words RU: "сколько", "что", "когда", "где", "какой", "кто", "почему", "как"
+            *** CRITICAL RULE - CHECK THIS FIRST: ***
+            If message STARTS with any of these words (case insensitive), it is ALWAYS SEARCH:
+            - "что " (what) - e.g. "Что мы покупали?" = SEARCH
+            - "какой" / "какие" / "какая" (which) - e.g. "Какие задачи?" = SEARCH
+            - "сколько" (how much/many) - e.g. "Сколько потратили?" = SEARCH
+            - "когда" (when) - e.g. "Когда встреча?" = SEARCH
+            - "где" (where) - e.g. "Где информация?" = SEARCH
+            - "кто" (who) - e.g. "Кто назначен?" = SEARCH
+            - "почему" / "зачем" (why) - e.g. "Почему так?" = SEARCH
+            - "как" (how) - e.g. "Как сделать?" = SEARCH
+            - "чё" / "че" (informal what) - e.g. "чё там?" = SEARCH
+            - "what" / "when" / "where" / "which" / "who" / "why" / "how"
+
+            If message ENDS with "?" it is SEARCH (even if it contains action words like "покупали", "купили").
+
+            *** EXAMPLES - ALWAYS SEARCH (even if they mention purchases/expenses): ***
+            - "Что мы покупали в этом месяце?" → SEARCH (starts with "что", ends with "?")
+            - "Что купили?" → SEARCH (starts with "что")
+            - "Какие у меня задачи?" → SEARCH (starts with "какие")
+            - "чё там по бюджету?" → SEARCH (starts with "чё")
+            - "Сколько потратили?" → SEARCH (starts with "сколько")
+            - "How much did we spend?" → SEARCH (starts with "how")
+
+            Additional search triggers:
             - Requests EN: "show me", "list all", "find", "search", "tell me about"
             - Requests RU: "покажи", "найди", "выведи", "подскажи", "расскажи"
-            - Informal RU: "чё там", "что там"
             Tool: search_knowledge
 
             6. SAVE - User provides NEW factual information to store (NOT questions!):
             - ONLY if NOT a question (no "?" at end, no question words at start)
+            - NEVER save if message starts with: что, какой, какие, сколько, когда, где, кто, как, чё, че
+            - NEVER save if message ends with "?"
             - Expenses: "I spent 500" / "Потратил 500", "Купил X за Y"
             - Facts: "Budget is..." / "Бюджет...", "Встреча в..."
             - Decisions: "We decided..." / "Решили...", "Выбрали..."
@@ -787,9 +809,118 @@ public class AgentService {
     }
 
     /**
+     * Pre-check for question patterns that MUST be SEARCH intent.
+     * This is a failsafe to ensure questions are never misclassified as SAVE.
+     * Returns IntentResult for SEARCH if pattern matches, null otherwise.
+     */
+    private IntentResult checkForceSearchPattern(String message) {
+        if (message == null || message.isBlank()) {
+            return null;
+        }
+
+        String lowerMessage = message.toLowerCase().trim();
+
+        // Skip task-related questions - let LLM handle them to use correct tool
+        if (lowerMessage.contains("задач") || lowerMessage.contains("task")) {
+            log.debug("Task-related question, letting LLM decide tool");
+            return null;
+        }
+
+        // Determine which tool to use based on context
+        String tool = "search_knowledge";
+
+        // Russian question word prefixes (with space to avoid matching word parts)
+        String[] russianQuestionStarts = {
+            "что ", "какой ", "какие ", "какая ", "каков ", "какое ",
+            "сколько ", "когда ", "где ", "кто ", "почему ", "зачем ",
+            "как ", "чё ", "че ", "чего "
+        };
+
+        // English question word prefixes
+        String[] englishQuestionStarts = {
+            "what ", "which ", "when ", "where ", "who ", "why ", "how "
+        };
+
+        // Check Russian question starts
+        for (String prefix : russianQuestionStarts) {
+            if (lowerMessage.startsWith(prefix)) {
+                log.debug("Matched Russian question pattern: '{}'", prefix);
+                return new IntentResult(
+                    Intent.SEARCH,
+                    tool,
+                    List.of(),
+                    message,  // Use the message as search query
+                    List.of(),
+                    null,
+                    null
+                );
+            }
+        }
+
+        // Check English question starts
+        for (String prefix : englishQuestionStarts) {
+            if (lowerMessage.startsWith(prefix)) {
+                log.debug("Matched English question pattern: '{}'", prefix);
+                return new IntentResult(
+                    Intent.SEARCH,
+                    tool,
+                    List.of(),
+                    message,
+                    List.of(),
+                    null,
+                    null
+                );
+            }
+        }
+
+        // Check if message ends with "?" (question mark)
+        if (message.trim().endsWith("?")) {
+            log.debug("Matched question mark pattern");
+            return new IntentResult(
+                Intent.SEARCH,
+                tool,
+                List.of(),
+                message,
+                List.of(),
+                null,
+                null
+            );
+        }
+
+        // Russian request words (also should be SEARCH)
+        String[] russianRequestStarts = {
+            "покажи ", "найди ", "выведи ", "подскажи ", "расскажи "
+        };
+        for (String prefix : russianRequestStarts) {
+            if (lowerMessage.startsWith(prefix)) {
+                log.debug("Matched Russian request pattern: '{}'", prefix);
+                return new IntentResult(
+                    Intent.SEARCH,
+                    tool,
+                    List.of(),
+                    message,
+                    List.of(),
+                    null,
+                    null
+                );
+            }
+        }
+
+        return null;  // No forced pattern matched, let LLM decide
+    }
+
+    /**
      * Step 1: Detect user intent using fast model with structured output
      */
     private IntentResult detectIntent(String message) {
+        // FAILSAFE: Pre-check for Russian question patterns that must ALWAYS be SEARCH
+        // This ensures questions are never misclassified as SAVE
+        IntentResult forcedSearch = checkForceSearchPattern(message);
+        if (forcedSearch != null) {
+            log.info("Force-detected SEARCH pattern: {}", message);
+            return forcedSearch;
+        }
+
         try {
             GenerativeModel intentModel = new GenerativeModel.Builder()
                     .setModelName(flashModel)

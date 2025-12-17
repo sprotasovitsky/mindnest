@@ -10,7 +10,7 @@ MindNest is an AI-first platform for knowledge and task management through a cha
 
 - **Backend**: Java 21 + Spring Boot 3.2 with Virtual Threads
 - **Mobile/Web**: Flutter + Dart (iOS, Android, Web from single codebase)
-- **AI**: Google Vertex AI (Gemini for LLM, text-embedding-004 for embeddings)
+- **AI**: Google Vertex AI (Gemini 2.5 Flash-Lite for LLM, gemini-embedding-001 for embeddings)
 - **Databases**: Neo4j (knowledge graph), Qdrant (vector search), PostgreSQL (users/auth)
 - **Infrastructure**: Docker Compose for local dev
 
@@ -91,6 +91,22 @@ docker-compose logs -f       # View logs
 3. `LlmService` calls Vertex AI
 4. Response includes confidence score and sources
 
+## AI Models Configuration
+
+Current models in `application.yml`:
+```yaml
+models:
+  chat: gemini-2.5-flash-lite      # Main chat model
+  chat-pro: gemini-2.5-pro         # For complex queries
+  flash: gemini-2.5-flash-lite     # Intent detection
+  embedding: gemini-embedding-001  # 3072 dimensions, 100+ languages
+```
+
+Key features:
+- **Cross-language search**: EN query finds RU content and vice versa
+- **Recency boost**: Recent items get up to 5% score boost (decays over 30 days)
+- **Similarity thresholds**: Search 0.5, Update 0.7, Delete 0.6+keywords or 0.8
+
 ## Environment Variables
 
 ### Google Cloud / Vertex AI
@@ -133,6 +149,7 @@ docker exec mindnest-neo4j cypher-shell -u neo4j -p mindnest "MATCH (k:Knowledge
 
 ### Qdrant (vector search)
 - **Collection name**: `knowledge_vectors` (NOT `knowledge`)
+- **Vector dimensions**: 3072 (gemini-embedding-001)
 - **No authentication**
 ```bash
 # Count all vectors
@@ -173,12 +190,21 @@ After each test scenario, verify:
 
 ### CRITICAL: Testing Rules
 
+**ABSOLUTE RULE - EXACT TEST EXECUTION:**
+- Tests MUST be executed EXACTLY as written in `tests/scenarios/*.md` files
+- NEVER create ad-hoc test scripts that deviate from scenarios
+- NEVER simplify or modify test steps
+- Use the EXACT users, messages, and sequence from scenario files
+- If a scenario has 2 users (e.g., Алексей and Мария), use BOTH users
+- If a scenario has specific messages, use those EXACT messages
+
 **BEFORE starting a test iteration:**
 1. Save the current system prompt to `tests/prompts/prompt-vN.txt` (increment N)
 2. This ensures we know exactly which prompt version was used for each test
 
 **During test execution:**
 - Execute ALL steps in each scenario - no shortcuts
+- Follow the EXACT sequence from the markdown file
 - If issues are found, STOP and fix them BEFORE moving to next test
 - Do NOT just record issues and continue - FIX THEM FIRST
 - After ANY code change, rebuild backend and restart ALL tests from 001
@@ -221,11 +247,29 @@ AgentService.java          # Orchestrates LLM calls, defines function declaratio
 ToolExecutor.java          # Routes function calls to appropriate tool class
     ↓
 *Tools.java                # Actual implementations
-├── KnowledgeTools.java    # create, search, delete knowledge
+├── KnowledgeTools.java    # create, search, update, delete knowledge + graph relations
 ├── TaskTools.java         # create, complete, search tasks
 ├── ProjectTools.java      # project/member management
 └── TimeTools.java         # date parsing
 ```
+
+### Available Tools (14 total)
+| Tool | Description |
+|------|-------------|
+| `create_knowledge` | Save facts, decisions, notes |
+| `search_knowledge` | Find information (supports cross-language) |
+| `update_knowledge` | Correct existing info |
+| `delete_knowledge` | Remove items |
+| `preview_delete` | Preview items before deletion |
+| `confirm_delete` | Confirm deletion by IDs |
+| `create_task` | Create tasks with assignee and deadline |
+| `complete_task_by_title` | Mark task as done by title |
+| `get_active_tasks` | List active tasks |
+| `search_tasks` | Find tasks |
+| `create_relation` | Link two knowledge items |
+| `get_related` | Find related items |
+| `find_path` | Find connection path between items |
+| `get_current_date` | Get current date/time |
 
 ### Adding New Tool
 1. Add method to appropriate `*Tools.java` class
@@ -233,12 +277,28 @@ ToolExecutor.java          # Routes function calls to appropriate tool class
 3. Add executor method in `ToolExecutor.java`
 4. Update system prompt in `AgentService.java` if needed
 
+### Intent Detection
+Agent uses two-step processing:
+1. **Intent Detection** (Gemini Flash): Classifies user message into SAVE, SEARCH, UPDATE, DELETE, TASK, COMPLETE, RELATION, or CHAT
+2. **Response Generation** (Gemini Flash-Lite): Executes tools and generates response
+
+Supported intents:
+- `SAVE` - Save new information
+- `SEARCH` - Find existing information
+- `UPDATE` - Correct/modify existing info
+- `DELETE` - Remove items
+- `TASK` - Create new task
+- `COMPLETE` - Mark task as done
+- `RELATION` - Create link between items
+- `CHAT` - General conversation
+
 ### Common Issues Fixed
 - **Tasks not completing**: Use `complete_task_by_title` (searches by name, not ID)
 - **Empty responses**: Fallback returns function call results if LLM returns empty text
 - **Delete not working**: Use `delete_knowledge` tool with query-based search
 - **Wrong year in dates**: TimeTools uses current/next year for dates without year
 - **Data duplication**: 85% similarity check before creating new items
+- **Cross-language search**: Now works with gemini-embedding-001 (100+ languages)
 
 ## State Management (Mobile)
 
