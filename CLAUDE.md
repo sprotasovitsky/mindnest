@@ -164,21 +164,29 @@ curl -s "http://localhost:6333/collections/knowledge_vectors/points/scroll" \
 ## Testing
 
 ### Test Scenarios
-Test scenarios are in `tests/scenarios/`. Each scenario is a markdown file with steps to execute.
 
-```bash
-# Location
+**Full documentation: [`tests/README.md`](tests/README.md)**
+
+```
 tests/
-├── README.md           # Test process documentation
-└── scenarios/
-    └── 001-new-year-party.md
+├── README.md              # Full test documentation
+├── run-scenario.sh        # Test runner (macOS compatible)
+├── scenarios/             # Test scenario files
+│   ├── 012-russian-language.md
+│   └── 015-cross-language.md
+├── prompts/               # Saved system prompts
+└── results/               # Test results (committed)
 ```
 
 ### Running Tests
-1. Start infrastructure: `cd docker && docker-compose up -d`
-2. Start backend with proper Java/credentials (see Environment Variables)
-3. Execute scenario steps via curl or test scripts
-4. Run post-test analysis (see tests/README.md)
+
+```bash
+cd tests
+./run-scenario.sh scenarios/012-russian-language.md
+./run-scenario.sh scenarios/015-cross-language.md
+```
+
+The runner parses the markdown file and executes all steps automatically.
 
 ### Post-Test Analysis Checklist
 After each test scenario, verify:
