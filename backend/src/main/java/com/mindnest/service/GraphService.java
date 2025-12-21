@@ -150,6 +150,15 @@ public class GraphService {
      * Serialize graph context to text format for LLM.
      */
     public String serializeForLLM(GraphContext context) {
+        return serializeForLLM(context, Map.of());
+    }
+
+    /**
+     * Serialize graph context to text format for LLM with user name mapping.
+     * @param context The graph context
+     * @param userIdToName Map of userId to userName for showing who created each item
+     */
+    public String serializeForLLM(GraphContext context, Map<String, String> userIdToName) {
         StringBuilder sb = new StringBuilder();
         sb.append("=== KNOWLEDGE GRAPH ===\n\n");
 
@@ -198,6 +207,11 @@ public class GraphService {
             if (item.getAssignee() != null) {
                 if (props.length() > 0) props.append(", ");
                 props.append("assignee:").append(item.getAssignee());
+            }
+            // Add createdBy (who added this item)
+            if (item.getOwnerId() != null && userIdToName.containsKey(item.getOwnerId())) {
+                if (props.length() > 0) props.append(", ");
+                props.append("addedBy:").append(userIdToName.get(item.getOwnerId()));
             }
 
             String propsStr = props.length() > 0 ? " {" + props + "}" : "";

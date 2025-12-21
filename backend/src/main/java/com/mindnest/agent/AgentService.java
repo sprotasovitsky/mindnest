@@ -437,41 +437,29 @@ public class AgentService {
                 ? (String) intent.properties().get("status")
                 : "TODO";
 
-        // If completing a task (status=DONE), create new node with SUPERSEDES
+        // If completing a task (status=DONE), use complete_task_by_title
         if ("DONE".equalsIgnoreCase(status)) {
-            // Create completed task node
-            Map<String, Object> args = new HashMap<>();
-            args.put("title", intent.content() + " [DONE]");
-            String result = toolExecutor.execute("create_task", args, projectId, userId);
-
             // Find target query from relations or use content as fallback
-            String targetQuery = null;
+            String targetQuery = intent.content();
             for (RelationIntent rel : intent.relations()) {
-                if ("SUPERSEDES".equals(rel.type())) {
+                if ("SUPERSEDES".equals(rel.type()) && rel.toQuery() != null) {
                     targetQuery = rel.toQuery();
                     break;
                 }
             }
 
-            // Fallback: if no relations provided, use task content as search query
-            if (targetQuery == null && intent.content() != null && !intent.content().isEmpty()) {
-                targetQuery = intent.content();
-                log.info("TASK DONE fallback: using content='{}' as targetQuery", targetQuery);
-            }
+            // Use complete_task_by_title to mark existing task as DONE
+            Map<String, Object> args = new HashMap<>();
+            args.put("title", targetQuery);
+            String result = toolExecutor.execute("complete_task_by_title", args, projectId, userId);
 
-            // Create SUPERSEDES relation to original task
+            log.info("Task completion result for '{}': {}", targetQuery, result);
+
             List<String> linkedTo = new ArrayList<>();
-            if (targetQuery != null) {
-                try {
-                    String linkResult = createRelation(intent.content() + " [DONE]", targetQuery, "SUPERSEDES", projectId, userId);
-                    if (linkResult != null && linkResult.contains("Created relation")) {
-                        linkedTo.add("completed: " + targetQuery);
-                    }
-                } catch (Exception e) {
-                    log.warn("Failed to create SUPERSEDES relation: {}", e.getMessage());
-                }
+            if (result != null && result.contains("Completed task")) {
+                linkedTo.add("completed: " + targetQuery);
             }
-            return new ChunkResult(true, null, "Completed: " + intent.content(), linkedTo, null);
+            return new ChunkResult(true, null, "Completed: " + targetQuery, linkedTo, null);
         }
 
         // Create new task
@@ -527,8 +515,11 @@ public class AgentService {
             // Expand graph with proper depth per relation type
             GraphService.GraphContext graphContext = graphService.expandGraph(seedIds, 50);
 
-            // Serialize graph for LLM
-            String graphText = graphService.serializeForLLM(graphContext);
+            // Build userId -> userName map for showing who added each item
+            Map<String, String> userIdToName = buildUserIdToNameMap(projectId);
+
+            // Serialize graph for LLM with user names
+            String graphText = graphService.serializeForLLM(graphContext, userIdToName);
             log.debug("Expanded graph for search:\n{}", graphText);
 
             // Build user context for LLM
@@ -579,6 +570,28 @@ public class AgentService {
         }
 
         return context.toString();
+    }
+
+    /**
+     * Build a map of userId -> userName for all project members.
+     * Used to show who added each item in the knowledge graph.
+     */
+    private Map<String, String> buildUserIdToNameMap(String projectId) {
+        Map<String, String> userIdToName = new HashMap<>();
+        try {
+            if (projectId != null) {
+                List<ProjectMember> members = projectTools.getMembers(UUID.fromString(projectId));
+                for (ProjectMember member : members) {
+                    var memberUser = userRepository.findById(member.getUserId());
+                    if (memberUser.isPresent()) {
+                        userIdToName.put(member.getUserId().toString(), memberUser.get().getName());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to build userId to name map: {}", e.getMessage());
+        }
+        return userIdToName;
     }
 
     // NOTE: No executeDelete method - system is IMMUTABLE
@@ -637,16 +650,6 @@ public class AgentService {
         }
     }
 
-    /**
-     * Detect language of text (simple heuristic based on character set)
-     */
-    private String detectLanguage(String text) {
-        if (text == null || text.isEmpty()) return "English";
-        // Count Cyrillic characters
-        long cyrillicCount = text.chars().filter(c -> (c >= 0x0400 && c <= 0x04FF)).count();
-        // If more than 20% Cyrillic, assume Russian
-        return cyrillicCount > text.length() * 0.2 ? "Russian" : "English";
-    }
 
     /**
      * Generate response for search results, including calculations if needed
@@ -662,10 +665,8 @@ public class AgentService {
                             .build())
                     .build();
 
-            String language = detectLanguage(originalQuestion);
             String prompt = promptConfig.getSearchResponsePrompt()
-                    .formatted(searchResults, originalQuestion)
-                    + "\n\n**YOU MUST RESPOND IN " + language.toUpperCase() + " ONLY.**";
+                    .formatted(searchResults, originalQuestion);
 
             GenerateContentResponse response = responseModel.generateContent(prompt);
             return ResponseHandler.getText(response);
@@ -690,10 +691,8 @@ public class AgentService {
                             .build())
                     .build();
 
-            String language = detectLanguage(originalMessage);
             String prompt = promptConfig.getActionResponsePrompt()
-                    .formatted(actionSummary, originalMessage)
-                    + "\n\n**YOU MUST RESPOND IN " + language.toUpperCase() + " ONLY.**";
+                    .formatted(actionSummary, originalMessage);
 
             GenerateContentResponse response = responseModel.generateContent(prompt);
             return ResponseHandler.getText(response);
@@ -786,6 +785,8 @@ public class AgentService {
                 .addFunctionDeclarations(buildGetActiveTasksFunction())
                 .addFunctionDeclarations(buildUpdateTaskStatusFunction())
                 .addFunctionDeclarations(buildCompleteTaskByTitleFunction())
+                .addFunctionDeclarations(buildCompleteAllTasksByAssigneeFunction())
+                .addFunctionDeclarations(buildGetMyItemsFunction())
                 .addFunctionDeclarations(buildSearchTasksFunction())
                 .addFunctionDeclarations(buildDecomposeTaskFunction())
                 .addFunctionDeclarations(buildCreateProjectFunction())
@@ -1061,7 +1062,7 @@ public class AgentService {
     private FunctionDeclaration buildCompleteTaskByTitleFunction() {
         return FunctionDeclaration.newBuilder()
                 .setName("complete_task_by_title")
-                .setDescription("Mark a task as completed by searching for it by title or description. Use this when user says 'mark task X as done' or 'completed task X'")
+                .setDescription("Mark a SINGLE task as completed by searching for it by title. Use this when user mentions a SPECIFIC task name.")
                 .setParameters(Schema.newBuilder()
                         .setType(Type.OBJECT)
                         .putProperties("title", Schema.newBuilder()
@@ -1069,6 +1070,31 @@ public class AgentService {
                                 .setDescription("Task title or keywords to find the task (e.g. 'buy alcohol', 'shopping')")
                                 .build())
                         .addRequired("title")
+                        .build())
+                .build();
+    }
+
+    private FunctionDeclaration buildCompleteAllTasksByAssigneeFunction() {
+        return FunctionDeclaration.newBuilder()
+                .setName("complete_all_tasks_by_assignee")
+                .setDescription("Mark ALL tasks assigned to a person as completed. Use this when user says 'my tasks are done', 'I finished all my tasks', 'done with my tasks'. This completes ALL tasks for the person, not just one.")
+                .setParameters(Schema.newBuilder()
+                        .setType(Type.OBJECT)
+                        .putProperties("assignee", Schema.newBuilder()
+                                .setType(Type.STRING)
+                                .setDescription("Name of the person whose ALL tasks should be marked as done (e.g. 'Boris', 'Andrey')")
+                                .build())
+                        .addRequired("assignee")
+                        .build())
+                .build();
+    }
+
+    private FunctionDeclaration buildGetMyItemsFunction() {
+        return FunctionDeclaration.newBuilder()
+                .setName("get_my_items")
+                .setDescription("Get all items created/added by the current user. Use when user asks 'my items', 'what did I add', 'show my contributions', 'list what I saved'.")
+                .setParameters(Schema.newBuilder()
+                        .setType(Type.OBJECT)
                         .build())
                 .build();
     }
@@ -1403,6 +1429,15 @@ public class AgentService {
                 Map<String, Object> args = new HashMap<>();
                 args.put("title", content);
                 yield toolExecutor.execute("complete_task_by_title", args, projectId, userId);
+            }
+            case "complete_all_tasks_by_assignee" -> {
+                Map<String, Object> args = new HashMap<>();
+                args.put("assignee", content);
+                yield toolExecutor.execute("complete_all_tasks_by_assignee", args, projectId, userId);
+            }
+            case "get_my_items" -> {
+                Map<String, Object> args = new HashMap<>();
+                yield toolExecutor.execute("get_my_items", args, projectId, userId);
             }
             case "create_relation" -> {
                 // For relations, we let the main model handle it since it needs to parse source/target

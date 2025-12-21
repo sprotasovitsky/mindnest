@@ -3,35 +3,79 @@ Each chunk should be a complete, self-contained piece of information or action.
 
 Rules:
 - Each expense/purchase = separate chunk
-- Each task = separate chunk
+- Each task assignment (different person) = separate chunk
 - Each fact/decision = separate chunk
 - Keep full context in each chunk (amount, assignee, deadline, etc.)
 - If message is already atomic, return as single chunk
-- Preserve original language exactly
 - Questions (SEARCH) should NOT be split - keep as single chunk
+
+IMPORTANT TASK RULES:
+- Task for ONE person with MULTIPLE items = ONE chunk (don't split!)
+- Tasks for DIFFERENT people = separate chunks
+- "Task for me: do X, Y, and Z" = ONE chunk
+- "Task for Boris: X, Task for Vika: Y" = TWO chunks
 
 Examples:
 
-Input: "Купил шампанское 6 бутылок за 8500 и водку 2 бутылки за 1200"
-Output: ["Купил шампанское 6 бутылок за 8500", "Купил водку 2 бутылки за 1200"]
+1. Multiple expenses:
+Input: "Bought champagne 6 bottles for 8500 and vodka 2 bottles for 1200"
+Output: ["Bought champagne 6 bottles for 8500", "Bought vodka 2 bottles for 1200"]
 
-Input: "Задачи: Борису купить вино до 30го, Вике заказать торт до 25го"
-Output: ["Задача для Бориса: купить вино до 30 декабря", "Задача для Вики: заказать торт до 25 декабря"]
+2. Multiple tasks for different people:
+Input: "Tasks: Boris buy wine by 30th, Vika order cake by 25th"
+Output: ["Task for Boris: buy wine, deadline December 30", "Task for Vika: order cake, deadline December 25"]
 
-Input: "Бюджет на алкоголь 20000 рублей"
-Output: ["Бюджет на алкоголь 20000 рублей"]
+3. Single task with multiple items (DO NOT SPLIT):
+Input: "Task for me: rent karaoke, buy board games and disposable dishes"
+Output: ["Task for me: rent karaoke, buy board games and disposable dishes"]
 
-Input: "Вернула сапоги, получила возврат 7500"
-Output: ["Вернула сапоги, получила возврат 7500"]
+4. Complex message with multiple task assignments:
+Input: "Create tasks: Boris buys all alcohol, Vika buys all food, I'll rent karaoke and buy games"
+Output: ["Task for Boris: buy all alcohol", "Task for Vika: buy all food", "Task for me: rent karaoke and buy games"]
 
-Input: "Сколько мы потратили на еду?"
-Output: ["Сколько мы потратили на еду?"]
+5. Single fact:
+Input: "Budget for alcohol is 20000"
+Output: ["Budget for alcohol is 20000"]
 
-Input: "Решили заказать пиццу и суши. Задача для Пети - позвонить в доставку"
-Output: ["Решили заказать пиццу и суши", "Задача для Пети: позвонить в доставку"]
+6. Refund (single event):
+Input: "Returned boots, got refund 7500"
+Output: ["Returned boots, got refund 7500"]
 
-Input: "I bought milk for $5 and bread for $3. Task for John: buy eggs"
-Output: ["I bought milk for $5", "I bought bread for $3", "Task for John: buy eggs"]
+7. Question (never split):
+Input: "How much did we spend on food and what tasks are left?"
+Output: ["How much did we spend on food and what tasks are left?"]
+
+8. Decision + task:
+Input: "Decided to order pizza and sushi. Task for Pete - call delivery"
+Output: ["Decided to order pizza and sushi", "Task for Pete: call delivery"]
+
+9. Multiple purchases + task:
+Input: "I bought milk for 5 and bread for 3. Task for John: buy eggs and butter"
+Output: ["I bought milk for 5", "I bought bread for 3", "Task for John: buy eggs and butter"]
+
+10. Expense list with categories:
+Input: "Today's expenses: lunch 650 (food), taxi 450 (transport), Netflix 799 (entertainment)"
+Output: ["lunch 650 (food)", "taxi 450 (transport)", "Netflix 799 (entertainment)"]
+
+11. Inventory (single item):
+Input: "Living room: sofa, TV, coffee table, 2 armchairs, bookshelf"
+Output: ["Living room: sofa, TV, coffee table, 2 armchairs, bookshelf"]
+
+12. Task with expenses (mixed message):
+Input: "Done with shopping! Spent 8500 on champagne and 1200 on vodka. Task complete."
+Output: ["Spent 8500 on champagne", "Spent 1200 on vodka", "Task complete"]
+
+13. Multiple facts:
+Input: "Moving date January 15. Movers arrive at 9am. New address: Tverskaya 25"
+Output: ["Moving date January 15", "Movers arrive at 9am", "New address: Tverskaya 25"]
+
+14. Budget limits by category:
+Input: "Monthly limits: food 25000, transport 5000, entertainment 10000"
+Output: ["Monthly limit for food: 25000", "Monthly limit for transport: 5000", "Monthly limit for entertainment: 10000"]
+
+15. Long single item (recipe, notes - don't split):
+Input: "Recipe for Beef Stroganoff: [long recipe text]"
+Output: ["Recipe for Beef Stroganoff: [long recipe text]"]
 
 User message: "%s"
 

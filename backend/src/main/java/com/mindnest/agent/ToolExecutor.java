@@ -94,7 +94,9 @@ public class ToolExecutor {
                 case "get_active_tasks" -> executeGetActiveTasks(userId);
                 case "update_task_status" -> executeUpdateTaskStatus(args);
                 case "complete_task_by_title" -> executeCompleteTaskByTitle(args, projectId);
+                case "complete_all_tasks_by_assignee" -> executeCompleteAllTasksByAssignee(args, projectId);
                 case "search_tasks" -> executeSearchTasks(args, projectId);
+                case "get_my_items" -> executeGetMyItems(args, projectId, userId);
                 case "decompose_task" -> executeDecomposeTask(args);
 
                 // Project tools
@@ -267,6 +269,43 @@ public class ToolExecutor {
         return taskTools.completeTaskByTitle(title, projectId)
                 .map(t -> String.format("Marked task '%s' as completed", getTaskTitle(t)))
                 .orElse("No matching task found for: " + title + ". Please check the task title.");
+    }
+
+    private String executeCompleteAllTasksByAssignee(Map<String, Object> args, String projectId) {
+        String assignee = (String) args.get("assignee");
+
+        List<KnowledgeItem> completed = taskTools.completeAllTasksByAssignee(assignee, projectId);
+
+        if (completed.isEmpty()) {
+            return "No active tasks found for: " + assignee;
+        }
+
+        StringBuilder result = new StringBuilder();
+        result.append(String.format("Completed %d tasks for %s:\n", completed.size(), assignee));
+        for (KnowledgeItem task : completed) {
+            result.append("- ").append(getTaskTitle(task)).append("\n");
+        }
+        return result.toString().trim();
+    }
+
+    private String executeGetMyItems(Map<String, Object> args, String projectId, String userId) {
+        if (userId == null) {
+            return "Cannot get your items: user not identified";
+        }
+
+        List<KnowledgeItem> items = knowledgeTools.getItemsByOwner(projectId, userId);
+
+        if (items.isEmpty()) {
+            return "You haven't added any items yet.";
+        }
+
+        StringBuilder result = new StringBuilder();
+        result.append(String.format("Your items (%d):\n", items.size()));
+        for (KnowledgeItem item : items) {
+            String type = item.getType() != null ? item.getType().name() : "UNKNOWN";
+            result.append(String.format("- [%s] %s\n", type, truncate(item.getContent(), 60)));
+        }
+        return result.toString().trim();
     }
 
     private String executeSearchTasks(Map<String, Object> args, String projectId) {

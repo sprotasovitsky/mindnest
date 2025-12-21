@@ -217,6 +217,32 @@ public class TaskTools {
         return Optional.empty();
     }
 
+    /**
+     * Complete ALL tasks assigned to a specific person.
+     * Finds tasks by assignee name in assignee field or content, marks all as DONE.
+     * @return List of completed tasks
+     */
+    public List<KnowledgeItem> completeAllTasksByAssignee(String assignee, String projectId) {
+        log.info("Completing ALL tasks for assignee: '{}' in project: {}", assignee, projectId);
+
+        List<KnowledgeItem> tasks = knowledgeRepository.findActiveTasksByAssignee(projectId, assignee);
+        List<KnowledgeItem> completed = new ArrayList<>();
+
+        log.info("Found {} active tasks for assignee '{}'", tasks.size(), assignee);
+
+        for (KnowledgeItem task : tasks) {
+            task.setStatus(TaskStatus.DONE);
+            task.setUpdatedAt(Instant.now());
+            KnowledgeItem updated = knowledgeRepository.save(task);
+            vectorSearchService.reindex(updated);
+            completed.add(updated);
+            log.info("Completed task: {} - '{}'", updated.getId(), getTaskTitle(updated));
+        }
+
+        log.info("Completed {} tasks for assignee: '{}'", completed.size(), assignee);
+        return completed;
+    }
+
     private String truncate(String text, int maxLen) {
         return text != null && text.length() > maxLen ? text.substring(0, maxLen) + "..." : text;
     }

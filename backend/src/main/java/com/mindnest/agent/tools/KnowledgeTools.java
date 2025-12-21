@@ -90,6 +90,15 @@ public class KnowledgeTools {
         return knowledgeRepository.findByProjectIdAndTypeAndDeletedAtIsNull(projectId, type);
     }
 
+    /**
+     * Get all items created by a specific user (for "my items" queries).
+     * Returns items where ownerId matches the given userId.
+     */
+    public List<KnowledgeItem> getItemsByOwner(String projectId, String ownerId) {
+        log.info("Getting items by owner: {} in project: {}", ownerId, projectId);
+        return knowledgeRepository.findByProjectIdAndOwnerIdAndDeletedAtIsNull(projectId, ownerId);
+    }
+
     // NOTE: No delete methods - system is immutable
     // DELETE operations create [DELETED] marker nodes with SUPERSEDES relations
     // This preserves full history and allows graph-based analysis
