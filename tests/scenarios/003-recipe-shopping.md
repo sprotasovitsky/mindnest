@@ -166,18 +166,19 @@ Expected: Agent compiles ingredients from all recipes:
 ```
 User: Dmitry
 Chat: "Actually, I'll have 8 guests instead of 4. Can you adjust all recipes and the shopping list?"
-Expected: Agent doubles all quantities:
+Expected: Agent creates NEW versions of recipes for 8 people (with SUPERSEDES relations to originals):
 - Beef: 1200g
 - Potatoes: 2 kg
 - Chicken: 600g
 - etc.
+Note: In immutable architecture, adjustments create new items, not modify existing
 ```
 
 #### Step 4.2: Verify adjustment
 ```
 User: Dmitry
 Chat: "How much beef do I need now?"
-Expected: Agent confirms 1200g (doubled from 600g)
+Expected: Agent returns 1200g (from the new superseding recipe, ignoring outdated 600g version)
 ```
 
 ---
@@ -281,7 +282,8 @@ Expected: Agent calculates: 4810 / 8 = 601.25 rubles per person
 ```
 User: Dmitry
 Chat: "The dinner was great! Rate the beef stroganoff recipe 5 stars and add note: guests loved it, next time add more mushrooms"
-Expected: Agent updates recipe with rating and note
+Expected: Agent creates NEW version of recipe with rating and note (SUPERSEDES original)
+Note: In immutable architecture, adding rating creates new item with relation to old
 ```
 
 ---
@@ -290,7 +292,7 @@ Expected: Agent updates recipe with rating and note
 
 ### Neo4j Checks
 ```cypher
-// All recipes
+// All recipes (including superseded versions)
 MATCH (k:KnowledgeItem {projectId: '<project_id>'})
 WHERE k.content CONTAINS 'recipe' OR k.content CONTAINS 'Ingredients'
 RETURN k.content;
@@ -304,6 +306,18 @@ RETURN k.content, k.status;
 MATCH (k:KnowledgeItem {projectId: '<project_id>'})
 WHERE k.content CONTAINS 'rub'
 RETURN k.content;
+
+// SUPERSEDES relations (recipe adjustments and rating)
+MATCH (new:KnowledgeItem)-[r:SUPERSEDES]->(old:KnowledgeItem)
+WHERE new.projectId = '<project_id>'
+RETURN new.content as current, old.content as outdated;
+```
+
+### Qdrant Checks
+```bash
+curl -s "http://localhost:6333/collections/knowledge_vectors/points/count" \
+  -H "Content-Type: application/json" \
+  -d '{"filter":{"must":[{"key":"projectId","match":{"value":"<project_id>"}}]}}'
 ```
 
 ---
@@ -313,10 +327,11 @@ RETURN k.content;
 After successful test:
 - 1 user registered
 - 1 project
-- 3 complete recipes saved
+- 6+ recipe items (3 original + 3 adjusted for 8 people with SUPERSEDES)
 - Shopping list with ~20 items
 - All items marked as bought with prices
-- Recipe updated with rating/notes
+- Recipe rated with 5 stars (new version SUPERSEDES adjusted version)
+- Multiple SUPERSEDES relations tracking recipe evolution
 
 ---
 
@@ -324,10 +339,10 @@ After successful test:
 
 1. **Recipe parsing**: Agent extracts structured data from recipe text
 2. **List aggregation**: Combines ingredients from multiple recipes
-3. **Math operations**: Doubles quantities correctly
+3. **Math operations**: Doubles quantities correctly via new recipe versions
 4. **State tracking**: Tracks bought vs needed items
-5. **Information retrieval**: Can answer specific questions about saved recipes
-6. **Updates**: Can add notes/ratings to existing items
+5. **Information retrieval**: Returns current (non-superseded) recipe data
+6. **Immutable updates**: Rating creates new item + SUPERSEDES relation
 
 ---
 

@@ -4,20 +4,21 @@
 
 A development team of 6 people runs a 4-week sprint on a complex e-commerce project. This scenario tests:
 - **High volume data**: 200+ items across categories (tasks, decisions, notes, facts)
-- **Performance under load**: Search, update, delete in large dataset
+- **Performance under load**: Search, corrections, deletions in large dataset
 - **Multi-user concurrent work**: 6 users with different responsibilities
-- **Graph relations**: Complex item relationships
+- **Graph relations**: Complex item relationships (including SUPERSEDES chains)
 - **Edge cases**: Long content, special characters, rapid operations
-- **Data integrity**: No duplicates, correct updates, clean deletes
+- **Immutable architecture**: Corrections via SUPERSEDES, deletions via [DELETED] markers
 
 ## Complexity: Very High (6 users, 200+ items, 10 phases)
 
 ## Key Testing Focus
 - System handles 200+ knowledge items per project
 - Search returns relevant results quickly (<3s)
-- Updates don't create duplicates
-- Deletes are clean (no orphans)
+- Corrections create NEW items + SUPERSEDES (no direct updates)
+- Deletions create [DELETED] markers + SUPERSEDES (no physical deletes)
 - Graph relations work at scale
+- SUPERSEDES chains followed correctly in search
 - Long text content is handled
 - Special characters preserved
 
@@ -1045,27 +1046,28 @@ Expected: Agent finds February team purchases
 Intent: SEARCH
 ```
 
-#### Step 11.4: Update in large dataset
+#### Step 11.4: Update in large dataset (Immutable)
 ```
 User: Marina
 Chat: "На самом деле MacBook для Pavel стоил 245000₽, а не 250000₽"
-Expected: Agent updates specific record
-Intent: UPDATE
+Expected: Agent creates NEW record (245000₽) with SUPERSEDES relation to old
+Intent: SAVE (creates new version + SUPERSEDES)
 ```
 
 ```
 User: Marina
 Chat: "Исправь: AWS EC2 стоил $160, не $150"
-Expected: Agent updates AWS record
-Intent: UPDATE
+Expected: Agent creates NEW record ($160) with SUPERSEDES relation to old
+Intent: SAVE (creates new version + SUPERSEDES)
 ```
 
-#### Step 11.5: Delete in large dataset
+#### Step 11.5: Delete in large dataset (Immutable)
 ```
 User: Marina
 Chat: "Удали запись про резерв на баги - мы решили не планировать это отдельно"
-Expected: Agent deletes specific record
-Intent: DELETE
+Expected: Agent creates [DELETED] marker with SUPERSEDES relation to original
+Intent: SAVE (creates [DELETED] marker + SUPERSEDES)
+Note: In immutable architecture, delete = create deletion marker
 ```
 
 ---
@@ -1085,8 +1087,8 @@ Chat: "Связи между элементами проекта:
 6. BUG-005 (ё/е issue) RELATES_TO ADR-001
 
 Создай все эти связи."
-Expected: Agent creates 6 relations
-Intent: RELATION (x6)
+Expected: Agent creates 6 relations (uses create_relation tool)
+Intent: SAVE (x6 relation creations)
 ```
 
 #### Step 12.2: Query relations
@@ -1151,10 +1153,13 @@ time curl -s -X POST "http://localhost:8080/api/chat" \
 | Bugs tracked | 8+ | 6+ |
 | ADRs | 2+ | 2 |
 | Relations | 6+ | 4+ |
+| SUPERSEDES relations | 3+ | 2+ |
 | Search time (simple) | <2s | <3s |
 | Search time (complex) | <3s | <5s |
-| Update accuracy | 100% | 95%+ |
-| Delete precision | 100% | 95%+ |
+| Correction accuracy | 100% | 95%+ |
+| Deletion accuracy | 100% | 95%+ |
+
+Note: "Correction" means creating new item + SUPERSEDES. "Deletion" means creating [DELETED] marker + SUPERSEDES.
 
 ---
 
@@ -1165,8 +1170,8 @@ time curl -s -X POST "http://localhost:8080/api/chat" \
 | Create item | <1s | Per item |
 | Search (simple) | <2s | With 200+ items |
 | Search (complex) | <3s | Aggregations |
-| Update | <2s | Find + update |
-| Delete | <2s | Find + delete |
+| Correction | <2s | Find + create new + SUPERSEDES |
+| Deletion | <2s | Find + create [DELETED] + SUPERSEDES |
 | Graph query | <3s | Traversal |
 | Full test run | <20min | All phases |
 

@@ -110,7 +110,7 @@ Intent: SEARCH
 
 ---
 
-### Phase 4: Delete and Re-create
+### Phase 4: Delete and Re-create (Immutable Architecture)
 
 #### Step 4.1: Create item
 ```
@@ -128,27 +128,29 @@ Expected: Agent returns "100000 рублей"
 Intent: SEARCH
 ```
 
-#### Step 4.3: Delete item
+#### Step 4.3: Delete item (creates [DELETED] marker)
 ```
 User: Тестер
 Chat: "Удали бюджет на отпуск"
-Expected: Agent deletes the item
-Intent: DELETE
+Expected: Agent creates [DELETED] marker with SUPERSEDES relation to original
+Intent: SAVE (with [DELETED] marker)
+Note: In immutable architecture, delete = create deletion marker + SUPERSEDES relation
 ```
 
-#### Step 4.4: Verify item deleted
+#### Step 4.4: Verify item "deleted" (superseded)
 ```
 User: Тестер
 Chat: "Какой бюджет на отпуск?"
-Expected: Agent says nothing found
+Expected: Agent says nothing found (LLM ignores superseded items)
 Intent: SEARCH
+Note: Original item still exists in DB but is superseded by [DELETED] marker
 ```
 
 #### Step 4.5: Re-create with new value
 ```
 User: Тестер
 Chat: "Бюджет на отпуск: 150000 рублей"
-Expected: Agent creates new item (no duplicate detection issue)
+Expected: Agent creates new item (duplicate check should allow - old was "deleted")
 Intent: SAVE
 ```
 
@@ -156,7 +158,7 @@ Intent: SAVE
 ```
 User: Тестер
 Chat: "Какой бюджет на отпуск?"
-Expected: Agent returns "150000 рублей" (not old value)
+Expected: Agent returns "150000 рублей" (ignores both old value AND deletion marker)
 Intent: SEARCH
 ```
 
@@ -190,15 +192,15 @@ Intent: SAVE
 ```
 User: Тестер
 Chat: "Свяжи бэкенд Alpha с проектом Alpha - бэкенд относится к проекту"
-Expected: Agent creates RELATES_TO relation
-Intent: RELATION
+Expected: Agent creates RELATES_TO relation (uses create_relation tool)
+Intent: SAVE
 ```
 
 ```
 User: Тестер
 Chat: "API документация относится к бэкенду Alpha"
-Expected: Agent creates second relation
-Intent: RELATION
+Expected: Agent creates second relation (uses create_relation tool)
+Intent: SAVE
 ```
 
 #### Step 5.3: Query single level relations
@@ -252,7 +254,7 @@ curl -s "http://localhost:6333/collections/knowledge_vectors/points/scroll" \
 | 2.2-2.3 | Search in long text | Content found |
 | 3.1-3.3 | Special chars save | All chars preserved |
 | 3.4-3.5 | Search special chars | Content found |
-| 4.1-4.6 | Delete/re-create | New value correct |
+| 4.1-4.6 | Delete/re-create (immutable) | [DELETED] marker + SUPERSEDES, new value found |
 | 5.1-5.4 | Graph relations | Relations created & queryable |
 
 ---
@@ -271,12 +273,15 @@ curl -s "http://localhost:6333/collections/knowledge_vectors/points/scroll" \
 - Check marks: ✓ ✗ ☑
 - Non-Latin: 日本語 中文 العربية
 
-### Delete/re-create:
-- No ghost data after delete
-- Duplicate detection should not block re-creation
-- New value should be found, not old cached
+### Delete/re-create (Immutable Architecture):
+- "Delete" creates [DELETED] marker + SUPERSEDES relation
+- Original item still exists in DB (never physically deleted)
+- LLM ignores superseded items in search responses
+- Duplicate detection should allow re-creation after "delete"
+- New value found correctly (ignores deletion marker chain)
 
 ### Graph relations:
 - Chain: A -> B -> C
 - get_related should return direct relations
 - find_path should traverse multiple levels
+- SUPERSEDES chains followed to end (for finding current version)

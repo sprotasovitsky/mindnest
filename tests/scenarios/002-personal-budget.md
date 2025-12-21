@@ -207,20 +207,22 @@ Expected: Agent lists:
 
 ---
 
-### Phase 7: Expense Corrections
+### Phase 7: Expense Corrections (Immutable Architecture)
 
 #### Step 7.1: Correction
 ```
 User: Marina
 Chat: "I made a mistake - the Auchan shopping was actually 4200 rubles, not 4500. Please correct it."
-Expected: Agent updates the expense record
+Expected: Agent creates NEW expense record (4200 rubles) with SUPERSEDES relation to old one
+Note: In immutable architecture, corrections create new items, not update existing
 ```
 
 #### Step 7.2: Refund
 ```
 User: Marina
 Chat: "I returned the boots and got a refund of 7500 rubles"
-Expected: Agent records refund/removes expense, clothing budget now OK
+Expected: Agent creates refund record with CONTRADICTS relation to original boots expense
+Note: CONTRADICTS relation means these items cancel out in calculations
 ```
 
 ---
@@ -256,7 +258,7 @@ Expected: Agent analyzes patterns (if enough data)
 ```cypher
 // All expenses
 MATCH (k:KnowledgeItem {projectId: '<project_id>'})
-WHERE k.content CONTAINS 'rubles' OR k.content CONTAINS 'рублей'
+WHERE k.content CONTAINS 'rubles'
 RETURN k.content, k.createdAt
 ORDER BY k.createdAt;
 
@@ -265,10 +267,22 @@ MATCH (k:KnowledgeItem {projectId: '<project_id>'})
 WHERE k.content CONTAINS 'budget' OR k.content CONTAINS 'limit'
 RETURN k.content;
 
-// Check for corrections/updates
-MATCH (k:KnowledgeItem {projectId: '<project_id>'})
-RETURN k.content, k.updatedAt
-WHERE k.updatedAt > k.createdAt;
+// Check SUPERSEDES relations (corrections)
+MATCH (new:KnowledgeItem)-[r:SUPERSEDES]->(old:KnowledgeItem)
+WHERE new.projectId = '<project_id>'
+RETURN new.content as corrected, old.content as original;
+
+// Check CONTRADICTS relations (refunds)
+MATCH (refund:KnowledgeItem)-[r:CONTRADICTS]->(original:KnowledgeItem)
+WHERE refund.projectId = '<project_id>'
+RETURN refund.content, original.content;
+```
+
+### Qdrant Checks
+```bash
+curl -s "http://localhost:6333/collections/knowledge_vectors/points/count" \
+  -H "Content-Type: application/json" \
+  -d '{"filter":{"must":[{"key":"projectId","match":{"value":"<project_id>"}}]}}'
 ```
 
 ---
@@ -279,10 +293,12 @@ After successful test:
 - 1 user registered
 - 1 personal project
 - 6 budget limit records
-- ~15 expense records
-- Agent can calculate totals by category
+- ~17+ expense records (including correction and refund markers)
+- 1 SUPERSEDES relation (Auchan correction: 4200 supersedes 4500)
+- 1 CONTRADICTS relation (boots refund contradicts boots purchase)
+- Agent can calculate totals by category (accounting for SUPERSEDES/CONTRADICTS)
 - Agent can identify over-budget categories
-- Agent can handle corrections and refunds
+- Agent can handle corrections and refunds via immutable architecture
 
 ---
 
@@ -290,10 +306,11 @@ After successful test:
 
 1. **Categorization**: Agent correctly categorizes expenses
 2. **Date handling**: Agent associates expenses with correct dates
-3. **Calculations**: Accurate sum/remaining calculations
+3. **Calculations**: Accurate sum/remaining calculations (respecting SUPERSEDES/CONTRADICTS)
 4. **Alerts**: Warning when budget exceeded
-5. **Updates**: Ability to correct mistakes
-6. **Analysis**: Pattern recognition and summaries
+5. **Corrections**: Creates new item + SUPERSEDES relation (not update)
+6. **Refunds**: Creates refund item + CONTRADICTS relation
+7. **Analysis**: Pattern recognition and summaries
 
 ---
 

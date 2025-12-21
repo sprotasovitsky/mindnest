@@ -113,7 +113,8 @@ Expected: Agent adds items
 ```
 User: Andrey
 Chat: "I have a Christmas tree, no need to buy. Remove it from the shopping list. But we need tree decorations - a box of ornaments."
-Expected: Agent removes tree, adds ornaments
+Expected: Agent creates [DELETED] marker for tree (with SUPERSEDES relation), adds ornaments
+Note: In immutable architecture, "remove" creates a deletion marker, not actual delete
 ```
 
 ---
@@ -128,7 +129,8 @@ Chat: "Let's assign who buys what. Create tasks with deadline December 30:
 - Task for Vika: Buy all food (duck, vegetables, salads ingredients, herring)
 - Task for Galya: Buy desserts and decorations (cake, ice cream, candies, balloons, garlands, napkins, fireworks, ornaments)
 - Task for me (Andrey): Rent karaoke, buy board games, disposable dishes and garbage bags"
-Expected: Agent creates 4 tasks with deadline 2024-12-30
+Expected: Agent creates multiple tasks with deadline December 30
+Note: System may decompose into individual tasks per item. Expected ~7+ tasks total.
 ```
 
 #### Step 3.2: Boris checks his task
@@ -212,8 +214,9 @@ Chat: "I'm done too:
 - Sparkling water 6 bottles - 300 rubles
 - Regular water 4 bottles - 200 rubles
 Total: 5750 rubles
-Done with my task!"
-Expected: Agent records expenses, marks task done
+All my tasks are done!"
+Expected: Agent records expenses, marks ALL Andrey's tasks as done
+Note: If Andrey has multiple tasks, agent should complete all of them
 ```
 
 ---
@@ -302,9 +305,27 @@ RETURN k.content;
 ### Qdrant Checks
 ```bash
 # Check vectors exist for project
-curl http://localhost:6333/collections/mindnest/points/scroll \
+curl -s "http://localhost:6333/collections/knowledge_vectors/points/count" \
   -H "Content-Type: application/json" \
-  -d '{"filter": {"must": [{"key": "projectId", "match": {"value": "<project_id>"}}]}, "limit": 100}'
+  -d '{"filter":{"must":[{"key":"projectId","match":{"value":"<project_id>"}}]}}'
+```
+
+### Immutable Architecture Checks
+```cypher
+// Check SUPERSEDES relations (for deleted/updated items)
+MATCH (a:KnowledgeItem)-[r:SUPERSEDES]->(b:KnowledgeItem)
+WHERE a.projectId = '<project_id>'
+RETURN a.content, b.content;
+
+// Check [DELETED] markers
+MATCH (k:KnowledgeItem {projectId: '<project_id>'})
+WHERE k.content STARTS WITH '[DELETED]'
+RETURN k.content;
+
+// Check [DONE] task markers
+MATCH (k:KnowledgeItem {projectId: '<project_id>'})
+WHERE k.content CONTAINS '[DONE]'
+RETURN k.content;
 ```
 
 ---
@@ -314,10 +335,14 @@ curl http://localhost:6333/collections/mindnest/points/scroll \
 After successful test:
 - 4 users registered
 - 1 shared project with 4 members
-- ~20 knowledge items (shopping list items)
-- 4 expense records
-- 4 completed tasks
+- ~30+ knowledge items (shopping list + expenses + deletion markers)
+- 4 expense records (one per person)
+- 7+ tasks created (system decomposes into individual tasks)
+- All tasks completed (each has [DONE] marker + SUPERSEDES relation)
+- 1 [DELETED] marker for Christmas tree
 - Agent can calculate totals from stored data
+
+Note: In immutable architecture, completed tasks and deleted items create NEW nodes with SUPERSEDES relations, so total node count will be higher than just "items saved".
 
 ---
 

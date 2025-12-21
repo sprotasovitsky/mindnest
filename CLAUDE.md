@@ -269,8 +269,12 @@ curl -s "http://localhost:6333/collections/knowledge_vectors/points/scroll" \
 tests/
 ├── run-scenario.sh        # Test runner (macOS compatible)
 ├── scenarios/             # Test scenario files
-│   ├── 012-russian-language.md
-│   └── 015-cross-language.md
+│   ├── 001-new-year-party.md      # Multi-user shopping/tasks
+│   ├── 002-personal-budget.md     # Budget tracking with corrections
+│   ├── 003-recipe-shopping.md     # Recipe management
+│   ├── ...
+│   ├── 013-edge-cases.md          # Edge cases (long text, unicode, delete/recreate)
+│   └── 014-enterprise-sprint.md   # High volume stress test (200+ items)
 ├── prompts/               # Saved prompts (ONE file per version)
 │   └── prompt-vN.md       # All prompts + config for version N
 └── results/               # Test results (committed)
@@ -327,8 +331,9 @@ Loaded via `PromptConfig.java` at startup.
 
 ```bash
 cd tests
-./run-scenario.sh scenarios/012-russian-language.md
-./run-scenario.sh scenarios/015-cross-language.md
+./run-scenario.sh scenarios/001-new-year-party.md
+./run-scenario.sh scenarios/002-personal-budget.md
+./run-scenario.sh scenarios/014-enterprise-sprint.md  # Stress test (15-20 min)
 ```
 
 The runner parses the markdown file and executes all steps automatically.
@@ -463,7 +468,7 @@ You MUST analyze the actual responses:
 **Step 2 - RUN test:**
 ```bash
 cd tests
-./run-scenario.sh scenarios/012-russian-language.md
+./run-scenario.sh scenarios/001-new-year-party.md
 ```
 
 **Step 3 - AFTER test:**
