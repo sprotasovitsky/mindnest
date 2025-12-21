@@ -128,7 +128,25 @@ public class ToolExecutor {
         String typeStr = (String) args.getOrDefault("type", "NOTE");
         KnowledgeType type = KnowledgeType.valueOf(typeStr.toUpperCase());
 
-        KnowledgeItem item = knowledgeTools.createKnowledge(content, type, projectId, userId);
+        // Extract optional properties
+        java.math.BigDecimal amount = null;
+        Object amountObj = args.get("amount");
+        if (amountObj != null) {
+            if (amountObj instanceof Number) {
+                amount = java.math.BigDecimal.valueOf(((Number) amountObj).doubleValue());
+            } else if (amountObj instanceof String) {
+                try {
+                    amount = new java.math.BigDecimal((String) amountObj);
+                } catch (NumberFormatException e) {
+                    log.warn("Invalid amount format: {}", amountObj);
+                }
+            }
+        }
+
+        String currency = (String) args.get("currency");
+        String assignee = (String) args.get("assignee");
+
+        KnowledgeItem item = knowledgeTools.createKnowledge(content, type, projectId, userId, amount, currency, assignee);
         return String.format("Created %s: '%s' (id: %s)",
                 type.name().toLowerCase(),
                 truncate(content, 50),
@@ -185,13 +203,13 @@ public class ToolExecutor {
 
         LocalDate deadline = deadlineStr != null ? timeTools.parseDate(deadlineStr) : null;
 
-        // Include assignee in task content for searchability
+        // Include assignee in task content for searchability, but also save to separate field
         String taskTitle = title;
         if (assignee != null && !assignee.isBlank()) {
             taskTitle = title + " [assigned to: " + assignee + "]";
         }
 
-        KnowledgeItem task = taskTools.createTask(taskTitle, description, deadline, projectId, userId);
+        KnowledgeItem task = taskTools.createTask(taskTitle, description, deadline, projectId, userId, assignee);
 
         String deadlineInfo = deadline != null
                 ? " (deadline: " + timeTools.formatDate(deadline) + ")"

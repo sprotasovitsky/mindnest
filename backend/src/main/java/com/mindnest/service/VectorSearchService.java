@@ -58,6 +58,17 @@ public class VectorSearchService {
             if (item.getCreatedAt() != null) {
                 metadata.put("createdAt", String.valueOf(item.getCreatedAt().toEpochMilli()));
             }
+            // Add amount and currency for expense calculations
+            if (item.getAmount() != null) {
+                metadata.put("amount", item.getAmount().toString());
+            }
+            if (item.getCurrency() != null) {
+                metadata.put("currency", item.getCurrency());
+            }
+            // Add assignee for task filtering
+            if (item.getAssignee() != null) {
+                metadata.put("assignee", item.getAssignee());
+            }
 
             // Store in vector database
             vectorRepository.upsert(item.getId(), embedding, metadata);

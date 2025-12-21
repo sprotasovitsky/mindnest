@@ -37,7 +37,7 @@ public class SearchIntentHandler implements IntentHandler {
         // Step 1: Semantic search to find seed nodes
         Map<String, Object> args = new HashMap<>();
         args.put("query", query);
-        args.put("limit", 10);
+        args.put("limit", 30);
 
         String tool = "TASK".equals(intent.type()) ? "search_tasks" : "search_knowledge";
         String searchResult = toolExecutor.execute(tool, args, projectId, null);

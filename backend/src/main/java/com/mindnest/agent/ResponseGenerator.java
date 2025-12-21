@@ -31,22 +31,20 @@ public class ResponseGenerator {
     /**
      * Generate combined response from all chunk results.
      * Handles clarification, search results, actions, and chat.
+     * If there are both actions AND clarification, show both.
      */
     public String generateCombinedResponse(List<ChunkResult> results, String originalMessage, String context) {
         try {
-            // Check for clarification results first - return directly without LLM
-            for (ChunkResult result : results) {
-                if (result.needsClarification()) {
-                    return result.description();  // Return clarification message as-is
-                }
-            }
-
             // Build summary of what was done
             StringBuilder actionSummary = new StringBuilder();
             StringBuilder searchResults = new StringBuilder();
+            String clarificationMessage = null;
 
             for (ChunkResult result : results) {
-                if (result.searchResults() != null) {
+                if (result.needsClarification()) {
+                    // Save clarification but don't return immediately
+                    clarificationMessage = result.description();
+                } else if (result.searchResults() != null) {
                     searchResults.append(result.searchResults()).append("\n");
                 } else if (result.description() != null && !"chat".equals(result.description())) {
                     actionSummary.append("- ").append(result.description());
@@ -59,12 +57,27 @@ public class ResponseGenerator {
 
             // If there are search results, use LLM to generate response with calculations
             if (searchResults.length() > 0) {
-                return generateSearchResponse(searchResults.toString(), originalMessage);
+                String searchResponse = generateSearchResponse(searchResults.toString(), originalMessage);
+                // Append clarification if present
+                if (clarificationMessage != null) {
+                    return searchResponse + "\n\n" + clarificationMessage;
+                }
+                return searchResponse;
             }
 
             // If there are actions, use LLM to generate natural response
             if (actionSummary.length() > 0) {
-                return generateActionResponse(actionSummary.toString(), originalMessage);
+                String actionResponse = generateActionResponse(actionSummary.toString(), originalMessage);
+                // Append clarification if present
+                if (clarificationMessage != null) {
+                    return actionResponse + "\n\n" + clarificationMessage;
+                }
+                return actionResponse;
+            }
+
+            // If only clarification, return it
+            if (clarificationMessage != null) {
+                return clarificationMessage;
             }
 
             // Chat response

@@ -38,13 +38,31 @@ public class KnowledgeTools {
      * No deduplication - LLM decides when to create SUPERSEDES relations.
      */
     public KnowledgeItem createKnowledge(String content, KnowledgeType type, String projectId, String ownerId) {
-        log.info("Creating knowledge: type={}, project={}", type, projectId);
+        return createKnowledge(content, type, projectId, ownerId, null, null, null);
+    }
+
+    /**
+     * Create a new knowledge item with additional properties.
+     * @param content Content text
+     * @param type Knowledge type (FACT, NOTE, EXPENSE, etc.)
+     * @param projectId Project ID
+     * @param ownerId User ID who created this item
+     * @param amount Monetary amount (for expenses)
+     * @param currency Currency code (RUB, USD, EUR)
+     * @param assignee Person assigned (for tasks)
+     */
+    public KnowledgeItem createKnowledge(String content, KnowledgeType type, String projectId, String ownerId,
+                                          java.math.BigDecimal amount, String currency, String assignee) {
+        log.info("Creating knowledge: type={}, project={}, amount={}, assignee={}", type, projectId, amount, assignee);
 
         KnowledgeItem item = KnowledgeItem.builder()
                 .content(content)
                 .type(type)
                 .projectId(projectId)
                 .ownerId(ownerId)
+                .amount(amount)
+                .currency(currency)
+                .assignee(assignee)
                 .createdAt(Instant.now())
                 .updatedAt(Instant.now())
                 .build();

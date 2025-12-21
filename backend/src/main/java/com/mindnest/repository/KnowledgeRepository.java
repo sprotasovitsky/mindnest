@@ -156,4 +156,10 @@ public interface KnowledgeRepository extends Neo4jRepository<KnowledgeItem, Stri
            "OPTIONAL MATCH (k)-[r]->(related:KnowledgeItem) " +
            "RETURN k, collect(r), collect(related)")
     KnowledgeItem findByIdWithRelations(String id);
+
+    // Check if task already has a [DONE] marker (someone already SUPERSEDES it with status=DONE)
+    @Query("MATCH (done:KnowledgeItem)-[:SUPERSEDES]->(task:KnowledgeItem {id: $taskId}) " +
+           "WHERE done.status = 'DONE' " +
+           "RETURN count(done) > 0")
+    boolean hasCompletionMarker(String taskId);
 }

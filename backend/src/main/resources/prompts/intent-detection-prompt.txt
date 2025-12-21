@@ -371,6 +371,30 @@ Context: "Assistant: You have 3 tasks:\n[1] buy wine\n[2] rent karaoke\n[3] buy 
   "search_query": null
 }
 
+23. User says "all my tasks are done" - complete ALL their tasks:
+Input: "All my tasks are done!"
+Context: "User: Create tasks for me: buy wine, rent karaoke"
+{
+  "intent": "TASK",
+  "type": "TASK",
+  "content": "all my tasks",
+  "properties": {"status": "DONE", "complete_all": true},
+  "relations": [],
+  "search_query": null
+}
+
+24. User explicitly says they finished all tasks:
+Input: "I finished everything on my list"
+Context: ""
+{
+  "intent": "TASK",
+  "type": "TASK",
+  "content": "all tasks finished",
+  "properties": {"status": "DONE", "complete_all": true},
+  "relations": [],
+  "search_query": null
+}
+
 ================================================================================
 EXAMPLES - SEARCH INTENT (questions, requests for info)
 ================================================================================

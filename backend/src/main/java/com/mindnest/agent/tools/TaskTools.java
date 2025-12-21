@@ -37,7 +37,15 @@ public class TaskTools {
      */
     public KnowledgeItem createTask(String title, String description, LocalDate deadline,
                                      String projectId, String ownerId) {
-        log.info("Creating task: '{}', deadline={}, project={}", title, deadline, projectId);
+        return createTask(title, description, deadline, projectId, ownerId, null);
+    }
+
+    /**
+     * Create a new task with assignee
+     */
+    public KnowledgeItem createTask(String title, String description, LocalDate deadline,
+                                     String projectId, String ownerId, String assignee) {
+        log.info("Creating task: '{}', deadline={}, project={}, assignee={}", title, deadline, projectId, assignee);
 
         String content = description != null && !description.isBlank()
                 ? title + "\n\n" + description
@@ -48,6 +56,7 @@ public class TaskTools {
                 .type(KnowledgeType.TASK)
                 .status(TaskStatus.TODO)
                 .deadline(deadline)
+                .assignee(assignee)
                 .projectId(projectId)
                 .ownerId(ownerId)
                 .createdAt(Instant.now())
@@ -59,7 +68,7 @@ public class TaskTools {
         // Index for semantic search
         vectorSearchService.index(saved);
 
-        log.info("Created task: {} (deadline: {})", saved.getId(), deadline);
+        log.info("Created task: {} (deadline: {}, assignee: {})", saved.getId(), deadline, assignee);
         return saved;
     }
 
@@ -180,6 +189,7 @@ public class TaskTools {
     /**
      * Find and complete task by title/content match.
      * Uses semantic search - embeddings handle morphology and language variations.
+     * IMMUTABLE: Creates new [DONE] node with SUPERSEDES relation to original task.
      */
     public Optional<KnowledgeItem> completeTaskByTitle(String titleQuery, String projectId) {
         log.info("Completing task by title: '{}' in project: {}", titleQuery, projectId);
@@ -200,14 +210,11 @@ public class TaskTools {
                     foundTask.get().getStatus() != TaskStatus.DONE &&
                     foundTask.get().getStatus() != TaskStatus.CANCELLED) {
 
-                    KnowledgeItem task = foundTask.get();
-                    task.setStatus(TaskStatus.DONE);
-                    task.setUpdatedAt(Instant.now());
-                    KnowledgeItem updated = knowledgeRepository.save(task);
-                    vectorSearchService.reindex(updated);
-                    log.info("Completed task: {} - '{}' (score: {})",
-                            updated.getId(), getTaskTitle(updated), result.score());
-                    return Optional.of(updated);
+                    KnowledgeItem originalTask = foundTask.get();
+                    KnowledgeItem completedTask = completeTaskImmutably(originalTask);
+                    log.info("Completed task: {} -> {} (score: {})",
+                            originalTask.getId(), completedTask.getId(), result.score());
+                    return Optional.of(completedTask);
                 }
             }
         }
@@ -218,8 +225,51 @@ public class TaskTools {
     }
 
     /**
+     * Complete a task using immutable architecture.
+     * Creates a new [DONE] node with SUPERSEDES relation to original.
+     * Checks if task already has a completion marker to avoid duplicates.
+     */
+    private KnowledgeItem completeTaskImmutably(KnowledgeItem originalTask) {
+        // Check if task already has a [DONE] marker to avoid duplicates
+        if (knowledgeRepository.hasCompletionMarker(originalTask.getId())) {
+            log.info("Task {} already has completion marker, skipping duplicate", originalTask.getId());
+            return originalTask; // Return original, it's already marked done
+        }
+
+        String originalTitle = getTaskTitle(originalTask);
+
+        // Create new node with [DONE] marker
+        KnowledgeItem doneNode = KnowledgeItem.builder()
+                .content(originalTitle + " [DONE]")
+                .type(KnowledgeType.TASK)
+                .status(TaskStatus.DONE)
+                .deadline(originalTask.getDeadline())
+                .assignee(originalTask.getAssignee())
+                .projectId(originalTask.getProjectId())
+                .ownerId(originalTask.getOwnerId())
+                .createdAt(Instant.now())
+                .updatedAt(Instant.now())
+                .build();
+
+        KnowledgeItem saved = knowledgeRepository.save(doneNode);
+        vectorSearchService.index(saved);
+
+        // Create SUPERSEDES relation: done -> original
+        knowledgeRepository.createSupersedes(
+                saved.getId(),
+                originalTask.getId(),
+                "Task completed",
+                1.0
+        );
+
+        log.info("Created [DONE] node {} with SUPERSEDES relation to original task {}",
+                saved.getId(), originalTask.getId());
+        return saved;
+    }
+
+    /**
      * Complete ALL tasks assigned to a specific person.
-     * Finds tasks by assignee name in assignee field or content, marks all as DONE.
+     * IMMUTABLE: Creates new [DONE] nodes with SUPERSEDES relations to originals.
      * @return List of completed tasks
      */
     public List<KnowledgeItem> completeAllTasksByAssignee(String assignee, String projectId) {
@@ -231,12 +281,8 @@ public class TaskTools {
         log.info("Found {} active tasks for assignee '{}'", tasks.size(), assignee);
 
         for (KnowledgeItem task : tasks) {
-            task.setStatus(TaskStatus.DONE);
-            task.setUpdatedAt(Instant.now());
-            KnowledgeItem updated = knowledgeRepository.save(task);
-            vectorSearchService.reindex(updated);
-            completed.add(updated);
-            log.info("Completed task: {} - '{}'", updated.getId(), getTaskTitle(updated));
+            KnowledgeItem doneNode = completeTaskImmutably(task);
+            completed.add(doneNode);
         }
 
         log.info("Completed {} tasks for assignee: '{}'", completed.size(), assignee);
@@ -260,7 +306,7 @@ public class TaskTools {
 
     /**
      * Complete multiple tasks by their IDs.
-     * Used when user selects specific tasks from clarification list.
+     * IMMUTABLE: Creates new [DONE] nodes with SUPERSEDES relations to originals.
      * @param taskIds List of task IDs to complete
      * @return List of completed tasks
      */
@@ -273,12 +319,8 @@ public class TaskTools {
                     .filter(t -> t.getType() == KnowledgeType.TASK)
                     .filter(t -> t.getStatus() != TaskStatus.DONE && t.getStatus() != TaskStatus.CANCELLED)
                     .ifPresent(task -> {
-                        task.setStatus(TaskStatus.DONE);
-                        task.setUpdatedAt(Instant.now());
-                        KnowledgeItem updated = knowledgeRepository.save(task);
-                        vectorSearchService.reindex(updated);
-                        completed.add(updated);
-                        log.info("Completed task by ID: {} - '{}'", taskId, getTaskTitle(updated));
+                        KnowledgeItem doneNode = completeTaskImmutably(task);
+                        completed.add(doneNode);
                     });
         }
 

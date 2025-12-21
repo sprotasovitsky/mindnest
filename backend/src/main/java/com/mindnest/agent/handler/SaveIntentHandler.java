@@ -6,8 +6,10 @@ import com.mindnest.agent.RelationIntent;
 import com.mindnest.agent.ToolExecutor;
 import com.mindnest.agent.tools.KnowledgeTools;
 import com.mindnest.model.entity.KnowledgeRelation;
+import com.mindnest.repository.VectorRepository.SearchResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -26,6 +28,11 @@ public class SaveIntentHandler implements IntentHandler {
     private final ToolExecutor toolExecutor;
     private final KnowledgeTools knowledgeTools;
 
+    // Minimum similarity score for creating SUPERSEDES/CONTRADICTS relations
+    // Higher threshold prevents linking unrelated items
+    @Value("${agent.thresholds.update:0.6}")
+    private double relationThreshold;
+
     @Override
     public String getIntentType() {
         return "SAVE";
@@ -42,6 +49,19 @@ public class SaveIntentHandler implements IntentHandler {
         args.put("content", intent.content());
         args.put("type", determineKnowledgeType(intent));
 
+        // Add extracted properties (amount, currency, assignee)
+        if (intent.properties() != null) {
+            if (intent.properties().containsKey("amount")) {
+                args.put("amount", intent.properties().get("amount"));
+            }
+            if (intent.properties().containsKey("currency")) {
+                args.put("currency", intent.properties().get("currency"));
+            }
+            if (intent.properties().containsKey("assignee")) {
+                args.put("assignee", intent.properties().get("assignee"));
+            }
+        }
+
         // Execute tool
         String result = toolExecutor.execute("create_knowledge", args, projectId, userId);
 
@@ -56,15 +76,24 @@ public class SaveIntentHandler implements IntentHandler {
 
     /**
      * Find relation targets BEFORE creating new item.
+     * Only includes targets with similarity score above threshold.
      */
     private Map<String, String> findRelationTargets(ChunkIntent intent, String projectId) {
         Map<String, String> preFoundTargets = new HashMap<>();
         for (RelationIntent rel : intent.relations()) {
             try {
-                var searchResults = knowledgeTools.searchKnowledge(rel.toQuery(), projectId, 1);
+                List<SearchResult> searchResults = knowledgeTools.searchKnowledge(rel.toQuery(), projectId, 1);
                 if (!searchResults.isEmpty()) {
-                    preFoundTargets.put(rel.toQuery(), searchResults.get(0).id());
-                    log.debug("Pre-found target for '{}': {}", rel.toQuery(), searchResults.get(0).id());
+                    SearchResult result = searchResults.get(0);
+                    // Only create relation if similarity is above threshold
+                    if (result.score() >= relationThreshold) {
+                        preFoundTargets.put(rel.toQuery(), result.id());
+                        log.debug("Pre-found target for '{}': {} (score: {})",
+                                rel.toQuery(), result.id(), result.score());
+                    } else {
+                        log.info("Skipping relation to '{}': score {} below threshold {}",
+                                rel.toQuery(), result.score(), relationThreshold);
+                    }
                 }
             } catch (Exception e) {
                 log.warn("Failed to pre-find target '{}': {}", rel.toQuery(), e.getMessage());
