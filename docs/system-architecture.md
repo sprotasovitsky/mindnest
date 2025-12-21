@@ -177,32 +177,45 @@ All prompts in `backend/src/main/resources/prompts/`:
 ```
 backend/src/main/java/com/mindnest/
 ├── agent/
-│   ├── AgentService.java      # Main orchestrator (~1500 lines)
-│   ├── ToolExecutor.java      # Routes tool calls
+│   ├── AgentService.java           # Main orchestrator (145 lines)
+│   ├── IntentDetectionEngine.java  # Message decomposition & intent detection
+│   ├── IntentExecutor.java         # Routes intents to handlers
+│   ├── ResponseGenerator.java      # LLM response generation
+│   ├── UserContextBuilder.java     # User/project context building
+│   ├── ToolDeclarationFactory.java # Tool/function declarations
+│   ├── ToolExecutor.java           # Routes tool calls
+│   ├── ChunkResult.java            # Result of chunk processing
+│   ├── ChunkIntent.java            # Detected intent record
+│   ├── RelationIntent.java         # Relation intent record
+│   ├── handler/
+│   │   ├── IntentHandler.java      # Handler interface
+│   │   ├── SaveIntentHandler.java  # SAVE intent
+│   │   ├── TaskIntentHandler.java  # TASK intent + clarification
+│   │   ├── SearchIntentHandler.java # SEARCH intent
+│   │   └── ChatIntentHandler.java  # CHAT intent
 │   └── tools/
 │       ├── KnowledgeTools.java
 │       ├── TaskTools.java
 │       ├── ProjectTools.java
 │       └── TimeTools.java
 ├── service/
-│   ├── GraphService.java      # Graph expansion
-│   ├── VectorSearchService.java
-│   └── EmbeddingService.java
+│   ├── GraphService.java           # Graph expansion
+│   ├── VectorSearchService.java    # Qdrant semantic search
+│   └── EmbeddingService.java       # Embeddings via Gemini
 └── repository/
     └── KnowledgeRepository.java
 ```
 
-### AgentService Methods
+### Agent Service Architecture
 
-| Method | Purpose |
-|--------|---------|
-| processMessage() | Main entry point |
-| decompose() | Split message (LLM) |
-| detectChunkIntent() | Classify chunk (LLM) |
-| executeSave() | Create knowledge item |
-| executeTask() | Create/complete task |
-| executeSearch() | Search + graph expansion |
-| generateCombinedResponse() | Final response (LLM) |
+| Service | Purpose |
+|---------|---------|
+| AgentService | Main orchestrator, coordinates pipeline |
+| IntentDetectionEngine | decompose(), detectChunkIntent() |
+| IntentExecutor | Routes to Save/Task/Search/Chat handlers |
+| ResponseGenerator | generateSearchResponse(), generateActionResponse() |
+| UserContextBuilder | buildUserContext(), getPendingTaskIds() |
+| ToolDeclarationFactory | Creates 17 tool declarations for Gemini |
 
 ### Tools
 
@@ -219,76 +232,87 @@ backend/src/main/java/com/mindnest/
 | find_path | Find path between items |
 | get_current_date | Current date |
 
-## 9. Known Issues (Test v23)
+## 9. Known Issues and Fixes
 
-### 9.1 Task Completion Only First Match
+### 9.1 Task Completion ✅ FIXED
 
 **Problem**: User has 4 tasks, says "Done!" → only 1 marked DONE
 
-**Cause**: `completeTaskByTitle()` uses semantic search, returns after first match:
+**Solution**: Implemented clarification flow in TaskIntentHandler:
+- If 0 tasks → "You have no active tasks"
+- If 1 task → Complete immediately
+- If N tasks → Show numbered list, ask which ones to complete
+- User can respond with "all", "1 and 3", or task name
+
 ```java
-for (SearchResult result : results) {
-    if (result.score() > threshold) {
-        task.setStatus(TaskStatus.DONE);
-        return Optional.of(updated);  // ← Returns immediately!
-    }
+// TaskIntentHandler.java
+if (needsClarification) {
+    return requestTaskClarification(projectId, userId);  // Shows numbered list
+}
+if (completeAll) {
+    return completeAllTasks(projectId, userId);
+}
+if (selectedIndices != null) {
+    return completeSelectedTasks(selectedIndices, pendingTaskIds);
 }
 ```
 
-### 9.2 Expense Search Incomplete
+### 9.2 Expense Search Incomplete (Open)
 
 **Problem**: Sum shows 6000 instead of 35850
 
 **Cause**: Semantic search doesn't find all expense items
 
-### 9.3 "My items" Shows Wrong Items
+**Potential fix**: Use type filter + amount field aggregation
+
+### 9.3 "My items" Shows Wrong Items (Open)
 
 **Problem**: Vika asks "my items" → shows other users' items
 
 **Cause**: Semantic search for "my items" doesn't filter by ownerId
 
-### 9.4 Assignee Field Often Null
+**Potential fix**: Combine ownerId filter with semantic search
 
-**Problem**: Assignee stored in content text `[assigned to: Boris]` instead of field
+### 9.4 Assignee Field Often Null (Open)
 
-## 10. Open Questions
+**Problem**: Assignee stored in content text instead of field
 
-### 10.1 Task Completion Strategy
+**Potential fix**: Intent detection should extract assignee to field
 
-When user says "my task done", should we:
-- A) Complete most semantically similar task (current, unreliable)
-- B) Complete all tasks for that user (too aggressive?)
-- C) Ask for clarification if multiple tasks
-- D) Use assignee field + filter by current user
-
-### 10.2 Expense Aggregation
-
-How to handle "total expenses" queries:
-- A) Semantic search (current, incomplete)
-- B) Direct query by type + amount field
-- C) Create separate EXPENSE type
-
-### 10.3 "My items" Query
-
-How to handle:
-- A) Semantic search (current, wrong results)
-- B) Filter by ownerId only
-- C) Combine: ownerId filter + semantic
-
-## 11. Proposed Fixes Priority
+## 10. Remaining Tasks
 
 ### High Priority
-
-1. Fix task completion - use assignee context in matching
+1. ~~Fix task completion~~ ✅ Done - clarification flow implemented
 2. Fix expense aggregation - query by amount field
 3. Fix "my items" - filter by ownerId
 
 ### Medium Priority
-
 4. Store assignee in field, not content text
 5. Increase search limits for aggregations
 
 ### Low Priority
-
 6. Add EXPENSE type separate from FACT
 7. Configurable graph expansion limits
+
+## 11. Architecture Improvements (Completed)
+
+### AgentService Refactoring ✅
+
+**Before**: AgentService was 1,727 lines (god class)
+
+**After**: Split into focused services:
+| Service | Lines | Responsibility |
+|---------|-------|----------------|
+| AgentService | 145 | Orchestration only |
+| IntentDetectionEngine | 180 | Decompose + detect intent |
+| IntentExecutor | 65 | Route to handlers |
+| ResponseGenerator | 120 | LLM responses |
+| UserContextBuilder | 130 | User context |
+| ToolDeclarationFactory | 280 | Tool declarations |
+| Intent handlers | 390 | Save/Task/Search/Chat |
+
+**Benefits**:
+- 92% reduction in main class size
+- Single responsibility per class
+- Easier testing and maintenance
+- New handlers added without modifying existing code

@@ -57,14 +57,35 @@ docker-compose logs -f       # View logs
 
 ### Backend Structure (`backend/src/main/java/com/mindnest/`)
 ```
-├── agent/          # AI agent orchestration (AgentService)
-├── config/         # Configuration classes (VertexAiConfig)
-├── controller/     # REST endpoints (ChatController)
+├── agent/                    # AI agent layer
+│   ├── AgentService.java         # Main orchestrator (145 lines)
+│   ├── IntentDetectionEngine.java # Message decomposition & intent detection
+│   ├── IntentExecutor.java        # Routes intents to handlers
+│   ├── ResponseGenerator.java     # LLM response generation
+│   ├── UserContextBuilder.java    # User/project context building
+│   ├── ToolDeclarationFactory.java # Tool/function declarations
+│   ├── ToolExecutor.java          # Routes tool calls to implementations
+│   ├── ChunkResult.java           # Result of chunk processing
+│   ├── ChunkIntent.java           # Detected intent record
+│   ├── RelationIntent.java        # Relation intent record
+│   ├── handler/                   # Intent handlers
+│   │   ├── IntentHandler.java         # Handler interface
+│   │   ├── SaveIntentHandler.java     # SAVE intent
+│   │   ├── TaskIntentHandler.java     # TASK intent + clarification
+│   │   ├── SearchIntentHandler.java   # SEARCH intent
+│   │   └── ChatIntentHandler.java     # CHAT intent
+│   └── tools/                     # Tool implementations
+│       ├── KnowledgeTools.java        # create, search knowledge
+│       ├── TaskTools.java             # create, complete tasks
+│       ├── ProjectTools.java          # project/member management
+│       └── TimeTools.java             # date parsing
+├── config/               # Configuration classes
+├── controller/           # REST endpoints
 ├── model/
-│   ├── dto/        # Request/Response DTOs
-│   └── entity/     # Database entities (User, Project, KnowledgeItem)
-├── repository/     # Data access (JPA for PostgreSQL, Neo4j repos)
-└── service/        # Business logic (LlmService, EmbeddingService, ModelRouter)
+│   ├── dto/              # Request/Response DTOs
+│   └── entity/           # Database entities
+├── repository/           # Data access
+└── service/              # Business logic
 ```
 
 ### Mobile Structure (`mobile/lib/`)
@@ -87,12 +108,32 @@ docker-compose logs -f       # View logs
 - **Vectors** (Qdrant): Embeddings for semantic search (items are NEVER deleted from Qdrant)
 
 ### AI Agent Flow
-1. User message → `ChatController`
-2. `AgentService.decompose()` → Splits message into logical chunks
-3. For each chunk: `detectChunkIntent()` → Determines SAVE/SEARCH/TASK/DELETE/CHAT
-4. Execute intent → Tools create/search items, expand graph
-5. `generateCombinedResponse()` → LLM generates natural response
-6. Response includes confidence score and sources
+```
+User Message → ChatController → AgentService
+                                      │
+                                      ▼
+                         IntentDetectionEngine.decompose()
+                         Splits message into logical chunks
+                                      │
+                                      ▼ (for each chunk)
+                         IntentDetectionEngine.detectChunkIntent()
+                         Returns: intent, type, content, properties, relations
+                                      │
+                                      ▼
+                              IntentExecutor.processChunk()
+                              Routes to appropriate handler:
+                              ├─ SaveIntentHandler   → create_knowledge
+                              ├─ TaskIntentHandler   → create_task / complete_task
+                              ├─ SearchIntentHandler → search + graph expansion
+                              └─ ChatIntentHandler   → no tools
+                                      │
+                                      ▼
+                         ResponseGenerator.generateCombinedResponse()
+                         LLM generates natural language response
+                                      │
+                                      ▼
+                         ChatResponse (reply, sources, confidence)
+```
 
 ## Immutable Architecture
 
@@ -278,6 +319,9 @@ Loaded via `PromptConfig.java` at startup.
 | v18 | Added SUPERSEDES semantics to search response (LLM ignores outdated items) |
 | v19 | Added user context (current user + project members) for task filtering |
 | v20 | Extracted all prompts to external files, unified version format |
+| v21 | Improved intent detection examples |
+| v22 | Added task completion clarification flow (needs_clarification, selected_indices) |
+| v23 | English-only prompts (language-agnostic via embeddings) |
 
 ### Running Tests
 
@@ -497,17 +541,41 @@ IntentResult intent = detectIntent(message);  // LLM returns intent, entities
 String updateQuery = intent.updateQuery();    // LLM extracted this, not regex
 ```
 
-### Tool Structure
+### Agent Architecture (Refactored)
+
 ```
-AgentService.java          # Orchestrates chunk processing, intent detection, response generation
-    ↓
-ToolExecutor.java          # Routes function calls to appropriate tool class
-    ↓
-*Tools.java                # Actual implementations
-├── KnowledgeTools.java    # create, search knowledge + graph relations (NO delete/update)
-├── TaskTools.java         # create, complete, search tasks
-├── ProjectTools.java      # project/member management
-└── TimeTools.java         # date parsing
+┌─────────────────────────────────────────────────────────────────┐
+│  AgentService.java (145 lines) - Main orchestrator              │
+│  • Manages conversation context                                 │
+│  • Coordinates the processing pipeline                          │
+└─────────────────────────┬───────────────────────────────────────┘
+                          │
+          ┌───────────────┼───────────────┬───────────────┐
+          ▼               ▼               ▼               ▼
+┌─────────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐
+│IntentDetection  │ │IntentExecutor│ │ResponseGen  │ │UserContext  │
+│Engine           │ │              │ │erator       │ │Builder      │
+│                 │ │Routes to     │ │             │ │             │
+│• decompose()    │ │handlers:     │ │• search     │ │• buildUser  │
+│• detectIntent() │ │• Save        │ │• action     │ │  Context()  │
+│                 │ │• Task        │ │• chat       │ │• getPending │
+│                 │ │• Search      │ │• combined   │ │  TaskIds()  │
+│                 │ │• Chat        │ │             │ │             │
+└─────────────────┘ └──────┬──────┘ └─────────────┘ └─────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  ToolExecutor.java - Routes tool calls to implementations       │
+└─────────────────────────┬───────────────────────────────────────┘
+                          │
+          ┌───────────────┼───────────────┬───────────────┐
+          ▼               ▼               ▼               ▼
+┌─────────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐
+│KnowledgeTools   │ │TaskTools    │ │ProjectTools │ │TimeTools    │
+│• create         │ │• create     │ │• create     │ │• getCurrentDate│
+│• search         │ │• complete   │ │• getMembers │ │• parseDate   │
+│• createRelation │ │• getActive  │ │             │ │              │
+└─────────────────┘ └─────────────┘ └─────────────┘ └─────────────┘
 ```
 
 ### Key Services
@@ -515,30 +583,43 @@ ToolExecutor.java          # Routes function calls to appropriate tool class
 GraphService.java          # Graph expansion with depth per relation type
 VectorSearchService.java   # Qdrant semantic search with recency boost
 EmbeddingService.java      # Generate embeddings via Gemini
+ToolDeclarationFactory.java # Creates all 17 tool declarations for Gemini
 ```
 
-### Available Tools (11 total)
+### Available Tools (17 total)
 | Tool | Description |
 |------|-------------|
 | `create_knowledge` | Save facts, decisions, notes |
 | `search_knowledge` | Find information (supports cross-language) |
 | `create_task` | Create tasks with assignee and deadline |
 | `complete_task_by_title` | Mark task as done (creates [DONE] marker + SUPERSEDES) |
+| `complete_tasks_by_ids` | Complete multiple tasks by their IDs |
+| `complete_all_tasks_by_assignee` | Complete all tasks for a person |
 | `get_active_tasks` | List active tasks |
+| `get_tasks_for_today` | Get tasks due today |
+| `get_my_items` | Get items created by current user |
 | `search_tasks` | Find tasks |
+| `decompose_task` | Break task into subtasks |
 | `create_relation` | Link two knowledge items by search query |
-| `create_relation_by_id` | Link two items by their IDs |
 | `get_related` | Find related items |
 | `find_path` | Find connection path between items |
+| `create_project` | Create a new project |
+| `list_projects` | List user's projects |
 | `get_current_date` | Get current date/time |
 
 **Note**: There are NO `update_knowledge`, `delete_knowledge`, or `confirm_delete` tools. All modifications happen through the immutable architecture (new items + relations).
 
 ### Adding New Tool
 1. Add method to appropriate `*Tools.java` class
-2. Add function declaration in `AgentService.java` (TOOL_DECLARATIONS)
-3. Add executor method in `ToolExecutor.java`
-4. Update system prompt in `AgentService.java` if needed
+2. Add function declaration in `ToolDeclarationFactory.java`
+3. Add executor case in `ToolExecutor.java`
+4. Update system prompt in `prompts/system-prompt.txt` if needed
+
+### Adding New Intent Handler
+1. Create new handler class implementing `IntentHandler` interface in `agent/handler/`
+2. Implement `getIntentType()` and `execute()` methods
+3. Handler is auto-registered via Spring DI (no manual wiring needed)
+4. Update `intent-detection-prompt.txt` to recognize new intent
 
 ### Intent Detection (Chunk-Based)
 
@@ -547,21 +628,56 @@ Agent uses chunk-based processing for complex messages:
 1. **Decomposition** (Gemini Flash): Splits message into independent logical chunks
    - "Budget 50000 and buy milk" → ["Budget 50000", "buy milk"]
 2. **Intent Detection** (Gemini Flash): For each chunk, determines intent and extracts structured data
-3. **Execution**: Each chunk processed through appropriate flow
+3. **Execution**: Each chunk processed through appropriate handler
 4. **Response Generation** (Gemini Flash): Combines results into natural response
 
 Supported intents:
 - `SAVE` - Save new information (creates KnowledgeItem)
+  - Delete requests → SAVE with `[DELETED]` marker + SUPERSEDES relation
+  - Updates → SAVE new item + SUPERSEDES relation to old
 - `SEARCH` - Find existing information (expands graph, returns to LLM)
 - `TASK` - Create or complete task
   - status=TODO: Creates new task
-  - status=DONE: Creates `[DONE]` marker + SUPERSEDES relation
-- `DELETE` - Mark item as deleted (creates `[DELETED]` marker + SUPERSEDES relation)
+  - status=DONE: Completes task with clarification flow (see below)
 - `CHAT` - General conversation (no tools)
 
-**Note**: There is no UPDATE intent. Updates are handled by SAVE with SUPERSEDES relation to old item.
+**Note**: There is no UPDATE or DELETE intent. All modifications handled via SAVE with relations.
+
+### Task Completion Clarification Flow
+
+When user says "Done!" without specifying which task:
+
+```
+User: "Done!"
+         │
+         ▼
+IntentDetectionEngine: detects TASK intent with needs_clarification=true
+         │
+         ▼
+TaskIntentHandler: gets user's active tasks
+         │
+         ├─ 0 tasks → "You have no active tasks"
+         ├─ 1 task  → Complete immediately (no question)
+         └─ N tasks → Show numbered list, ask which ones
+                     │
+                     ▼
+            "You have 3 active tasks:
+             [1] Buy wine
+             [2] Rent karaoke
+             [3] Buy games
+             Which ones are complete? (enter numbers like '1 and 3', or 'all')"
+                     │
+                     ▼
+User: "1 and 3" or "all" or "the wine one"
+         │
+         ▼
+TaskIntentHandler: completes selected tasks
+```
+
+Clarification state is stored in message metadata (`pendingTaskIds`) and extracted on next turn.
 
 ### Common Issues Fixed
+- **Ambiguous task completion**: Clarification flow asks which tasks to complete when multiple exist
 - **Tasks not completing**: Use `complete_task_by_title` which creates `[DONE]` marker + SUPERSEDES
 - **Empty responses**: Fallback returns function call results if LLM returns empty text
 - **Wrong year in dates**: TimeTools uses current/next year for dates without year
@@ -569,6 +685,7 @@ Supported intents:
 - **Cross-language search**: Works with gemini-embedding-001 (100+ languages)
 - **Deleted items showing**: LLM taught to ignore items with SUPERSEDES from `[DELETED]` markers
 - **User task filtering**: User context (current user + members) passed to LLM for filtering
+- **God class refactoring**: AgentService split from 1727 lines to 145 lines + specialized services
 
 ## State Management (Mobile)
 

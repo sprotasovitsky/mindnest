@@ -331,6 +331,10 @@
 - ✅ Team collaboration (project members can share knowledge)
 - ✅ Intent detection with force-check patterns
 - ✅ Configurable similarity thresholds (externalized to application.yml)
+- ✅ Task completion clarification flow (asks which tasks when ambiguous)
+- ✅ AgentService refactoring (1,727 lines → 145 lines + specialized services)
+- ✅ Intent handlers architecture (Save, Task, Search, Chat handlers)
+- ✅ Immutable architecture (no UPDATE/DELETE at DB level)
 
 ---
 
