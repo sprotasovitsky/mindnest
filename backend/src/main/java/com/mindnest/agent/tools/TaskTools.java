@@ -243,6 +243,49 @@ public class TaskTools {
         return completed;
     }
 
+    /**
+     * Get active tasks for a specific user (by owner ID or assignee name).
+     * Used for clarification flow when user says "my task done" but has multiple tasks.
+     * @param projectId Project to search in
+     * @param userId User ID (for owner matching)
+     * @param userName User name (for assignee matching)
+     * @return List of active tasks for this user
+     */
+    public List<KnowledgeItem> getActiveTasksForUser(String projectId, String userId, String userName) {
+        log.info("Getting active tasks for user: {} ({}) in project: {}", userName, userId, projectId);
+        List<KnowledgeItem> tasks = knowledgeRepository.findActiveTasksForUser(projectId, userId, userName);
+        log.info("Found {} active tasks for user '{}'", tasks.size(), userName);
+        return tasks;
+    }
+
+    /**
+     * Complete multiple tasks by their IDs.
+     * Used when user selects specific tasks from clarification list.
+     * @param taskIds List of task IDs to complete
+     * @return List of completed tasks
+     */
+    public List<KnowledgeItem> completeTasksByIds(List<String> taskIds) {
+        log.info("Completing {} tasks by IDs: {}", taskIds.size(), taskIds);
+        List<KnowledgeItem> completed = new ArrayList<>();
+
+        for (String taskId : taskIds) {
+            knowledgeRepository.findById(taskId)
+                    .filter(t -> t.getType() == KnowledgeType.TASK)
+                    .filter(t -> t.getStatus() != TaskStatus.DONE && t.getStatus() != TaskStatus.CANCELLED)
+                    .ifPresent(task -> {
+                        task.setStatus(TaskStatus.DONE);
+                        task.setUpdatedAt(Instant.now());
+                        KnowledgeItem updated = knowledgeRepository.save(task);
+                        vectorSearchService.reindex(updated);
+                        completed.add(updated);
+                        log.info("Completed task by ID: {} - '{}'", taskId, getTaskTitle(updated));
+                    });
+        }
+
+        log.info("Completed {} out of {} requested tasks", completed.size(), taskIds.size());
+        return completed;
+    }
+
     private String truncate(String text, int maxLen) {
         return text != null && text.length() > maxLen ? text.substring(0, maxLen) + "..." : text;
     }

@@ -66,6 +66,10 @@ public interface KnowledgeRepository extends Neo4jRepository<KnowledgeItem, Stri
     @Query("MATCH (k:KnowledgeItem) WHERE k.projectId = $projectId AND k.ownerId = $ownerId AND k.deletedAt IS NULL RETURN k ORDER BY k.createdAt DESC")
     List<KnowledgeItem> findByProjectIdAndOwnerIdAndDeletedAtIsNull(String projectId, String ownerId);
 
+    // Find active tasks where user is either owner or assignee (for "my tasks" queries)
+    @Query("MATCH (k:KnowledgeItem) WHERE k.type = 'TASK' AND k.projectId = $projectId AND k.status IN ['TODO', 'IN_PROGRESS'] AND k.deletedAt IS NULL AND (k.ownerId = $userId OR toLower(k.assignee) CONTAINS toLower($userName)) RETURN k ORDER BY k.deadline")
+    List<KnowledgeItem> findActiveTasksForUser(String projectId, String userId, String userName);
+
     // Relation creation methods - each with proper Neo4j relationship type
     // SUPERSEDES: new item replaces old (for updates, deletes, task completion)
     @Query("MATCH (source:KnowledgeItem {id: $sourceId}), (target:KnowledgeItem {id: $targetId}) " +

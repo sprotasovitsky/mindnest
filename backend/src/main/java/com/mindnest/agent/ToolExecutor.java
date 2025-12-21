@@ -95,6 +95,7 @@ public class ToolExecutor {
                 case "update_task_status" -> executeUpdateTaskStatus(args);
                 case "complete_task_by_title" -> executeCompleteTaskByTitle(args, projectId);
                 case "complete_all_tasks_by_assignee" -> executeCompleteAllTasksByAssignee(args, projectId);
+                case "complete_tasks_by_ids" -> executeCompleteTasksByIds(args);
                 case "search_tasks" -> executeSearchTasks(args, projectId);
                 case "get_my_items" -> executeGetMyItems(args, projectId, userId);
                 case "decompose_task" -> executeDecomposeTask(args);
@@ -282,6 +283,28 @@ public class ToolExecutor {
 
         StringBuilder result = new StringBuilder();
         result.append(String.format("Completed %d tasks for %s:\n", completed.size(), assignee));
+        for (KnowledgeItem task : completed) {
+            result.append("- ").append(getTaskTitle(task)).append("\n");
+        }
+        return result.toString().trim();
+    }
+
+    @SuppressWarnings("unchecked")
+    private String executeCompleteTasksByIds(Map<String, Object> args) {
+        List<String> taskIds = (List<String>) args.get("task_ids");
+
+        if (taskIds == null || taskIds.isEmpty()) {
+            return "No task IDs provided";
+        }
+
+        List<KnowledgeItem> completed = taskTools.completeTasksByIds(taskIds);
+
+        if (completed.isEmpty()) {
+            return "No tasks found with the provided IDs";
+        }
+
+        StringBuilder result = new StringBuilder();
+        result.append(String.format("Completed %d tasks:\n", completed.size()));
         for (KnowledgeItem task : completed) {
             result.append("- ").append(getTaskTitle(task)).append("\n");
         }

@@ -42,6 +42,7 @@ public class AgentService {
     private final com.mindnest.repository.UserRepository userRepository;
     private final com.mindnest.agent.tools.ProjectTools projectTools;
     private final KnowledgeTools knowledgeTools;
+    private final com.mindnest.agent.tools.TaskTools taskTools;
 
     @Value("${vertex-ai.models.chat}")
     private String chatModel;
@@ -70,18 +71,24 @@ public class AgentService {
         String itemId,
         String description,
         List<String> linkedTo,
-        String searchResults     // For SEARCH intent
+        String searchResults,       // For SEARCH intent
+        boolean needsClarification, // For task completion clarification
+        List<String> pendingTaskIds // Task IDs pending user selection
     ) {
         static ChunkResult chat() {
-            return new ChunkResult(true, null, "chat", List.of(), null);
+            return new ChunkResult(true, null, "chat", List.of(), null, false, List.of());
         }
 
         static ChunkResult saved(String id, String desc) {
-            return new ChunkResult(true, id, desc, List.of(), null);
+            return new ChunkResult(true, id, desc, List.of(), null, false, List.of());
         }
 
         static ChunkResult search(String results) {
-            return new ChunkResult(true, null, "search", List.of(), results);
+            return new ChunkResult(true, null, "search", List.of(), results, false, List.of());
+        }
+
+        static ChunkResult clarification(String message, List<String> taskIds) {
+            return new ChunkResult(true, null, message, List.of(), null, true, taskIds);
         }
     }
 
@@ -104,6 +111,9 @@ public class AgentService {
             List<Message> context = conversationService.getContextMessages(conversation.getId());
             String contextSummary = buildContextSummary(context);
 
+            // Extract pending task IDs from last clarification (if any)
+            List<String> pendingTaskIds = getPendingTaskIdsFromContext(context);
+
             // === NEW ARCHITECTURE: Chunk-based processing ===
 
             // STEP 1: Decompose message into chunks
@@ -113,7 +123,7 @@ public class AgentService {
             // STEP 2: Process each chunk through full flow
             List<ChunkResult> results = new ArrayList<>();
             for (String chunk : chunks) {
-                ChunkResult result = processChunk(chunk, contextSummary, projectId, userId);
+                ChunkResult result = processChunk(chunk, contextSummary, projectId, userId, pendingTaskIds);
                 results.add(result);
                 log.info("Chunk '{}' -> result: {}", truncate(chunk, 50), result);
             }
@@ -127,12 +137,20 @@ public class AgentService {
             // Calculate confidence
             double confidence = calculateConfidence(finalResponse);
 
-            // Save assistant response
+            // Save assistant response with metadata
             Map<String, Object> metadata = new HashMap<>();
             metadata.put("confidence", confidence);
             if (!sources.isEmpty()) {
                 metadata.put("sources", sources);
             }
+
+            // Extract pending task IDs from clarification results for next turn
+            List<String> newPendingTaskIds = extractPendingTaskIds(results);
+            if (!newPendingTaskIds.isEmpty()) {
+                metadata.put("pendingTaskIds", newPendingTaskIds);
+                metadata.put("clarificationType", "task_completion");
+            }
+
             conversationService.addMessage(conversation.getId(), Message.Role.assistant, finalResponse, metadata);
 
             return ChatResponse.builder()
@@ -226,25 +244,64 @@ public class AgentService {
     }
 
     /**
+     * Extract pending task IDs from the last assistant message's metadata.
+     * Used for handling user's response to task clarification.
+     */
+    @SuppressWarnings("unchecked")
+    private List<String> getPendingTaskIdsFromContext(List<Message> context) {
+        log.debug("Looking for pendingTaskIds in {} context messages", context.size());
+        // Find the most recent assistant message with clarification metadata
+        for (Message msg : context) {
+            log.debug("Message role={}, hasMetadata={}, metadata={}",
+                    msg.getRole(), msg.getMetadata() != null,
+                    msg.getMetadata() != null ? msg.getMetadata().keySet() : "null");
+            if (msg.getRole() == Message.Role.assistant && msg.getMetadata() != null) {
+                Object pendingIds = msg.getMetadata().get("pendingTaskIds");
+                log.debug("Found pendingIds: {}, type: {}", pendingIds,
+                        pendingIds != null ? pendingIds.getClass().getName() : "null");
+                if (pendingIds instanceof List) {
+                    List<String> ids = (List<String>) pendingIds;
+                    log.info("Extracted {} pending task IDs from context", ids.size());
+                    return ids;
+                }
+            }
+        }
+        log.debug("No pendingTaskIds found in context");
+        return List.of();
+    }
+
+    /**
      * STEP 2: Process a single chunk through full agent flow
      */
-    private ChunkResult processChunk(String chunk, String contextSummary, String projectId, String userId) {
+    private ChunkResult processChunk(String chunk, String contextSummary, String projectId, String userId,
+                                      List<String> pendingTaskIds) {
         // 2.1 Intent detection for this chunk
         ChunkIntent intent = detectChunkIntent(chunk, contextSummary);
         log.info("Chunk intent: {} -> type: {}", intent.intent(), intent.type());
 
-        // 2.2 Execute based on intent
+        // 2.2 If there are pending task IDs from clarification, add them to intent properties
+        ChunkIntent intentWithPending = intent;
+        if (!pendingTaskIds.isEmpty() && "TASK".equalsIgnoreCase(intent.intent())) {
+            Map<String, Object> newProps = new HashMap<>(intent.properties() != null ? intent.properties() : Map.of());
+            newProps.put("pending_task_ids", pendingTaskIds);
+            intentWithPending = new ChunkIntent(
+                    intent.intent(), intent.type(), intent.subtype(), intent.content(),
+                    newProps, intent.relations(), intent.searchQuery()
+            );
+        }
+
+        // 2.3 Execute based on intent
         // NOTE: System is IMMUTABLE - no DELETE/UPDATE intents
         // - "Delete" returns SAVE with [DELETED] content + SUPERSEDES relation
         // - "Update" returns SAVE with new content + SUPERSEDES relation
         // - "Complete task" returns TASK with status=DONE + SUPERSEDES relation
-        return switch (intent.intent().toUpperCase()) {
-            case "SAVE" -> executeSave(intent, projectId, userId);
-            case "TASK" -> executeTask(intent, projectId, userId);
-            case "SEARCH" -> executeSearch(intent, projectId, userId);
+        return switch (intentWithPending.intent().toUpperCase()) {
+            case "SAVE" -> executeSave(intentWithPending, projectId, userId);
+            case "TASK" -> executeTask(intentWithPending, projectId, userId);
+            case "SEARCH" -> executeSearch(intentWithPending, projectId, userId);
             case "CHAT" -> ChunkResult.chat();
             default -> {
-                log.warn("Unknown intent: {}", intent.intent());
+                log.warn("Unknown intent: {}", intentWithPending.intent());
                 yield ChunkResult.chat();
             }
         };
@@ -411,7 +468,7 @@ public class AgentService {
             }
         }
 
-        return new ChunkResult(true, null, intent.content(), linkedTo, null);
+        return new ChunkResult(true, null, intent.content(), linkedTo, null, false, List.of());
     }
 
     /**
@@ -430,36 +487,16 @@ public class AgentService {
     /**
      * Execute TASK intent - create task or complete existing task.
      * status=TODO: create new task
-     * status=DONE: create completed task node + SUPERSEDES relation to original
+     * status=DONE: complete task(s) with clarification if ambiguous
      */
     private ChunkResult executeTask(ChunkIntent intent, String projectId, String userId) {
         String status = intent.properties() != null
                 ? (String) intent.properties().get("status")
                 : "TODO";
 
-        // If completing a task (status=DONE), use complete_task_by_title
+        // If completing a task (status=DONE), handle clarification flow
         if ("DONE".equalsIgnoreCase(status)) {
-            // Find target query from relations or use content as fallback
-            String targetQuery = intent.content();
-            for (RelationIntent rel : intent.relations()) {
-                if ("SUPERSEDES".equals(rel.type()) && rel.toQuery() != null) {
-                    targetQuery = rel.toQuery();
-                    break;
-                }
-            }
-
-            // Use complete_task_by_title to mark existing task as DONE
-            Map<String, Object> args = new HashMap<>();
-            args.put("title", targetQuery);
-            String result = toolExecutor.execute("complete_task_by_title", args, projectId, userId);
-
-            log.info("Task completion result for '{}': {}", targetQuery, result);
-
-            List<String> linkedTo = new ArrayList<>();
-            if (result != null && result.contains("Completed task")) {
-                linkedTo.add("completed: " + targetQuery);
-            }
-            return new ChunkResult(true, null, "Completed: " + targetQuery, linkedTo, null);
+            return handleTaskCompletion(intent, projectId, userId);
         }
 
         // Create new task
@@ -492,7 +529,210 @@ public class AgentService {
             }
         }
 
-        return new ChunkResult(true, null, "Task: " + intent.content(), linkedTo, null);
+        return new ChunkResult(true, null, "Task: " + intent.content(), linkedTo, null, false, List.of());
+    }
+
+    /**
+     * Handle task completion with clarification flow.
+     * If needs_clarification=true and multiple tasks: show numbered list
+     * If complete_all=true: complete all user's tasks
+     * If selected_indices present: complete specific tasks
+     * Otherwise: use semantic search to find matching task
+     */
+    private ChunkResult handleTaskCompletion(ChunkIntent intent, String projectId, String userId) {
+        Map<String, Object> props = intent.properties() != null ? intent.properties() : Map.of();
+
+        // Check if this is a response to clarification: "all" or specific selection
+        Boolean completeAll = props.get("complete_all") != null && Boolean.TRUE.equals(props.get("complete_all"));
+
+        // Safely extract selected_indices (could be List<Integer> or List<Double> from JSON)
+        List<Integer> selectedIndices = extractIntegerList(props.get("selected_indices"));
+
+        // Safely extract pending_task_ids (could be List<String>)
+        List<String> pendingTaskIds = extractStringList(props.get("pending_task_ids"));
+
+        // Case 1: User said "all" after clarification
+        if (completeAll) {
+            String userName = getUserName(userId);
+            List<com.mindnest.model.entity.KnowledgeItem> tasks = taskTools.getActiveTasksForUser(projectId, userId, userName);
+
+            if (tasks.isEmpty()) {
+                return new ChunkResult(true, null, "No active tasks found", List.of(), null, false, List.of());
+            }
+
+            List<com.mindnest.model.entity.KnowledgeItem> completed = taskTools.completeTasksByIds(
+                    tasks.stream().map(com.mindnest.model.entity.KnowledgeItem::getId).toList()
+            );
+
+            List<String> linkedTo = completed.stream()
+                    .map(t -> "completed: " + getTaskTitle(t))
+                    .toList();
+
+            return new ChunkResult(true, null,
+                    "Completed " + completed.size() + " tasks",
+                    linkedTo, null, false, List.of());
+        }
+
+        // Case 2: User selected specific tasks by indices (e.g., "1 and 3")
+        if (selectedIndices != null && !selectedIndices.isEmpty() && pendingTaskIds != null && !pendingTaskIds.isEmpty()) {
+            List<String> idsToComplete = new ArrayList<>();
+            for (Integer idx : selectedIndices) {
+                if (idx >= 1 && idx <= pendingTaskIds.size()) {
+                    idsToComplete.add(pendingTaskIds.get(idx - 1)); // 1-based index
+                }
+            }
+
+            if (idsToComplete.isEmpty()) {
+                return new ChunkResult(true, null, "Invalid selection", List.of(), null, false, List.of());
+            }
+
+            List<com.mindnest.model.entity.KnowledgeItem> completed = taskTools.completeTasksByIds(idsToComplete);
+
+            List<String> linkedTo = completed.stream()
+                    .map(t -> "completed: " + getTaskTitle(t))
+                    .toList();
+
+            return new ChunkResult(true, null,
+                    "Completed " + completed.size() + " tasks",
+                    linkedTo, null, false, List.of());
+        }
+
+        // Case 3: Check if needs clarification (ambiguous task completion)
+        Boolean needsClarification = props.get("needs_clarification") != null
+                && Boolean.TRUE.equals(props.get("needs_clarification"));
+
+        if (needsClarification) {
+            String userName = getUserName(userId);
+            List<com.mindnest.model.entity.KnowledgeItem> tasks = taskTools.getActiveTasksForUser(projectId, userId, userName);
+
+            if (tasks.isEmpty()) {
+                return new ChunkResult(true, null, "You have no active tasks", List.of(), null, false, List.of());
+            }
+
+            // Single task - complete without asking
+            if (tasks.size() == 1) {
+                com.mindnest.model.entity.KnowledgeItem task = tasks.get(0);
+                taskTools.completeTasksByIds(List.of(task.getId()));
+                return new ChunkResult(true, null, "Completed: " + getTaskTitle(task),
+                        List.of("completed: " + getTaskTitle(task)), null, false, List.of());
+            }
+
+            // Multiple tasks - need clarification
+            String clarificationMessage = buildTaskClarificationMessage(tasks);
+            List<String> taskIds = tasks.stream()
+                    .map(com.mindnest.model.entity.KnowledgeItem::getId)
+                    .toList();
+
+            return ChunkResult.clarification(clarificationMessage, taskIds);
+        }
+
+        // Case 4: Specific task mentioned - use semantic search
+        String targetQuery = intent.content();
+        for (RelationIntent rel : intent.relations()) {
+            if ("SUPERSEDES".equals(rel.type()) && rel.toQuery() != null) {
+                targetQuery = rel.toQuery();
+                break;
+            }
+        }
+
+        Map<String, Object> args = new HashMap<>();
+        args.put("title", targetQuery);
+        String result = toolExecutor.execute("complete_task_by_title", args, projectId, null);
+
+        log.info("Task completion result for '{}': {}", targetQuery, result);
+
+        List<String> linkedTo = new ArrayList<>();
+        if (result != null && result.contains("Completed task")) {
+            linkedTo.add("completed: " + targetQuery);
+        }
+        return new ChunkResult(true, null, "Completed: " + targetQuery, linkedTo, null, false, List.of());
+    }
+
+    /**
+     * Build clarification message with numbered task list.
+     */
+    private String buildTaskClarificationMessage(List<com.mindnest.model.entity.KnowledgeItem> tasks) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("You have ").append(tasks.size()).append(" active tasks:\n");
+        for (int i = 0; i < tasks.size(); i++) {
+            String title = getTaskTitle(tasks.get(i));
+            sb.append("[").append(i + 1).append("] ").append(title).append("\n");
+        }
+        sb.append("\nWhich ones are complete? (enter numbers like '1 and 3', or 'all' for all)");
+        return sb.toString();
+    }
+
+    /**
+     * Get user name from userId.
+     */
+    private String getUserName(String userId) {
+        if (userId == null) return "Unknown";
+        try {
+            return userRepository.findById(UUID.fromString(userId))
+                    .map(u -> u.getName())
+                    .orElse("Unknown");
+        } catch (Exception e) {
+            log.warn("Failed to get user name: {}", e.getMessage());
+            return "Unknown";
+        }
+    }
+
+    /**
+     * Get task title (first line of content).
+     */
+    private String getTaskTitle(com.mindnest.model.entity.KnowledgeItem task) {
+        String content = task.getContent();
+        if (content == null) return "Untitled";
+        int newlineIdx = content.indexOf('\n');
+        return newlineIdx > 0 ? content.substring(0, newlineIdx) : content;
+    }
+
+    /**
+     * Extract pending task IDs from clarification results.
+     */
+    private List<String> extractPendingTaskIds(List<ChunkResult> results) {
+        for (ChunkResult result : results) {
+            if (result.needsClarification() && result.pendingTaskIds() != null && !result.pendingTaskIds().isEmpty()) {
+                return result.pendingTaskIds();
+            }
+        }
+        return List.of();
+    }
+
+    /**
+     * Safely extract a list of integers from an object (handles JSON parsing quirks).
+     */
+    @SuppressWarnings("unchecked")
+    private List<Integer> extractIntegerList(Object obj) {
+        if (obj == null) return List.of();
+        if (obj instanceof List) {
+            List<?> list = (List<?>) obj;
+            return list.stream()
+                    .map(item -> {
+                        if (item instanceof Number) return ((Number) item).intValue();
+                        if (item instanceof String) return Integer.parseInt((String) item);
+                        return null;
+                    })
+                    .filter(i -> i != null)
+                    .toList();
+        }
+        return List.of();
+    }
+
+    /**
+     * Safely extract a list of strings from an object.
+     */
+    @SuppressWarnings("unchecked")
+    private List<String> extractStringList(Object obj) {
+        if (obj == null) return List.of();
+        if (obj instanceof List) {
+            List<?> list = (List<?>) obj;
+            return list.stream()
+                    .map(item -> item != null ? item.toString() : null)
+                    .filter(s -> s != null)
+                    .toList();
+        }
+        return List.of();
     }
 
     /**
@@ -615,6 +855,13 @@ public class AgentService {
      */
     private String generateCombinedResponse(List<ChunkResult> results, String originalMessage, String context) {
         try {
+            // Check for clarification results first - return directly without LLM
+            for (ChunkResult result : results) {
+                if (result.needsClarification()) {
+                    return result.description();  // Return clarification message as-is
+                }
+            }
+
             // Build summary of what was done
             StringBuilder actionSummary = new StringBuilder();
             StringBuilder searchResults = new StringBuilder();

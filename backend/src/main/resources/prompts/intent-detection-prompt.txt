@@ -24,7 +24,10 @@ Output format:
     "assignee": "person name" or null,
     "deadline": "YYYY-MM-DD" or null,
     "category": "category name" or null,
-    "status": "TODO" | "DONE" or null
+    "status": "TODO" | "DONE" or null,
+    "needs_clarification": true only if task completion is ambiguous,
+    "complete_all": true only if user says "all" after clarification,
+    "selected_indices": [1, 3] only if user picks specific tasks by number
   },
   "relations": [
     {
@@ -282,6 +285,89 @@ Input: "Done with shopping! Spent 14000 on alcohol"
   "relations": [
     {"to_query": "shopping task", "type": "SUPERSEDES"}
   ],
+  "search_query": null
+}
+
+================================================================================
+EXAMPLES - TASK CLARIFICATION (when user has multiple tasks)
+================================================================================
+
+IMPORTANT: Task completion detection rules:
+- Words like "done", "finished", "completed", "ready" → status: "DONE"
+- If the MESSAGE ITSELF contains specific task reference (e.g., "bought wine", "cleaned") → complete that task
+- If the MESSAGE ITSELF is ONLY a completion word ("Done!", "Finished!") with NO task details → needs_clarification: true
+- Do NOT infer task from context - if user just says "Done!", set needs_clarification: true even if context mentions tasks
+- This applies to ANY language (system uses semantic understanding)
+
+17. Ambiguous task completion (needs clarification):
+Input: "Done!"
+Context: "Assistant: You have 3 tasks: buy wine, rent karaoke, buy games"
+{
+  "intent": "TASK",
+  "type": "TASK",
+  "content": "",
+  "properties": {"status": "DONE", "needs_clarification": true},
+  "relations": [],
+  "search_query": null
+}
+
+18. Another ambiguous completion:
+Input: "My task is finished"
+Context: "User: my tasks?\nAssistant: You have: [1] buy wine [2] rent karaoke"
+{
+  "intent": "TASK",
+  "type": "TASK",
+  "content": "",
+  "properties": {"status": "DONE", "needs_clarification": true},
+  "relations": [],
+  "search_query": null
+}
+
+19. User responds "all" after clarification list:
+Input: "all"
+Context: "Assistant: You have 3 tasks:\n[1] buy wine\n[2] rent karaoke\n[3] buy games\nWhich ones?"
+{
+  "intent": "TASK",
+  "type": "TASK",
+  "content": "all tasks",
+  "properties": {"status": "DONE", "complete_all": true},
+  "relations": [],
+  "search_query": null
+}
+
+20. User selects specific tasks by numbers:
+Input: "1 and 3"
+Context: "Assistant: You have 3 tasks:\n[1] buy wine\n[2] rent karaoke\n[3] buy games\nWhich ones?"
+{
+  "intent": "TASK",
+  "type": "TASK",
+  "content": "tasks 1 and 3",
+  "properties": {"status": "DONE", "selected_indices": [1, 3]},
+  "relations": [],
+  "search_query": null
+}
+
+21. User selects by name after clarification:
+Input: "the wine and games"
+Context: "Assistant: You have 3 tasks:\n[1] buy wine\n[2] rent karaoke\n[3] buy games\nWhich ones?"
+{
+  "intent": "TASK",
+  "type": "TASK",
+  "content": "wine and games",
+  "properties": {"status": "DONE", "selected_indices": [1, 3]},
+  "relations": [],
+  "search_query": null
+}
+
+22. User selects just one by number:
+Input: "2"
+Context: "Assistant: You have 3 tasks:\n[1] buy wine\n[2] rent karaoke\n[3] buy games"
+{
+  "intent": "TASK",
+  "type": "TASK",
+  "content": "task 2",
+  "properties": {"status": "DONE", "selected_indices": [2]},
+  "relations": [],
   "search_query": null
 }
 
