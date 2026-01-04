@@ -141,12 +141,19 @@ class KnowledgeGraph:
         if user_name:
             source_description += f" ({user_name})"
 
-        logger.info(f"Adding episode for project {project_id}: {message[:50]}...")
+        # Preprocess message to explicitly include user name for better entity extraction
+        # This helps Graphiti attribute purchases/tasks to the correct person
+        processed_message = message
+        if user_name:
+            # Add user context at the beginning so Graphiti knows who is speaking
+            processed_message = f"[Message from {user_name}]: {message}"
+
+        logger.info(f"Adding episode for project {project_id}: {processed_message[:50]}...")
 
         try:
             result = await self.client.add_episode(
                 name=f"msg_{user_id}_{ref_time.isoformat()}",
-                episode_body=message,
+                episode_body=processed_message,
                 source_description=source_description,
                 reference_time=ref_time,
                 group_id=project_id,
