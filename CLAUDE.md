@@ -64,12 +64,13 @@ docker-compose logs -f       # View logs
 │   └── versions/                 # Migration files
 ├── app/
 │   ├── main.py                   # FastAPI app entry point
-│   ├── config.py                 # Settings from environment
+│   ├── config.py                 # Settings from environment (Pydantic V2)
 │   ├── database.py               # PostgreSQL connection (SQLAlchemy async)
 │   ├── models.py                 # SQLAlchemy models
 │   ├── graphiti_client.py        # Graphiti wrapper
+│   ├── llm.py                    # Shared Gemini client (singleton)
 │   ├── prompts/                  # LLM prompt templates
-│   │   ├── __init__.py
+│   │   ├── __init__.py               # Prompt loading/formatting
 │   │   ├── system.txt
 │   │   ├── context_guide.txt
 │   │   └── response.txt
@@ -186,6 +187,26 @@ Key features:
 - **Automatic entity extraction**: No manual intent detection needed
 - **Temporal awareness**: Facts have validity periods
 
+### Shared LLM Client (`llm.py`)
+
+The `llm.py` module provides a singleton Gemini client shared between:
+- `graphiti_client.py` - for entity extraction and embeddings
+- `chat.py` - for response generation
+
+```python
+from .llm import get_gemini_client, generate_text
+
+# Get raw client for Graphiti
+client = get_gemini_client()
+
+# Generate text directly
+response = await generate_text("Your prompt here")
+```
+
+The client auto-detects authentication:
+1. If `GOOGLE_API_KEY` is set → uses API key auth
+2. Otherwise → uses Vertex AI with service account
+
 ## Environment Variables
 
 ### Required for Google AI
@@ -284,8 +305,7 @@ Prompts are loaded via `prompts/__init__.py`:
 ## API Endpoints
 
 ### Chat
-- `POST /api/chat` - Send message (legacy endpoint for compatibility)
-- `POST /api/chat/message` - Send message (new endpoint)
+- `POST /api/chat` - Send message, process through knowledge graph
 - `POST /api/chat/search` - Search knowledge graph
 - `GET /api/chat/health` - Health check
 

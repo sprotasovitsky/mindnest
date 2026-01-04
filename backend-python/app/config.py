@@ -1,11 +1,19 @@
 """Application configuration."""
 
-from pydantic_settings import BaseSettings
 from functools import lru_cache
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
     # Neo4j
     neo4j_uri: str = "bolt://localhost:7687"
@@ -24,17 +32,11 @@ class Settings(BaseSettings):
     # LLM Models
     llm_model: str = "gemini-2.5-flash-lite"
     llm_model_pro: str = "gemini-2.5-pro"
+    # Embeddings configured in Graphiti: gemini-embedding-001 (3072 dimensions)
 
     # App
-    secret_key: str = "change-me-in-production"
+    secret_key: str = Field(default="change-me-in-production")
     debug: bool = True
-
-    # Graphiti
-    semaphore_limit: int = 10  # Concurrent LLM operations
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
 
 
 @lru_cache

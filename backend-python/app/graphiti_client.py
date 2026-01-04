@@ -13,46 +13,29 @@ Graphiti automatically:
 - Maintains bi-temporal model (valid_at, expired_at, created_at)
 """
 
-import os
 import logging
 from datetime import datetime
 from typing import Optional
-from contextlib import asynccontextmanager
+
+from graphiti_core import Graphiti
+from graphiti_core.llm_client.gemini_client import GeminiClient
+from graphiti_core.llm_client.config import LLMConfig
+from graphiti_core.embedder.gemini import GeminiEmbedder, GeminiEmbedderConfig
+from graphiti_core.cross_encoder.gemini_reranker_client import GeminiRerankerClient
+from graphiti_core.search.search_config import (
+    SearchConfig,
+    EdgeSearchConfig,
+    EdgeSearchMethod,
+    EdgeReranker,
+    NodeSearchConfig,
+    NodeSearchMethod,
+    NodeReranker,
+)
 
 from .config import get_settings
+from .llm import get_gemini_client
 
 logger = logging.getLogger(__name__)
-
-# Lazy imports for Graphiti to handle import errors gracefully
-Graphiti = None
-GeminiClient = None
-GeminiEmbedder = None
-LLMConfig = None
-GeminiEmbedderConfig = None
-GeminiRerankerClient = None
-
-
-def _import_graphiti():
-    """Lazy import Graphiti and its dependencies."""
-    global Graphiti, GeminiClient, GeminiEmbedder, LLMConfig, GeminiEmbedderConfig, GeminiRerankerClient
-    if Graphiti is None:
-        try:
-            from graphiti_core import Graphiti as _Graphiti
-            from graphiti_core.llm_client.gemini_client import GeminiClient as _GeminiClient
-            from graphiti_core.llm_client.config import LLMConfig as _LLMConfig
-            from graphiti_core.embedder.gemini import GeminiEmbedder as _GeminiEmbedder
-            from graphiti_core.embedder.gemini import GeminiEmbedderConfig as _GeminiEmbedderConfig
-            from graphiti_core.cross_encoder.gemini_reranker_client import GeminiRerankerClient as _GeminiRerankerClient
-            Graphiti = _Graphiti
-            GeminiClient = _GeminiClient
-            GeminiEmbedder = _GeminiEmbedder
-            LLMConfig = _LLMConfig
-            GeminiEmbedderConfig = _GeminiEmbedderConfig
-            GeminiRerankerClient = _GeminiRerankerClient
-        except ImportError as e:
-            logger.error(f"Failed to import Graphiti: {e}")
-            logger.error("Install with: pip install graphiti-core")
-            raise
 
 
 class KnowledgeGraph:
@@ -75,54 +58,24 @@ class KnowledgeGraph:
         if self._initialized:
             return
 
-        # Lazy import
-        _import_graphiti()
-
         settings = get_settings()
-
         logger.info(f"Initializing Graphiti with Neo4j at {settings.neo4j_uri}")
 
-        # Check if we have API key or need to use Vertex AI
-        api_key = settings.google_api_key
+        # Get shared Gemini client
+        genai_client = get_gemini_client()
 
-        if not api_key:
-            # Try to get API key from environment or use Vertex AI
-            api_key = os.getenv("GOOGLE_API_KEY", "")
-
-        # Create google.genai.Client for LLM and embedder
-        from google import genai as google_genai
-
-        if api_key:
-            # Use API key
-            logger.info("Using Google AI API key")
-            genai_client = google_genai.Client(api_key=api_key)
-        else:
-            # Use Vertex AI with ADC
-            logger.info("Using Vertex AI with service account credentials")
-            if settings.google_application_credentials:
-                os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = settings.google_application_credentials
-
-            genai_client = google_genai.Client(
-                vertexai=True,
-                project=settings.vertex_ai_project_id,
-                location=settings.vertex_ai_location,
-            )
-
-        # Configure LLM client (Google Gemini)
-        llm_config = LLMConfig(
-            model=settings.llm_model,
-        )
+        # Configure LLM client
+        llm_config = LLMConfig(model=settings.llm_model)
         llm_client = GeminiClient(config=llm_config, client=genai_client)
 
-        # Configure embedder (Google Gemini embeddings)
-        # gemini-embedding-001: 3072 dimensions, 100+ languages
+        # Configure embedder (gemini-embedding-001: 3072 dimensions, 100+ languages)
         embedder_config = GeminiEmbedderConfig(
             embedding_model="gemini-embedding-001",
             embedding_dim=3072,
         )
         embedder = GeminiEmbedder(config=embedder_config, client=genai_client)
 
-        # Configure cross-encoder/reranker (Gemini)
+        # Configure cross-encoder/reranker
         cross_encoder = GeminiRerankerClient(config=llm_config, client=genai_client)
 
         # Create Graphiti client
@@ -196,10 +149,9 @@ class KnowledgeGraph:
                 episode_body=message,
                 source_description=source_description,
                 reference_time=ref_time,
-                group_id=project_id,  # Isolate data by project
+                group_id=project_id,
             )
 
-            # AddEpisodeResults has: episode, nodes, edges, etc.
             return {
                 "success": True,
                 "episode_id": result.episode.uuid if result and result.episode else None,
@@ -208,10 +160,7 @@ class KnowledgeGraph:
             }
         except Exception as e:
             logger.error(f"Failed to add episode: {e}")
-            return {
-                "success": False,
-                "error": str(e),
-            }
+            return {"success": False, "error": str(e)}
 
     async def search(
         self,
@@ -237,13 +186,6 @@ class KnowledgeGraph:
         logger.info(f"Searching in project {project_id}: {query[:50]}...")
 
         try:
-            from graphiti_core.search.search_config import (
-                SearchConfig,
-                EdgeSearchConfig, EdgeSearchMethod, EdgeReranker,
-                NodeSearchConfig, NodeSearchMethod, NodeReranker,
-            )
-
-            # Use hybrid search with BM25 + cosine similarity
             config = SearchConfig(
                 edge_config=EdgeSearchConfig(
                     search_methods=[EdgeSearchMethod.bm25, EdgeSearchMethod.cosine_similarity],
@@ -255,23 +197,17 @@ class KnowledgeGraph:
                 ),
                 limit=limit,
             )
-            logger.info(f"Calling Graphiti search_ with query='{query}', group_ids=['{project_id}'], limit={limit}")
-            try:
-                results = await self.client.search_(
-                    query=query,
-                    group_ids=[project_id],
-                    config=config,
-                )
-                logger.info(f"Search results: edges={len(results.edges) if results.edges else 0}, nodes={len(results.nodes) if results.nodes else 0}")
-                if results.edges:
-                    for e in results.edges[:3]:
-                        logger.info(f"  Edge: {e.fact}")
-                if results.nodes:
-                    for n in results.nodes[:3]:
-                        logger.info(f"  Node: {n.name} - {n.summary}")
-            except Exception as search_err:
-                logger.error(f"Search_ exception: {search_err}", exc_info=True)
-                raise
+
+            results = await self.client.search_(
+                query=query,
+                group_ids=[project_id],
+                config=config,
+            )
+
+            logger.info(
+                f"Search results: edges={len(results.edges) if results.edges else 0}, "
+                f"nodes={len(results.nodes) if results.nodes else 0}"
+            )
 
             return {
                 "success": True,
@@ -297,12 +233,7 @@ class KnowledgeGraph:
             }
         except Exception as e:
             logger.error(f"Search failed: {e}")
-            return {
-                "success": False,
-                "error": str(e),
-                "facts": [],
-                "entities": [],
-            }
+            return {"success": False, "error": str(e), "facts": [], "entities": []}
 
     async def get_context_for_response(
         self,
@@ -313,35 +244,27 @@ class KnowledgeGraph:
     ) -> dict:
         """Get context from knowledge graph for response generation.
 
-        This is used to build the prompt context for the LLM
-        when generating a response to the user.
-
         Args:
             query: User's question/message
             project_id: Project to search in
-            max_facts: Maximum facts to include (default increased to 20)
-            max_entities: Maximum entities to include (default increased to 10)
+            max_facts: Maximum facts to include
+            max_entities: Maximum entities to include
 
         Returns:
-            Dict with facts and entities (formatting is done by prompts module)
+            Dict with facts and entities for LLM context
         """
         search_result = await self.search(query, project_id, limit=max_facts)
 
         if not search_result["success"]:
-            return {
-                "facts": [],
-                "entities": [],
-            }
+            return {"facts": [], "entities": []}
 
-        # Sort facts by created_at (newest first) for better context
+        # Sort facts by created_at (newest first)
         facts = search_result["facts"][:max_facts]
         facts.sort(key=lambda f: f.get("created_at") or "", reverse=True)
 
-        entities = search_result["entities"][:max_entities]
-
         return {
             "facts": facts,
-            "entities": entities,
+            "entities": search_result["entities"][:max_entities],
         }
 
 

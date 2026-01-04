@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import get_settings
 from .database import init_db, close_db
 from .graphiti_client import get_knowledge_graph, close_knowledge_graph
+from .llm import close_client as close_llm_client
 from .routers import chat, auth, projects
 
 # Configure logging
@@ -61,6 +62,7 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down MindNest backend...")
     await close_knowledge_graph()
     await close_db()
+    close_llm_client()
     logger.info("All connections closed")
 
 
