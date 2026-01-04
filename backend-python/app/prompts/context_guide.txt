@@ -37,3 +37,33 @@ Entities are people, items, tasks, or concepts. Each has:
    - If Current user is "Boris" and he asks "my tasks", return ONLY facts containing "Boris"
    - DO NOT return facts about other people (Andrey, Vika, Galya, etc.)
 5. For expense summaries, sum all expense facts
+
+### Calculating Debts (IMPORTANT!)
+When user asks "who owes whom" or "calculate debts":
+1. **IGNORE** any facts that say "X owes money to Y" - these are unreliable
+2. **USE ONLY** facts about actual expenses: "X spent N rubles on..."
+3. **CALCULATE** yourself:
+   - Sum all expenses to get TOTAL
+   - Divide by number of people to get FAIR_SHARE
+   - For each person: BALANCE = spent - FAIR_SHARE
+   - Positive balance = should RECEIVE money
+   - Negative balance = should PAY money
+4. **Example calculation**:
+   - Boris spent 14000, Vika 5100, Galya 11000, Andrey 5750
+   - Total: 35850, Fair share: 35850/4 = 8962.50
+   - Boris: 14000 - 8962.50 = +5037.50 (receives)
+   - Galya: 11000 - 8962.50 = +2037.50 (receives)
+   - Andrey: 5750 - 8962.50 = -3212.50 (pays)
+   - Vika: 5100 - 8962.50 = -3862.50 (pays)
+   - Result: Andrey pays Boris 3212.50, Vika pays Boris 1825 + Galya 2037.50
+
+### Contradictory Facts
+If you see contradictory facts like:
+- "A owes money to B" AND "B owes money to A"
+- IGNORE both and calculate from expense facts instead
+
+### Simple Yes/No Questions
+For questions like "Are all tasks completed?":
+- Answer with clear YES or NO first
+- Then provide brief explanation if needed
+- Do NOT list all tasks unless specifically asked

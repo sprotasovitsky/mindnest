@@ -253,18 +253,56 @@ class KnowledgeGraph:
         Returns:
             Dict with facts and entities for LLM context
         """
+        # Primary search with original query
         search_result = await self.search(query, project_id, limit=max_facts)
 
-        if not search_result["success"]:
-            return {"facts": [], "entities": []}
+        all_facts = search_result.get("facts", []) if search_result["success"] else []
+        all_entities = search_result.get("entities", []) if search_result["success"] else []
+
+        # For debt/money questions, also search for expense facts
+        query_lower = query.lower()
+        if any(word in query_lower for word in ["owe", "debt", "even", "split", "settle"]):
+            logger.info("Debt-related query detected, also searching for expenses")
+
+            # Filter out unreliable "owes money" facts from primary search
+            all_facts = [
+                f for f in all_facts
+                if "owes money" not in f["fact"].lower()
+            ]
+
+            expense_result = await self.search(
+                "expenses spent rubles total", project_id, limit=max_facts
+            )
+            if expense_result["success"]:
+                # Add expense facts, avoiding duplicates
+                existing_facts = {f["fact"] for f in all_facts}
+                for fact in expense_result["facts"]:
+                    # Skip "owes money" facts - they're unreliable
+                    if "owes money" in fact["fact"].lower():
+                        continue
+                    if fact["fact"] not in existing_facts:
+                        all_facts.append(fact)
+                        existing_facts.add(fact["fact"])
+
+        # For task completion questions, also search for completed tasks
+        if any(word in query_lower for word in ["completed", "done", "finished", "all tasks"]):
+            logger.info("Task completion query detected, also searching for task status")
+            task_result = await self.search(
+                "task completed done assigned", project_id, limit=max_facts
+            )
+            if task_result["success"]:
+                existing_facts = {f["fact"] for f in all_facts}
+                for fact in task_result["facts"]:
+                    if fact["fact"] not in existing_facts:
+                        all_facts.append(fact)
+                        existing_facts.add(fact["fact"])
 
         # Sort facts by created_at (newest first)
-        facts = search_result["facts"][:max_facts]
-        facts.sort(key=lambda f: f.get("created_at") or "", reverse=True)
+        all_facts.sort(key=lambda f: f.get("created_at") or "", reverse=True)
 
         return {
-            "facts": facts,
-            "entities": search_result["entities"][:max_entities],
+            "facts": all_facts[:max_facts],
+            "entities": all_entities[:max_entities],
         }
 
 
