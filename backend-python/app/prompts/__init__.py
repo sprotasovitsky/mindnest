@@ -67,26 +67,11 @@ def format_response_prompt(
     Returns:
         Formatted prompt ready for LLM
     """
-    # Format facts
-    if facts:
-        facts_lines = []
-        for f in facts:
-            status = "[CURRENT]" if not f.get("expired_at") else "[SUPERSEDED]"
-            created = f.get("created_at", "unknown")[:19] if f.get("created_at") else "unknown"
-            facts_lines.append(f"- {status} {f['fact']} (recorded: {created})")
-        facts_text = "\n".join(facts_lines)
-    else:
-        facts_text = "No relevant facts found."
+    import json
 
-    # Format entities
-    if entities:
-        entities_lines = []
-        for e in entities:
-            summary = e.get("summary") or "No details available"
-            entities_lines.append(f"- **{e['name']}**: {summary}")
-        entities_text = "\n".join(entities_lines)
-    else:
-        entities_text = "No relevant entities found."
+    # Pass raw data as JSON - let LLM interpret with full metadata
+    facts_text = json.dumps(facts, indent=2, ensure_ascii=False) if facts else "[]"
+    entities_text = json.dumps(entities, indent=2, ensure_ascii=False) if entities else "[]"
 
     # Load and format template
     template = get_response_template()

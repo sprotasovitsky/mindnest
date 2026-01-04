@@ -1,16 +1,7 @@
 """Graphiti Knowledge Graph Client.
 
-This module provides a wrapper around Graphiti for the MindNest application.
-It handles:
-- Episode ingestion (messages → knowledge graph)
-- Hybrid search (semantic + BM25 + graph traversal)
-- Context retrieval for response generation
-
-Graphiti automatically:
-- Extracts entities from text
-- Creates and normalizes edge types (Emergent Schema)
-- Handles temporal invalidation (replaces our SUPERSEDES logic)
-- Maintains bi-temporal model (valid_at, expired_at, created_at)
+Simplified wrapper around Graphiti - no special case handling.
+All intelligence is delegated to LLM via prompts.
 """
 
 import logging
@@ -39,15 +30,7 @@ logger = logging.getLogger(__name__)
 
 
 class KnowledgeGraph:
-    """Graphiti-based knowledge graph for MindNest.
-
-    This replaces:
-    - Neo4j KnowledgeItem/KnowledgeRelation
-    - Qdrant vector storage
-    - VectorSearchService
-    - GraphService
-    - IntentDetectionEngine (entity extraction part)
-    """
+    """Graphiti-based knowledge graph for MindNest."""
 
     def __init__(self):
         self._client: Optional[Graphiti] = None
@@ -61,24 +44,20 @@ class KnowledgeGraph:
         settings = get_settings()
         logger.info(f"Initializing Graphiti with Neo4j at {settings.neo4j_uri}")
 
-        # Get shared Gemini client
         genai_client = get_gemini_client()
 
-        # Configure LLM client
-        llm_config = LLMConfig(model=settings.llm_model)
+        # Use Pro model for better entity extraction
+        llm_config = LLMConfig(model=settings.llm_model_pro)
         llm_client = GeminiClient(config=llm_config, client=genai_client)
 
-        # Configure embedder (gemini-embedding-001: 3072 dimensions, 100+ languages)
         embedder_config = GeminiEmbedderConfig(
             embedding_model="gemini-embedding-001",
             embedding_dim=3072,
         )
         embedder = GeminiEmbedder(config=embedder_config, client=genai_client)
 
-        # Configure cross-encoder/reranker
         cross_encoder = GeminiRerankerClient(config=llm_config, client=genai_client)
 
-        # Create Graphiti client
         self._client = Graphiti(
             uri=settings.neo4j_uri,
             user=settings.neo4j_user,
@@ -88,7 +67,6 @@ class KnowledgeGraph:
             cross_encoder=cross_encoder,
         )
 
-        # Build indices (creates vector and BM25 indices in Neo4j)
         await self._client.build_indices_and_constraints()
 
         self._initialized = True
@@ -108,7 +86,7 @@ class KnowledgeGraph:
             raise RuntimeError("KnowledgeGraph not initialized. Call initialize() first.")
         return self._client
 
-    async def add_message(
+    async def add_episode(
         self,
         message: str,
         project_id: str,
@@ -116,44 +94,26 @@ class KnowledgeGraph:
         user_name: Optional[str] = None,
         reference_time: Optional[datetime] = None,
     ) -> dict:
-        """Add a user message to the knowledge graph.
+        """Add a message to the knowledge graph.
 
-        Graphiti will automatically:
-        - Extract entities (people, tasks, expenses, etc.)
-        - Create edges between entities
-        - Handle temporal metadata
-        - Invalidate contradicting edges
-
-        Args:
-            message: User's message text
-            project_id: Project ID for namespace isolation
-            user_id: User ID who sent the message
-            user_name: Optional user name for better entity extraction
-            reference_time: When the message was sent (default: now)
-
-        Returns:
-            Dict with episode info and extracted entities
+        Graphiti automatically extracts entities and creates edges.
+        No preprocessing or filtering - just pass the message.
         """
         ref_time = reference_time or datetime.now()
 
-        # Add context about who is speaking
-        source_description = f"chat_message from user:{user_id}"
-        if user_name:
-            source_description += f" ({user_name})"
+        source_description = f"Message from {user_name or user_id}"
 
-        # Preprocess message to explicitly include user name for better entity extraction
-        # This helps Graphiti attribute purchases/tasks to the correct person
-        processed_message = message
+        # Add speaker context for better entity attribution
+        episode_body = message
         if user_name:
-            # Add user context at the beginning so Graphiti knows who is speaking
-            processed_message = f"[Message from {user_name}]: {message}"
+            episode_body = f"[{user_name} says]: {message}"
 
-        logger.info(f"Adding episode for project {project_id}: {processed_message[:50]}...")
+        logger.info(f"Adding episode: {episode_body[:80]}...")
 
         try:
             result = await self.client.add_episode(
                 name=f"msg_{user_id}_{ref_time.isoformat()}",
-                episode_body=processed_message,
+                episode_body=episode_body,
                 source_description=source_description,
                 reference_time=ref_time,
                 group_id=project_id,
@@ -173,24 +133,14 @@ class KnowledgeGraph:
         self,
         query: str,
         project_id: str,
-        limit: int = 10,
+        limit: int = 40,
     ) -> dict:
         """Search the knowledge graph.
 
-        Uses Graphiti's hybrid search:
-        - Semantic similarity (embeddings)
-        - BM25 keyword matching
-        - Graph traversal
-
-        Args:
-            query: Search query in natural language
-            project_id: Project to search in
-            limit: Maximum results to return
-
-        Returns:
-            Dict with edges (facts) and nodes (entities)
+        Returns raw results - no filtering or post-processing.
+        Let the LLM decide what's relevant.
         """
-        logger.info(f"Searching in project {project_id}: {query[:50]}...")
+        logger.info(f"Searching: {query[:80]}...")
 
         try:
             config = SearchConfig(
@@ -211,106 +161,34 @@ class KnowledgeGraph:
                 config=config,
             )
 
-            logger.info(
-                f"Search results: edges={len(results.edges) if results.edges else 0}, "
-                f"nodes={len(results.nodes) if results.nodes else 0}"
-            )
+            edges = results.edges or []
+            nodes = results.nodes or []
+
+            logger.info(f"Found {len(edges)} edges, {len(nodes)} nodes")
 
             return {
                 "success": True,
-                "facts": [
+                "edges": [
                     {
                         "fact": edge.fact,
-                        "source": edge.source_node_uuid,
-                        "target": edge.target_node_uuid,
                         "created_at": edge.created_at.isoformat() if edge.created_at else None,
                         "valid_at": edge.valid_at.isoformat() if edge.valid_at else None,
                         "expired_at": edge.expired_at.isoformat() if edge.expired_at else None,
                     }
-                    for edge in (results.edges or [])
+                    for edge in edges
                 ],
-                "entities": [
+                "nodes": [
                     {
-                        "uuid": node.uuid,
                         "name": node.name,
                         "summary": node.summary,
+                        "created_at": node.created_at.isoformat() if node.created_at else None,
                     }
-                    for node in (results.nodes or [])
+                    for node in nodes
                 ],
             }
         except Exception as e:
             logger.error(f"Search failed: {e}")
-            return {"success": False, "error": str(e), "facts": [], "entities": []}
-
-    async def get_context_for_response(
-        self,
-        query: str,
-        project_id: str,
-        max_facts: int = 20,
-        max_entities: int = 10,
-    ) -> dict:
-        """Get context from knowledge graph for response generation.
-
-        Args:
-            query: User's question/message
-            project_id: Project to search in
-            max_facts: Maximum facts to include
-            max_entities: Maximum entities to include
-
-        Returns:
-            Dict with facts and entities for LLM context
-        """
-        # Primary search with original query
-        search_result = await self.search(query, project_id, limit=max_facts)
-
-        all_facts = search_result.get("facts", []) if search_result["success"] else []
-        all_entities = search_result.get("entities", []) if search_result["success"] else []
-
-        # For debt/money questions, also search for expense facts
-        query_lower = query.lower()
-        if any(word in query_lower for word in ["owe", "debt", "even", "split", "settle"]):
-            logger.info("Debt-related query detected, also searching for expenses")
-
-            # Filter out unreliable "owes money" facts from primary search
-            all_facts = [
-                f for f in all_facts
-                if "owes money" not in f["fact"].lower()
-            ]
-
-            expense_result = await self.search(
-                "expenses spent rubles total", project_id, limit=max_facts
-            )
-            if expense_result["success"]:
-                # Add expense facts, avoiding duplicates
-                existing_facts = {f["fact"] for f in all_facts}
-                for fact in expense_result["facts"]:
-                    # Skip "owes money" facts - they're unreliable
-                    if "owes money" in fact["fact"].lower():
-                        continue
-                    if fact["fact"] not in existing_facts:
-                        all_facts.append(fact)
-                        existing_facts.add(fact["fact"])
-
-        # For task completion questions, also search for completed tasks
-        if any(word in query_lower for word in ["completed", "done", "finished", "all tasks"]):
-            logger.info("Task completion query detected, also searching for task status")
-            task_result = await self.search(
-                "task completed done assigned", project_id, limit=max_facts
-            )
-            if task_result["success"]:
-                existing_facts = {f["fact"] for f in all_facts}
-                for fact in task_result["facts"]:
-                    if fact["fact"] not in existing_facts:
-                        all_facts.append(fact)
-                        existing_facts.add(fact["fact"])
-
-        # Sort facts by created_at (newest first)
-        all_facts.sort(key=lambda f: f.get("created_at") or "", reverse=True)
-
-        return {
-            "facts": all_facts[:max_facts],
-            "entities": all_entities[:max_entities],
-        }
+            return {"success": False, "error": str(e), "edges": [], "nodes": []}
 
 
 # Global instance

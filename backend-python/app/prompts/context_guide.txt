@@ -1,69 +1,18 @@
-## How to Interpret the Knowledge Graph Data
+## Knowledge Graph Data Format
 
-### Facts
-Facts represent relationships between entities. Each fact has:
-- `fact`: The statement describing the relationship
-- `created_at`: When this fact was recorded
-- `valid_at`: When this fact became true (if known)
-- `expired_at`: When this fact stopped being true (if superseded)
+Data is provided as JSON arrays with full metadata.
 
-**Important about expired_at:**
-- `expired_at = null` means the fact is CURRENT and still valid
-- `expired_at = <timestamp>` means this fact was SUPERSEDED by newer information
-- Expired facts are NOT deleted - they represent historical state
-- Use expired facts to understand the timeline and history
+### Facts (edges)
+Each fact represents an atomic piece of information:
+- `fact`: the statement
+- `created_at`: when recorded
+- `valid_at`: when became true
+- `expired_at`: null = current, timestamp = superseded by newer information
 
-**Example timeline:**
-1. "Boris is tasked with buying alcohol" (created: 10:00, expired_at: null) - ACTIVE task
-2. Later: "Boris bought alcohol for 14000 rubles" (created: 11:00, expired_at: null)
-3. The task fact gets expired_at set because it was completed
+### Entities (nodes)
+Each entity represents a person, item, or concept:
+- `name`: entity identifier
+- `summary`: aggregated, synthesized information about this entity
+- `created_at`: when this version was created
 
-### Entities
-Entities are people, items, tasks, or concepts. Each has:
-- `name`: The entity name
-- `summary`: Current known information about this entity
-
-**Note:** Entity summaries reflect the LATEST known state. To understand history, look at the facts.
-
-### Answering Questions
-1. Look at ALL facts, not just active ones
-2. Use timestamps to understand the timeline
-3. Distinguish between:
-   - Tasks that are PENDING (no completion fact)
-   - Tasks that are COMPLETED (has completion/expense fact)
-4. **IMPORTANT - "My" questions**: When user asks about "my tasks", "my items", etc.:
-   - Check the "Current user" in User Information section
-   - ONLY return facts that contain THAT PERSON'S NAME
-   - If Current user is "Boris" and he asks "my tasks", return ONLY facts containing "Boris"
-   - DO NOT return facts about other people (Andrey, Vika, Galya, etc.)
-5. For expense summaries, sum all expense facts
-
-### Calculating Debts (IMPORTANT!)
-When user asks "who owes whom" or "calculate debts":
-1. **IGNORE** any facts that say "X owes money to Y" - these are unreliable
-2. **USE ONLY** facts about actual expenses: "X spent N rubles on..."
-3. **CALCULATE** yourself:
-   - Sum all expenses to get TOTAL
-   - Divide by number of people to get FAIR_SHARE
-   - For each person: BALANCE = spent - FAIR_SHARE
-   - Positive balance = should RECEIVE money
-   - Negative balance = should PAY money
-4. **Example calculation**:
-   - Boris spent 14000, Vika 5100, Galya 11000, Andrey 5750
-   - Total: 35850, Fair share: 35850/4 = 8962.50
-   - Boris: 14000 - 8962.50 = +5037.50 (receives)
-   - Galya: 11000 - 8962.50 = +2037.50 (receives)
-   - Andrey: 5750 - 8962.50 = -3212.50 (pays)
-   - Vika: 5100 - 8962.50 = -3862.50 (pays)
-   - Result: Andrey pays Boris 3212.50, Vika pays Boris 1825 + Galya 2037.50
-
-### Contradictory Facts
-If you see contradictory facts like:
-- "A owes money to B" AND "B owes money to A"
-- IGNORE both and calculate from expense facts instead
-
-### Simple Yes/No Questions
-For questions like "Are all tasks completed?":
-- Answer with clear YES or NO first
-- Then provide brief explanation if needed
-- Do NOT list all tasks unless specifically asked
+Multiple entities with same name represent evolution over time (newer created_at = more complete).

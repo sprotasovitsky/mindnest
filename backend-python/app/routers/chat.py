@@ -1,6 +1,10 @@
 """Chat API Router.
 
-Handles chat messages and response generation.
+New simplified flow:
+1. Classify message (DATA/QUESTION/COMMAND)
+2. DATA → add to graph + short ack
+3. QUESTION → search graph + LLM answer
+4. COMMAND → (future: actions) for now treat as DATA
 """
 
 import logging
@@ -10,51 +14,48 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Header
 from pydantic import BaseModel, Field
 
+from ..classifier import classify_message, MessageType
+from ..config import get_settings
 from ..graphiti_client import get_knowledge_graph, KnowledgeGraph
 from ..llm import generate_text
 from ..prompts import format_response_prompt
-from .auth import decode_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 
 def get_current_user_optional(authorization: Optional[str] = Header(None)) -> Optional[dict]:
-    """Get current user from Authorization header (optional).
-
-    Returns minimal user info from token (no DB lookup).
-    """
+    """Get current user from Authorization header (optional)."""
     if not authorization or not authorization.startswith("Bearer "):
         return None
+    from .auth import decode_token
     return decode_token(authorization[7:])
 
 
 class ChatRequest(BaseModel):
     """Chat message request."""
-
     message: str = Field(..., min_length=1, max_length=10000)
-    projectId: Optional[str] = Field(None, min_length=1)  # Legacy format
+    projectId: Optional[str] = Field(None, min_length=1)
     project_id: Optional[str] = Field(None, min_length=1)
     user_id: Optional[str] = None
     user_name: Optional[str] = None
 
     def get_project_id(self) -> str:
-        """Get project ID from either field."""
         return self.projectId or self.project_id or ""
 
 
 class ChatResponse(BaseModel):
     """Chat response."""
-
     reply: str
     sources: list[str] = []
     confidence: float = 1.0
     entities_extracted: int = 0
+    message_type: str = ""
+    debug_context: Optional[dict] = None  # For debugging
 
 
 class SearchRequest(BaseModel):
     """Search request."""
-
     query: str = Field(..., min_length=1)
     project_id: str = Field(..., min_length=1)
     limit: int = Field(default=10, ge=1, le=100)
@@ -62,9 +63,8 @@ class SearchRequest(BaseModel):
 
 class SearchResponse(BaseModel):
     """Search response."""
-
-    facts: list[dict]
-    entities: list[dict]
+    edges: list[dict]
+    nodes: list[dict]
 
 
 async def process_message(
@@ -72,20 +72,38 @@ async def process_message(
     kg: KnowledgeGraph,
     user: Optional[dict] = None,
 ) -> ChatResponse:
-    """Process a chat message.
-
-    1. Add message to knowledge graph (Graphiti extracts entities/edges)
-    2. Retrieve relevant context from the graph
-    3. Generate response using the LLM
-    """
+    """Process a chat message with classification-based flow."""
     project_id = request.get_project_id()
     user_id = request.user_id or (user["id"] if user else "anonymous")
     user_name = request.user_name or (user.get("name") if user else None)
 
-    logger.info(f"Processing message for project {project_id}: {request.message[:50]}...")
+    # Step 1: Classify message
+    classification = await classify_message(request.message, user_name)
+    logger.info(f"Classified as {classification.message_type}: {request.message[:50]}...")
 
-    # Step 1: Add message to knowledge graph
-    add_result = await kg.add_message(
+    # Step 2: Process based on type
+    if classification.message_type == MessageType.DATA:
+        return await _handle_data(request, kg, project_id, user_id, user_name)
+
+    elif classification.message_type == MessageType.QUESTION:
+        return await _handle_question(
+            request, kg, project_id, user_name, classification.search_query
+        )
+
+    else:  # COMMAND - treat as DATA for now
+        return await _handle_data(request, kg, project_id, user_id, user_name)
+
+
+async def _handle_data(
+    request: ChatRequest,
+    kg: KnowledgeGraph,
+    project_id: str,
+    user_id: str,
+    user_name: Optional[str],
+) -> ChatResponse:
+    """Handle DATA message - add to graph and generate ack."""
+    # Add to knowledge graph
+    add_result = await kg.add_episode(
         message=request.message,
         project_id=project_id,
         user_id=user_id,
@@ -93,19 +111,13 @@ async def process_message(
     )
 
     if not add_result["success"]:
-        logger.warning(f"Failed to add message to graph: {add_result.get('error')}")
+        logger.warning(f"Failed to add to graph: {add_result.get('error')}")
 
-    # Step 2: Get context from knowledge graph
-    context = await kg.get_context_for_response(
-        query=request.message,
-        project_id=project_id,
-    )
-
-    # Step 3: Generate response
+    # Generate acknowledgment response
     prompt = format_response_prompt(
         message=request.message,
-        facts=context.get("facts", []),
-        entities=context.get("entities", []),
+        facts=[],  # No search for DATA
+        entities=[],
         user_name=user_name,
         project_id=project_id,
     )
@@ -114,13 +126,79 @@ async def process_message(
         reply = await generate_text(prompt)
     except Exception as e:
         logger.error(f"Failed to generate response: {e}")
-        reply = "Sorry, I encountered an error generating a response. Please try again."
+        reply = "Got it! I've recorded that information."
 
     return ChatResponse(
         reply=reply,
-        sources=[f["fact"] for f in context["facts"][:5]],
-        confidence=1.0 if context["facts"] else 0.7,
+        sources=[],
+        confidence=1.0,
         entities_extracted=add_result.get("nodes_created", 0),
+        message_type="DATA",
+    )
+
+
+async def _handle_question(
+    request: ChatRequest,
+    kg: KnowledgeGraph,
+    project_id: str,
+    user_name: Optional[str],
+    search_query: Optional[str],
+) -> ChatResponse:
+    """Handle QUESTION message - search and answer."""
+    # Use classifier's search query or fall back to original message
+    query = search_query or request.message
+
+    # Search knowledge graph
+    search_result = await kg.search(query, project_id)
+
+    if not search_result["success"]:
+        logger.warning(f"Search failed: {search_result.get('error')}")
+
+    edges = search_result.get("edges", [])
+    nodes = search_result.get("nodes", [])
+
+    # Log what we're sending to LLM
+    logger.info(f"=== CONTEXT FOR LLM ===")
+    logger.info(f"Query used: {query}")
+    logger.info(f"Edges ({len(edges)}):")
+    for e in edges[:10]:
+        logger.info(f"  - {e['fact']}")
+    logger.info(f"Nodes ({len(nodes)}):")
+    for n in nodes:
+        logger.info(f"  - {n['name']}: {n['summary'][:100] if n.get('summary') else 'no summary'}...")
+
+    # Format for prompts (convert to old format for compatibility)
+    facts = [{"fact": e["fact"], **e} for e in edges]
+    entities = [{"name": n["name"], "summary": n["summary"], **n} for n in nodes]
+
+    # Generate answer using Pro model for better reasoning
+    settings = get_settings()
+    prompt = format_response_prompt(
+        message=request.message,
+        facts=facts,
+        entities=entities,
+        user_name=user_name,
+        project_id=project_id,
+    )
+
+    try:
+        reply = await generate_text(prompt, model=settings.llm_model_pro)
+    except Exception as e:
+        logger.error(f"Failed to generate response: {e}")
+        reply = "Sorry, I encountered an error. Please try again."
+
+    return ChatResponse(
+        reply=reply,
+        sources=[e["fact"] for e in edges[:5]],
+        confidence=1.0 if edges else 0.7,
+        entities_extracted=0,
+        message_type="QUESTION",
+        debug_context={
+            "query_used": query,
+            "edges": edges[:15],
+            "nodes": nodes,
+            "prompt": prompt,
+        },
     )
 
 
@@ -140,20 +218,14 @@ async def search(
     kg: KnowledgeGraph = Depends(get_knowledge_graph),
 ) -> SearchResponse:
     """Search the knowledge graph."""
-    logger.info(f"Searching in project {request.project_id}: {request.query[:50]}...")
-
-    result = await kg.search(
-        query=request.query,
-        project_id=request.project_id,
-        limit=request.limit,
-    )
+    result = await kg.search(request.query, request.project_id, request.limit)
 
     if not result["success"]:
         raise HTTPException(status_code=500, detail=result.get("error", "Search failed"))
 
     return SearchResponse(
-        facts=result["facts"],
-        entities=result["entities"],
+        edges=result["edges"],
+        nodes=result["nodes"],
     )
 
 
