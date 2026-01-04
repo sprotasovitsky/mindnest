@@ -17,6 +17,7 @@ class Settings(BaseSettings):
 
     # Google AI
     google_api_key: str = ""
+    google_application_credentials: str = ""
     vertex_ai_project_id: str = ""
     vertex_ai_location: str = "us-central1"
 

@@ -19,13 +19,40 @@ from datetime import datetime
 from typing import Optional
 from contextlib import asynccontextmanager
 
-from graphiti_core import Graphiti
-from graphiti_core.llm_client.google_genai_client import GoogleGenAIClient
-from graphiti_core.embedder.google_genai import GoogleGenAIEmbedder
-
 from .config import get_settings
 
 logger = logging.getLogger(__name__)
+
+# Lazy imports for Graphiti to handle import errors gracefully
+Graphiti = None
+GeminiClient = None
+GeminiEmbedder = None
+LLMConfig = None
+GeminiEmbedderConfig = None
+GeminiRerankerClient = None
+
+
+def _import_graphiti():
+    """Lazy import Graphiti and its dependencies."""
+    global Graphiti, GeminiClient, GeminiEmbedder, LLMConfig, GeminiEmbedderConfig, GeminiRerankerClient
+    if Graphiti is None:
+        try:
+            from graphiti_core import Graphiti as _Graphiti
+            from graphiti_core.llm_client.gemini_client import GeminiClient as _GeminiClient
+            from graphiti_core.llm_client.config import LLMConfig as _LLMConfig
+            from graphiti_core.embedder.gemini import GeminiEmbedder as _GeminiEmbedder
+            from graphiti_core.embedder.gemini import GeminiEmbedderConfig as _GeminiEmbedderConfig
+            from graphiti_core.cross_encoder.gemini_reranker_client import GeminiRerankerClient as _GeminiRerankerClient
+            Graphiti = _Graphiti
+            GeminiClient = _GeminiClient
+            GeminiEmbedder = _GeminiEmbedder
+            LLMConfig = _LLMConfig
+            GeminiEmbedderConfig = _GeminiEmbedderConfig
+            GeminiRerankerClient = _GeminiRerankerClient
+        except ImportError as e:
+            logger.error(f"Failed to import Graphiti: {e}")
+            logger.error("Install with: pip install graphiti-core")
+            raise
 
 
 class KnowledgeGraph:
@@ -48,20 +75,55 @@ class KnowledgeGraph:
         if self._initialized:
             return
 
+        # Lazy import
+        _import_graphiti()
+
         settings = get_settings()
 
         logger.info(f"Initializing Graphiti with Neo4j at {settings.neo4j_uri}")
 
+        # Check if we have API key or need to use Vertex AI
+        api_key = settings.google_api_key
+
+        if not api_key:
+            # Try to get API key from environment or use Vertex AI
+            api_key = os.getenv("GOOGLE_API_KEY", "")
+
+        # Create google.genai.Client for LLM and embedder
+        from google import genai as google_genai
+
+        if api_key:
+            # Use API key
+            logger.info("Using Google AI API key")
+            genai_client = google_genai.Client(api_key=api_key)
+        else:
+            # Use Vertex AI with ADC
+            logger.info("Using Vertex AI with service account credentials")
+            if settings.google_application_credentials:
+                os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = settings.google_application_credentials
+
+            genai_client = google_genai.Client(
+                vertexai=True,
+                project=settings.vertex_ai_project_id,
+                location=settings.vertex_ai_location,
+            )
+
         # Configure LLM client (Google Gemini)
-        llm_client = GoogleGenAIClient(
-            api_key=settings.google_api_key,
+        llm_config = LLMConfig(
             model=settings.llm_model,
         )
+        llm_client = GeminiClient(config=llm_config, client=genai_client)
 
         # Configure embedder (Google Gemini embeddings)
-        embedder = GoogleGenAIEmbedder(
-            api_key=settings.google_api_key,
+        # gemini-embedding-001: 3072 dimensions, 100+ languages
+        embedder_config = GeminiEmbedderConfig(
+            embedding_model="gemini-embedding-001",
+            embedding_dim=3072,
         )
+        embedder = GeminiEmbedder(config=embedder_config, client=genai_client)
+
+        # Configure cross-encoder/reranker (Gemini)
+        cross_encoder = GeminiRerankerClient(config=llm_config, client=genai_client)
 
         # Create Graphiti client
         self._client = Graphiti(
@@ -70,10 +132,11 @@ class KnowledgeGraph:
             password=settings.neo4j_password,
             llm_client=llm_client,
             embedder=embedder,
+            cross_encoder=cross_encoder,
         )
 
         # Build indices (creates vector and BM25 indices in Neo4j)
-        await self._client.build_indices()
+        await self._client.build_indices_and_constraints()
 
         self._initialized = True
         logger.info("Graphiti initialized successfully")
@@ -128,7 +191,7 @@ class KnowledgeGraph:
         logger.info(f"Adding episode for project {project_id}: {message[:50]}...")
 
         try:
-            episode = await self.client.add_episode(
+            result = await self.client.add_episode(
                 name=f"msg_{user_id}_{ref_time.isoformat()}",
                 episode_body=message,
                 source_description=source_description,
@@ -136,11 +199,12 @@ class KnowledgeGraph:
                 group_id=project_id,  # Isolate data by project
             )
 
+            # AddEpisodeResults has: episode, nodes, edges, etc.
             return {
                 "success": True,
-                "episode_id": episode.uuid if episode else None,
-                "nodes_created": len(episode.nodes) if episode and episode.nodes else 0,
-                "edges_created": len(episode.edges) if episode and episode.edges else 0,
+                "episode_id": result.episode.uuid if result and result.episode else None,
+                "nodes_created": len(result.nodes) if result and result.nodes else 0,
+                "edges_created": len(result.edges) if result and result.edges else 0,
             }
         except Exception as e:
             logger.error(f"Failed to add episode: {e}")
@@ -173,11 +237,41 @@ class KnowledgeGraph:
         logger.info(f"Searching in project {project_id}: {query[:50]}...")
 
         try:
-            results = await self.client._search(
-                query=query,
-                group_ids=[project_id],
-                num_results=limit,
+            from graphiti_core.search.search_config import (
+                SearchConfig,
+                EdgeSearchConfig, EdgeSearchMethod, EdgeReranker,
+                NodeSearchConfig, NodeSearchMethod, NodeReranker,
             )
+
+            # Use hybrid search with BM25 + cosine similarity
+            config = SearchConfig(
+                edge_config=EdgeSearchConfig(
+                    search_methods=[EdgeSearchMethod.bm25, EdgeSearchMethod.cosine_similarity],
+                    reranker=EdgeReranker.rrf,
+                ),
+                node_config=NodeSearchConfig(
+                    search_methods=[NodeSearchMethod.bm25, NodeSearchMethod.cosine_similarity],
+                    reranker=NodeReranker.rrf,
+                ),
+                limit=limit,
+            )
+            logger.info(f"Calling Graphiti search_ with query='{query}', group_ids=['{project_id}'], limit={limit}")
+            try:
+                results = await self.client.search_(
+                    query=query,
+                    group_ids=[project_id],
+                    config=config,
+                )
+                logger.info(f"Search results: edges={len(results.edges) if results.edges else 0}, nodes={len(results.nodes) if results.nodes else 0}")
+                if results.edges:
+                    for e in results.edges[:3]:
+                        logger.info(f"  Edge: {e.fact}")
+                if results.nodes:
+                    for n in results.nodes[:3]:
+                        logger.info(f"  Node: {n.name} - {n.summary}")
+            except Exception as search_err:
+                logger.error(f"Search_ exception: {search_err}", exc_info=True)
+                raise
 
             return {
                 "success": True,

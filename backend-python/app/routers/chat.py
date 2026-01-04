@@ -8,24 +8,40 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+import os
+from fastapi import APIRouter, Depends, HTTPException, Header
 from pydantic import BaseModel, Field
-import google.generativeai as genai
+from google import genai
 
 from ..config import get_settings
 from ..graphiti_client import get_knowledge_graph, KnowledgeGraph
+from .auth import get_user_from_token
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/chat", tags=["chat"])
+router = APIRouter(tags=["chat"])
+
+
+def get_current_user_optional(authorization: Optional[str] = Header(None)) -> Optional[dict]:
+    """Get current user from Authorization header (optional)."""
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    token = authorization[7:]
+    return get_user_from_token(token)
 
 
 # Request/Response models
 class ChatRequest(BaseModel):
     """Chat message request."""
     message: str = Field(..., min_length=1, max_length=10000)
-    project_id: str = Field(..., min_length=1)
-    user_id: str = Field(..., min_length=1)
+    # Support both formats: projectId (old Java) and project_id (new)
+    projectId: Optional[str] = Field(None, min_length=1)
+    project_id: Optional[str] = Field(None, min_length=1)
+    user_id: Optional[str] = None
     user_name: Optional[str] = None
+
+    def get_project_id(self) -> str:
+        """Get project ID from either field."""
+        return self.projectId or self.project_id or ""
 
 
 class ChatResponse(BaseModel):
@@ -49,10 +65,27 @@ class SearchResponse(BaseModel):
     entities: list[dict]
 
 
-# Initialize Gemini
+# Initialize Gemini client
 settings = get_settings()
-if settings.google_api_key:
-    genai.configure(api_key=settings.google_api_key)
+_genai_client = None
+
+def get_genai_client():
+    """Get or create Gemini client."""
+    global _genai_client
+    if _genai_client is None:
+        api_key = settings.google_api_key
+        if api_key:
+            _genai_client = genai.Client(api_key=api_key)
+        else:
+            # Use Vertex AI with ADC
+            if settings.google_application_credentials:
+                os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = settings.google_application_credentials
+            _genai_client = genai.Client(
+                vertexai=True,
+                project=settings.vertex_ai_project_id,
+                location=settings.vertex_ai_location,
+            )
+    return _genai_client
 
 
 async def generate_response(
@@ -70,7 +103,7 @@ async def generate_response(
     Returns:
         Generated response text
     """
-    model = genai.GenerativeModel(settings.llm_model)
+    client = get_genai_client()
 
     user_context = f"User {user_name} says" if user_name else "User says"
 
@@ -91,21 +124,24 @@ Instructions:
 Response:"""
 
     try:
-        response = await model.generate_content_async(prompt)
+        response = await client.aio.models.generate_content(
+            model=settings.llm_model,
+            contents=prompt,
+        )
         return response.text
     except Exception as e:
         logger.error(f"Failed to generate response: {e}")
         return "Sorry, I encountered an error generating a response. Please try again."
 
 
-@router.post("/message", response_model=ChatResponse)
-async def send_message(
+async def process_chat_message(
     request: ChatRequest,
-    kg: KnowledgeGraph = Depends(get_knowledge_graph),
+    kg: KnowledgeGraph,
+    user: Optional[dict] = None,
 ) -> ChatResponse:
-    """Process a chat message.
+    """Process a chat message (internal function).
 
-    This endpoint:
+    This function:
     1. Adds the message to the knowledge graph (Graphiti extracts entities/edges)
     2. Retrieves relevant context from the graph
     3. Generates a response using the LLM
@@ -115,15 +151,19 @@ async def send_message(
     - Edge creation and normalization
     - Temporal invalidation (updates/deletions)
     """
-    logger.info(f"Processing message for project {request.project_id}: {request.message[:50]}...")
+    project_id = request.get_project_id()
+    user_id = request.user_id or (user["id"] if user else "anonymous")
+    user_name = request.user_name or (user["name"] if user else None)
+
+    logger.info(f"Processing message for project {project_id}: {request.message[:50]}...")
 
     # Step 1: Add message to knowledge graph
     # Graphiti will extract entities and create edges
     add_result = await kg.add_message(
         message=request.message,
-        project_id=request.project_id,
-        user_id=request.user_id,
-        user_name=request.user_name,
+        project_id=project_id,
+        user_id=user_id,
+        user_name=user_name,
     )
 
     if not add_result["success"]:
@@ -132,14 +172,14 @@ async def send_message(
     # Step 2: Get context from knowledge graph
     context = await kg.get_context_for_response(
         query=request.message,
-        project_id=request.project_id,
+        project_id=project_id,
     )
 
     # Step 3: Generate response
     reply = await generate_response(
         message=request.message,
         context=context,
-        user_name=request.user_name,
+        user_name=user_name,
     )
 
     # Extract source facts for response
@@ -153,7 +193,29 @@ async def send_message(
     )
 
 
-@router.post("/search", response_model=SearchResponse)
+# Main chat endpoint (compatible with old Java API: POST /api/chat)
+@router.post("/api/chat", response_model=ChatResponse)
+async def send_message_legacy(
+    request: ChatRequest,
+    kg: KnowledgeGraph = Depends(get_knowledge_graph),
+    user: Optional[dict] = Depends(get_current_user_optional),
+) -> ChatResponse:
+    """Process a chat message (legacy endpoint for compatibility)."""
+    return await process_chat_message(request, kg, user)
+
+
+# New endpoint path
+@router.post("/api/chat/message", response_model=ChatResponse)
+async def send_message(
+    request: ChatRequest,
+    kg: KnowledgeGraph = Depends(get_knowledge_graph),
+    user: Optional[dict] = Depends(get_current_user_optional),
+) -> ChatResponse:
+    """Process a chat message."""
+    return await process_chat_message(request, kg, user)
+
+
+@router.post("/api/chat/search", response_model=SearchResponse)
 async def search(
     request: SearchRequest,
     kg: KnowledgeGraph = Depends(get_knowledge_graph),
@@ -182,7 +244,7 @@ async def search(
     )
 
 
-@router.get("/health")
+@router.get("/api/chat/health")
 async def health_check(
     kg: KnowledgeGraph = Depends(get_knowledge_graph),
 ) -> dict:

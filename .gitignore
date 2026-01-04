@@ -52,3 +52,5 @@ docker-compose.override.yml
 
 # Database volumes (local dev)
 data/
+backend-python/venv/
+**/__pycache__/

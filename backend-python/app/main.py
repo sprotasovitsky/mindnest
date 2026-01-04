@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
 from .graphiti_client import get_knowledge_graph, close_knowledge_graph
-from .routers import chat
+from .routers import chat, auth, projects
 
 # Configure logging
 logging.basicConfig(
@@ -72,6 +72,8 @@ app.add_middleware(
 )
 
 # Include routers
+app.include_router(auth.router)
+app.include_router(projects.router)
 app.include_router(chat.router)
 
 
