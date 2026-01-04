@@ -434,3 +434,17 @@ dart run build_runner build
 - Follow PEP 8 for Python code
 - Follow Dart style guide for Flutter code
 - The application supports multiple languages for end users via multilingual embeddings
+
+## Critical Rules
+
+### DO NOT change AI models without explicit user request
+
+The following models are intentionally chosen and must NOT be changed:
+```python
+llm_model = "gemini-2.5-flash-lite"      # NOT gemini-2.0-flash
+llm_model_pro = "gemini-2.5-pro"         # NOT gemini-2.0-pro
+embedding_model = "gemini-embedding-001"  # NOT text-embedding-004
+embedding_dim = 3072                      # NOT 768
+```
+
+These are the latest and most capable models. Do not "update" or "fix" them based on assumptions.
