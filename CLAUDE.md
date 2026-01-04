@@ -57,25 +57,29 @@ docker-compose logs -f       # View logs
 
 ## Architecture
 
-### Backend Structure (`backend-python/app/`)
+### Backend Structure (`backend-python/`)
 ```
-├── main.py                   # FastAPI app entry point, lifespan handler
-├── config.py                 # Settings from environment variables
-├── database.py               # PostgreSQL connection (SQLAlchemy async)
-├── models.py                 # SQLAlchemy models (User, Project, ProjectMember)
-├── graphiti_client.py        # Graphiti wrapper (KnowledgeGraph class)
-├── prompts/                  # External prompt templates
-│   ├── __init__.py               # Prompt loading and formatting
-│   ├── system.txt                # System prompt for LLM
-│   ├── context_guide.txt         # How to interpret graph data
-│   └── response.txt              # Response generation template
-├── routers/
-│   ├── auth.py                   # User registration/login
-│   ├── projects.py               # Project management
-│   └── chat.py                   # Chat API - main endpoint
-└── init-scripts/
-    └── postgres/
-        └── 01-init.sql           # PostgreSQL schema init
+├── alembic/                  # Database migrations
+│   ├── env.py                    # Alembic async config
+│   └── versions/                 # Migration files
+├── app/
+│   ├── main.py                   # FastAPI app entry point
+│   ├── config.py                 # Settings from environment
+│   ├── database.py               # PostgreSQL connection (SQLAlchemy async)
+│   ├── models.py                 # SQLAlchemy models
+│   ├── graphiti_client.py        # Graphiti wrapper
+│   ├── prompts/                  # LLM prompt templates
+│   │   ├── __init__.py
+│   │   ├── system.txt
+│   │   ├── context_guide.txt
+│   │   └── response.txt
+│   └── routers/
+│       ├── auth.py               # User registration/login
+│       ├── projects.py           # Project management
+│       └── chat.py               # Chat API
+├── alembic.ini               # Alembic configuration
+├── docker-compose.yml        # Neo4j + PostgreSQL
+└── requirements.txt          # Python dependencies
 ```
 
 ### Mobile Structure (`mobile/lib/`)
@@ -234,7 +238,25 @@ docker exec mindnest-neo4j cypher-shell -u neo4j -p mindnest123 \
 - **Credentials**: `mindnest:mindnest` (user:password)
 - **Database**: `mindnest`
 
-Tables are created by `init-scripts/postgres/01-init.sql` on first container start.
+### Database Migrations (Alembic)
+
+```bash
+cd backend-python
+
+# Run migrations (creates/updates tables)
+alembic upgrade head
+
+# Create new migration after model changes
+alembic revision --autogenerate -m "Description of changes"
+
+# Rollback last migration
+alembic downgrade -1
+
+# Show current revision
+alembic current
+```
+
+Migrations are stored in `backend-python/alembic/versions/`.
 
 ## Prompts
 
