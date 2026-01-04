@@ -52,13 +52,14 @@ class UserResponse(BaseModel):
     name: str
 
 
-def create_token(user_id: str, email: str) -> str:
+def create_token(user_id: str, email: str, name: str) -> str:
     """Create JWT token for user."""
     settings = get_settings()
     expire = datetime.utcnow() + timedelta(days=7)
     payload = {
         "sub": user_id,
         "email": email,
+        "name": name,
         "exp": expire,
     }
     return jwt.encode(payload, settings.secret_key, algorithm="HS256")
@@ -124,7 +125,7 @@ async def register(
     await db.refresh(user)
 
     # Create token
-    token = create_token(user.id, user.email)
+    token = create_token(user.id, user.email, user.name)
 
     logger.info(f"User registered: {user.id}")
 
@@ -160,7 +161,7 @@ async def login(
         )
 
     # Create token
-    token = create_token(user.id, user.email)
+    token = create_token(user.id, user.email, user.name)
 
     logger.info(f"User logged in: {user.id}")
 
@@ -193,6 +194,7 @@ def decode_token(token: str) -> Optional[dict]:
         return {
             "id": payload.get("sub"),
             "email": payload.get("email"),
+            "name": payload.get("name"),
         }
     except Exception as e:
         logger.warning(f"Invalid token: {e}")

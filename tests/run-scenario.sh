@@ -312,11 +312,11 @@ echo ""
 echo "=== Verification ==="
 if [ -n "$PROJECT_ID" ]; then
     echo "Checking Neo4j for entities (Graphiti):"
-    docker exec mindnest-neo4j-graphiti cypher-shell -u neo4j -p mindnest123 \
+    docker exec mindnest-neo4j cypher-shell -u neo4j -p mindnest123 \
         "MATCH (n:Entity) WHERE n.group_id = '$PROJECT_ID' RETURN count(n) as entity_count" 2>/dev/null || echo "Neo4j query failed (container may have different name)"
 
     echo ""
     echo "Edges in Neo4j:"
-    docker exec mindnest-neo4j-graphiti cypher-shell -u neo4j -p mindnest123 \
+    docker exec mindnest-neo4j cypher-shell -u neo4j -p mindnest123 \
         "MATCH ()-[r]->() WHERE r.group_id = '$PROJECT_ID' RETURN count(r) as edge_count" 2>/dev/null || echo "Neo4j query failed"
 fi
