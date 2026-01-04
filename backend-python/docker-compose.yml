@@ -1,11 +1,9 @@
-version: '3.8'
-
 services:
   neo4j:
     image: neo4j:5.26-community
-    container_name: mindnest-neo4j-graphiti
+    container_name: mindnest-neo4j
     ports:
-      - "7474:7474"  # HTTP
+      - "7474:7474"  # HTTP Browser
       - "7687:7687"  # Bolt
     environment:
       - NEO4J_AUTH=neo4j/mindnest123
@@ -21,10 +19,12 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - mindnest-network
 
   postgres:
     image: postgres:16-alpine
-    container_name: mindnest-postgres-graphiti
+    container_name: mindnest-postgres
     ports:
       - "5432:5432"
     environment:
@@ -33,13 +33,20 @@ services:
       - POSTGRES_DB=mindnest
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts/postgres:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U mindnest"]
+      test: ["CMD-SHELL", "pg_isready -U mindnest -d mindnest"]
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - mindnest-network
 
 volumes:
   neo4j_data:
   neo4j_logs:
   postgres_data:
+
+networks:
+  mindnest-network:
+    driver: bridge

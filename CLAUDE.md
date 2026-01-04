@@ -12,7 +12,7 @@ MindNest is an AI-first platform for knowledge and task management through a cha
 - **Mobile/Web**: Flutter + Dart (iOS, Android, Web from single codebase)
 - **AI**: Google Gemini (gemini-2.5-flash-lite for LLM, gemini-embedding-001 for embeddings)
 - **Knowledge Graph**: Graphiti (built on Neo4j) - handles entity extraction, temporal relations, hybrid search
-- **Databases**: Neo4j (knowledge graph via Graphiti), PostgreSQL (users/auth - in-memory for MVP)
+- **Databases**: Neo4j (knowledge graph via Graphiti), PostgreSQL (users, projects, members)
 - **Infrastructure**: Docker Compose for local dev
 
 ## Common Commands
@@ -43,7 +43,7 @@ flutter build ios            # Build iOS app
 dart run build_runner build  # Generate code (freezed, json_serializable, riverpod)
 ```
 
-### Docker (from `docker/` directory)
+### Docker (from `backend-python/` directory)
 ```bash
 docker-compose up -d         # Start databases (PostgreSQL, Neo4j)
 docker-compose down          # Stop all services
@@ -61,16 +61,21 @@ docker-compose logs -f       # View logs
 ```
 ├── main.py                   # FastAPI app entry point, lifespan handler
 ├── config.py                 # Settings from environment variables
+├── database.py               # PostgreSQL connection (SQLAlchemy async)
+├── models.py                 # SQLAlchemy models (User, Project, ProjectMember)
 ├── graphiti_client.py        # Graphiti wrapper (KnowledgeGraph class)
 ├── prompts/                  # External prompt templates
 │   ├── __init__.py               # Prompt loading and formatting
 │   ├── system.txt                # System prompt for LLM
 │   ├── context_guide.txt         # How to interpret graph data
 │   └── response.txt              # Response generation template
-└── routers/
-    ├── auth.py                   # User registration/login (in-memory for MVP)
-    ├── projects.py               # Project management (in-memory for MVP)
-    └── chat.py                   # Chat API - main endpoint
+├── routers/
+│   ├── auth.py                   # User registration/login
+│   ├── projects.py               # Project management
+│   └── chat.py                   # Chat API - main endpoint
+└── init-scripts/
+    └── postgres/
+        └── 01-init.sql           # PostgreSQL schema init
 ```
 
 ### Mobile Structure (`mobile/lib/`)
@@ -229,7 +234,7 @@ docker exec mindnest-neo4j cypher-shell -u neo4j -p mindnest123 \
 - **Credentials**: `mindnest:mindnest` (user:password)
 - **Database**: `mindnest`
 
-Note: For MVP, users and projects are stored in-memory. PostgreSQL will be used in production.
+Tables are created by `init-scripts/postgres/01-init.sql` on first container start.
 
 ## Prompts
 

@@ -13,6 +13,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
+from .database import init_db, close_db
 from .graphiti_client import get_knowledge_graph, close_knowledge_graph
 from .routers import chat, auth, projects
 
@@ -38,6 +39,14 @@ async def lifespan(app: FastAPI):
     if not settings.google_api_key:
         logger.warning("GOOGLE_API_KEY not set! LLM features will not work.")
 
+    # Initialize PostgreSQL
+    try:
+        await init_db()
+        logger.info("PostgreSQL database initialized")
+    except Exception as e:
+        logger.error(f"Failed to initialize PostgreSQL: {e}")
+        raise
+
     # Initialize Graphiti
     try:
         kg = await get_knowledge_graph()
@@ -51,7 +60,8 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down MindNest backend...")
     await close_knowledge_graph()
-    logger.info("Graphiti connection closed")
+    await close_db()
+    logger.info("All connections closed")
 
 
 # Create FastAPI app

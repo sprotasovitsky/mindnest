@@ -9,20 +9,19 @@ import hashlib
 import secrets
 from datetime import datetime, timedelta
 from typing import Optional
-from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from jose import jwt
 
 from ..config import get_settings
+from ..database import get_db
+from ..models import User
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth", tags=["auth"])
-
-# In-memory user storage (for MVP - replace with PostgreSQL later)
-# Structure: {email: {id, email, name, password_hash}}
-_users_db: dict[str, dict] = {}
 
 
 class RegisterRequest(BaseModel):
@@ -82,60 +81,71 @@ def hash_password(password: str) -> str:
     return f"{salt}:{password_hash}"
 
 
-def get_user_by_email(email: str) -> Optional[dict]:
+async def get_user_by_email(db: AsyncSession, email: str) -> Optional[User]:
     """Get user by email."""
-    return _users_db.get(email.lower())
+    result = await db.execute(
+        select(User).where(User.email == email.lower())
+    )
+    return result.scalar_one_or_none()
 
 
-def create_user(email: str, password: str, name: str) -> dict:
-    """Create new user."""
-    user_id = str(uuid4())
-    user = {
-        "id": user_id,
-        "email": email.lower(),
-        "name": name,
-        "password_hash": hash_password(password),
-        "created_at": datetime.utcnow().isoformat(),
-    }
-    _users_db[email.lower()] = user
-    return user
+async def get_user_by_id(db: AsyncSession, user_id: str) -> Optional[User]:
+    """Get user by ID."""
+    result = await db.execute(
+        select(User).where(User.id == user_id)
+    )
+    return result.scalar_one_or_none()
 
 
 @router.post("/register", response_model=AuthResponse)
-async def register(request: RegisterRequest) -> AuthResponse:
+async def register(
+    request: RegisterRequest,
+    db: AsyncSession = Depends(get_db),
+) -> AuthResponse:
     """Register a new user."""
     logger.info(f"Registering user: {request.email}")
 
     # Check if user exists
-    if get_user_by_email(request.email):
+    existing_user = await get_user_by_email(db, request.email)
+    if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered",
         )
 
     # Create user
-    user = create_user(request.email, request.password, request.name)
+    user = User(
+        email=request.email.lower(),
+        password_hash=hash_password(request.password),
+        name=request.name,
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
 
     # Create token
-    token = create_token(user["id"], user["email"])
+    token = create_token(user.id, user.email)
 
-    logger.info(f"User registered: {user['id']}")
+    logger.info(f"User registered: {user.id}")
 
     return AuthResponse(
         token=token,
-        user_id=user["id"],
-        email=user["email"],
-        name=user["name"],
+        user_id=user.id,
+        email=user.email,
+        name=user.name,
     )
 
 
 @router.post("/login", response_model=AuthResponse)
-async def login(request: LoginRequest) -> AuthResponse:
+async def login(
+    request: LoginRequest,
+    db: AsyncSession = Depends(get_db),
+) -> AuthResponse:
     """Login user."""
     logger.info(f"Login attempt: {request.email}")
 
     # Get user
-    user = get_user_by_email(request.email)
+    user = await get_user_by_email(db, request.email)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -143,39 +153,47 @@ async def login(request: LoginRequest) -> AuthResponse:
         )
 
     # Verify password
-    if not verify_password(request.password, user["password_hash"]):
+    if not verify_password(request.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
         )
 
     # Create token
-    token = create_token(user["id"], user["email"])
+    token = create_token(user.id, user.email)
 
-    logger.info(f"User logged in: {user['id']}")
+    logger.info(f"User logged in: {user.id}")
 
     return AuthResponse(
         token=token,
-        user_id=user["id"],
-        email=user["email"],
-        name=user["name"],
+        user_id=user.id,
+        email=user.email,
+        name=user.name,
     )
 
 
-def get_user_from_token(token: str) -> Optional[dict]:
-    """Extract user from JWT token."""
+async def get_user_from_token_db(db: AsyncSession, token: str) -> Optional[User]:
+    """Extract user from JWT token (with database lookup)."""
     try:
         settings = get_settings()
         payload = jwt.decode(token, settings.secret_key, algorithms=["HS256"])
-        email = payload.get("email")
-        if email:
-            return get_user_by_email(email)
+        user_id = payload.get("sub")
+        if user_id:
+            return await get_user_by_id(db, user_id)
     except Exception as e:
         logger.warning(f"Invalid token: {e}")
     return None
 
 
-def get_user_id_from_token(token: str) -> Optional[str]:
-    """Extract user ID from JWT token."""
-    user = get_user_from_token(token)
-    return user["id"] if user else None
+def decode_token(token: str) -> Optional[dict]:
+    """Decode JWT token and return payload."""
+    try:
+        settings = get_settings()
+        payload = jwt.decode(token, settings.secret_key, algorithms=["HS256"])
+        return {
+            "id": payload.get("sub"),
+            "email": payload.get("email"),
+        }
+    except Exception as e:
+        logger.warning(f"Invalid token: {e}")
+    return None

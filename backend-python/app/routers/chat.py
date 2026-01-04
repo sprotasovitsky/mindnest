@@ -16,18 +16,22 @@ from google import genai
 from ..config import get_settings
 from ..graphiti_client import get_knowledge_graph, KnowledgeGraph
 from ..prompts import format_response_prompt
-from .auth import get_user_from_token
+from .auth import decode_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["chat"])
 
 
 def get_current_user_optional(authorization: Optional[str] = Header(None)) -> Optional[dict]:
-    """Get current user from Authorization header (optional)."""
+    """Get current user from Authorization header (optional).
+
+    Returns minimal user info from token (no DB lookup).
+    For chat, we just need user_id and don't need full user object.
+    """
     if not authorization or not authorization.startswith("Bearer "):
         return None
     token = authorization[7:]
-    return get_user_from_token(token)
+    return decode_token(token)
 
 
 # Request/Response models
