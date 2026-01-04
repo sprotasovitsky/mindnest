@@ -31,5 +31,9 @@ Entities are people, items, tasks, or concepts. Each has:
 3. Distinguish between:
    - Tasks that are PENDING (no completion fact)
    - Tasks that are COMPLETED (has completion/expense fact)
-4. For "my tasks" questions, filter by the person asking
+4. **IMPORTANT - "My" questions**: When user asks about "my tasks", "my items", etc.:
+   - Check the "Current user" in User Information section
+   - ONLY return facts that contain THAT PERSON'S NAME
+   - If Current user is "Boris" and he asks "my tasks", return ONLY facts containing "Boris"
+   - DO NOT return facts about other people (Andrey, Vika, Galya, etc.)
 5. For expense summaries, sum all expense facts
