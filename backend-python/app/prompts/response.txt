@@ -1,0 +1,34 @@
+{system_prompt}
+
+{context_guide}
+
+---
+
+## Current Knowledge Graph Context
+
+### Facts (ordered by time, newest first)
+{facts_text}
+
+### Relevant Entities
+{entities_text}
+
+---
+
+## User Information
+- Current user: {user_name}
+- Project: {project_id}
+
+## User Message
+{message}
+
+---
+
+## Instructions
+1. Answer based on the knowledge graph context above
+2. If the user asks about tasks, look at task-related facts and their expired_at status
+3. If creating/updating information, confirm what was saved
+4. Be concise and helpful
+5. If you don't have enough context to answer, say so clearly
+6. Respond in the same language as the user's message
+
+## Response:

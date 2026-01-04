@@ -5,16 +5,17 @@ This replaces the Java ChatController and AgentService.
 """
 
 import logging
+import os
 from datetime import datetime
 from typing import Optional
 
-import os
 from fastapi import APIRouter, Depends, HTTPException, Header
 from pydantic import BaseModel, Field
 from google import genai
 
 from ..config import get_settings
 from ..graphiti_client import get_knowledge_graph, KnowledgeGraph
+from ..prompts import format_response_prompt
 from .auth import get_user_from_token
 
 logger = logging.getLogger(__name__)
@@ -92,6 +93,7 @@ async def generate_response(
     message: str,
     context: dict,
     user_name: Optional[str] = None,
+    project_id: Optional[str] = None,
 ) -> str:
     """Generate a response using Gemini with knowledge graph context.
 
@@ -99,29 +101,23 @@ async def generate_response(
         message: User's message
         context: Context from knowledge graph (facts, entities)
         user_name: Optional user name for personalization
+        project_id: Optional project ID for context
 
     Returns:
         Generated response text
     """
     client = get_genai_client()
 
-    user_context = f"User {user_name} says" if user_name else "User says"
+    # Format prompt using external templates
+    prompt = format_response_prompt(
+        message=message,
+        facts=context.get("facts", []),
+        entities=context.get("entities", []),
+        user_name=user_name,
+        project_id=project_id,
+    )
 
-    prompt = f"""You are a helpful AI assistant managing knowledge and tasks for a team.
-You have access to the following context from the knowledge base:
-
-{context['context_text']}
-
-{user_context}: {message}
-
-Instructions:
-- Answer based on the context when relevant
-- If creating/updating tasks or facts, confirm what was saved
-- Be concise and helpful
-- If you don't have enough context, say so
-- Respond in the same language as the user's message
-
-Response:"""
+    logger.debug(f"Generated prompt length: {len(prompt)} chars")
 
     try:
         response = await client.aio.models.generate_content(
@@ -180,6 +176,7 @@ async def process_chat_message(
         message=request.message,
         context=context,
         user_name=user_name,
+        project_id=project_id,
     )
 
     # Extract source facts for response

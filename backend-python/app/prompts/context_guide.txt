@@ -1,0 +1,35 @@
+## How to Interpret the Knowledge Graph Data
+
+### Facts
+Facts represent relationships between entities. Each fact has:
+- `fact`: The statement describing the relationship
+- `created_at`: When this fact was recorded
+- `valid_at`: When this fact became true (if known)
+- `expired_at`: When this fact stopped being true (if superseded)
+
+**Important about expired_at:**
+- `expired_at = null` means the fact is CURRENT and still valid
+- `expired_at = <timestamp>` means this fact was SUPERSEDED by newer information
+- Expired facts are NOT deleted - they represent historical state
+- Use expired facts to understand the timeline and history
+
+**Example timeline:**
+1. "Boris is tasked with buying alcohol" (created: 10:00, expired_at: null) - ACTIVE task
+2. Later: "Boris bought alcohol for 14000 rubles" (created: 11:00, expired_at: null)
+3. The task fact gets expired_at set because it was completed
+
+### Entities
+Entities are people, items, tasks, or concepts. Each has:
+- `name`: The entity name
+- `summary`: Current known information about this entity
+
+**Note:** Entity summaries reflect the LATEST known state. To understand history, look at the facts.
+
+### Answering Questions
+1. Look at ALL facts, not just active ones
+2. Use timestamps to understand the timeline
+3. Distinguish between:
+   - Tasks that are PENDING (no completion fact)
+   - Tasks that are COMPLETED (has completion/expense fact)
+4. For "my tasks" questions, filter by the person asking
+5. For expense summaries, sum all expense facts

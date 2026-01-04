@@ -308,8 +308,8 @@ class KnowledgeGraph:
         self,
         query: str,
         project_id: str,
-        max_facts: int = 10,
-        max_entities: int = 5,
+        max_facts: int = 20,
+        max_entities: int = 10,
     ) -> dict:
         """Get context from knowledge graph for response generation.
 
@@ -319,11 +319,11 @@ class KnowledgeGraph:
         Args:
             query: User's question/message
             project_id: Project to search in
-            max_facts: Maximum facts to include
-            max_entities: Maximum entities to include
+            max_facts: Maximum facts to include (default increased to 20)
+            max_entities: Maximum entities to include (default increased to 10)
 
         Returns:
-            Dict with facts and entities formatted for LLM prompt
+            Dict with facts and entities (formatting is done by prompts module)
         """
         search_result = await self.search(query, project_id, limit=max_facts)
 
@@ -331,32 +331,17 @@ class KnowledgeGraph:
             return {
                 "facts": [],
                 "entities": [],
-                "context_text": "No context available.",
             }
 
+        # Sort facts by created_at (newest first) for better context
         facts = search_result["facts"][:max_facts]
+        facts.sort(key=lambda f: f.get("created_at") or "", reverse=True)
+
         entities = search_result["entities"][:max_entities]
-
-        # Build context text for LLM
-        context_parts = []
-
-        if facts:
-            context_parts.append("Known facts:")
-            for f in facts:
-                fact_text = f["fact"]
-                if f.get("expired_at"):
-                    fact_text += " [OUTDATED]"
-                context_parts.append(f"- {fact_text}")
-
-        if entities:
-            context_parts.append("\nRelevant entities:")
-            for e in entities:
-                context_parts.append(f"- {e['name']}: {e['summary'] or 'No summary'}")
 
         return {
             "facts": facts,
             "entities": entities,
-            "context_text": "\n".join(context_parts) if context_parts else "No context available.",
         }
 
 
