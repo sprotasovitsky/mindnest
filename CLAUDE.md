@@ -177,12 +177,16 @@ Example timeline:
 
 Settings in `backend-python/app/config.py`:
 ```python
-llm_model: str = "gemini-2.5-flash-lite"       # Main chat model (fast, cost-effective)
+llm_model: str = "gemini-2.5-flash-lite"       # Reserved for future use
 llm_model_balanced: str = "gemini-2.5-flash"   # Balanced speed/quality
-llm_model_pro: str = "gemini-2.5-pro"          # Best quality for complex queries
+llm_model_pro: str = "gemini-2.5-pro"          # Chat responses (current default)
 graphiti_model: str = "gemini-2.5-flash"       # Entity extraction (best balance)
 # Embeddings: gemini-embedding-001 (3072 dimensions, 100+ languages)
 ```
+
+**Currently used:**
+- Chat responses: `llm_model_pro` (gemini-2.5-pro)
+- Graphiti entity extraction: `graphiti_model` (gemini-2.5-flash)
 
 **Model selection rationale** (based on comparative testing):
 - `gemini-2.5-flash` chosen for Graphiti after testing flash-lite, flash, pro, and gemini-3 models
@@ -471,10 +475,8 @@ dart run build_runner build
 
 The following models are intentionally chosen and must NOT be changed:
 ```python
-llm_model = "gemini-2.5-flash-lite"       # NOT gemini-2.0-flash
-llm_model_balanced = "gemini-2.5-flash"   # NOT gemini-2.0-flash
-llm_model_pro = "gemini-2.5-pro"          # NOT gemini-2.0-pro
-graphiti_model = "gemini-2.5-flash"       # NOT gemini-3, NOT flash-lite
+llm_model_pro = "gemini-2.5-pro"          # Chat responses - NOT gemini-2.0-pro
+graphiti_model = "gemini-2.5-flash"       # Entity extraction - NOT gemini-3, NOT flash-lite
 embedding_model = "gemini-embedding-001"  # NOT text-embedding-004
 embedding_dim = 3072                      # NOT 768
 ```
