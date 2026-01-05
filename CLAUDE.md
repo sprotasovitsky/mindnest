@@ -177,10 +177,18 @@ Example timeline:
 
 Settings in `backend-python/app/config.py`:
 ```python
-llm_model: str = "gemini-2.5-flash-lite"      # Main chat model
-llm_model_pro: str = "gemini-2.5-pro"         # For complex queries
+llm_model: str = "gemini-2.5-flash-lite"       # Main chat model (fast, cost-effective)
+llm_model_balanced: str = "gemini-2.5-flash"   # Balanced speed/quality
+llm_model_pro: str = "gemini-2.5-pro"          # Best quality for complex queries
+graphiti_model: str = "gemini-2.5-flash"       # Entity extraction (best balance)
 # Embeddings: gemini-embedding-001 (3072 dimensions, 100+ languages)
 ```
+
+**Model selection rationale** (based on comparative testing):
+- `gemini-2.5-flash` chosen for Graphiti after testing flash-lite, flash, pro, and gemini-3 models
+- gemini-3 models showed data loss issues (missing transactions in calculations)
+- flash-lite was fastest but had more refusals on valid requests
+- flash provides best balance of speed (~20% faster than pro) and accuracy
 
 Key features:
 - **Cross-language search**: EN query finds RU content and vice versa
@@ -366,6 +374,7 @@ Since Graphiti handles entity extraction and graph management, most new features
 ```
 tests/
 ├── run-scenario.sh        # Test runner (macOS compatible)
+├── compare-models.sh      # Model comparison across scenarios
 ├── scenarios/             # Test scenario files
 │   ├── 001-new-year-party.md      # Multi-user shopping/tasks
 │   ├── 002-personal-budget.md     # Budget tracking with corrections
@@ -376,6 +385,7 @@ tests/
 ├── prompts/               # Saved prompts (for version tracking)
 │   └── prompt-vN.md       # Prompts snapshot for version N
 └── results/               # Test results
+    ├── model-comparison-*/        # Model comparison results
     └── NNN-vN-description.md
 ```
 
@@ -394,6 +404,26 @@ The runner:
 4. Executes all Chat: messages in sequence
 5. Prints responses from the agent
 6. Verifies entities/edges in Neo4j (Graphiti)
+
+### Model Comparison Testing
+
+Compare different LLM models for Graphiti entity extraction:
+
+```bash
+cd tests
+./compare-models.sh
+```
+
+This script:
+1. Runs 3 scenarios with each configured model
+2. Measures timing for each run
+3. Exports entity/edge counts from Neo4j
+4. Generates comparison report in `results/model-comparison-*/comparison.md`
+
+Override model via environment variable:
+```bash
+GRAPHITI_MODEL="gemini-2.5-pro" uvicorn app.main:app --port 8000
+```
 
 ### Environment Variables for Tests
 
@@ -441,10 +471,18 @@ dart run build_runner build
 
 The following models are intentionally chosen and must NOT be changed:
 ```python
-llm_model = "gemini-2.5-flash-lite"      # NOT gemini-2.0-flash
-llm_model_pro = "gemini-2.5-pro"         # NOT gemini-2.0-pro
+llm_model = "gemini-2.5-flash-lite"       # NOT gemini-2.0-flash
+llm_model_balanced = "gemini-2.5-flash"   # NOT gemini-2.0-flash
+llm_model_pro = "gemini-2.5-pro"          # NOT gemini-2.0-pro
+graphiti_model = "gemini-2.5-flash"       # NOT gemini-3, NOT flash-lite
 embedding_model = "gemini-embedding-001"  # NOT text-embedding-004
 embedding_dim = 3072                      # NOT 768
 ```
 
 These are the latest and most capable models. Do not "update" or "fix" them based on assumptions.
+
+**Why gemini-2.5-flash for Graphiti:**
+- Tested against flash-lite, pro, and gemini-3 models
+- gemini-3 models showed data loss (missing transactions in budget calculations)
+- flash-lite had more refusals on valid update/correction requests
+- flash provides best balance: ~20% faster than pro with similar accuracy
