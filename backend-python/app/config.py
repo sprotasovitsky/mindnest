@@ -30,8 +30,12 @@ class Settings(BaseSettings):
     vertex_ai_location: str = "us-central1"
 
     # LLM Models
-    llm_model: str = "gemini-2.5-flash-lite"
-    llm_model_pro: str = "gemini-2.5-pro"
+    llm_model: str = "gemini-2.5-flash-lite"  # Fast, cost-effective
+    llm_model_balanced: str = "gemini-2.5-flash"  # Balanced speed/quality
+    llm_model_pro: str = "gemini-2.5-pro"  # Best quality
+
+    # Model for Graphiti entity extraction (can be overridden via env var)
+    graphiti_model: str = "gemini-2.5-flash"  # Best balance of speed and quality for entity extraction
     # Embeddings configured in Graphiti: gemini-embedding-001 (3072 dimensions)
 
     # App

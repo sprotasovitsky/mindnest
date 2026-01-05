@@ -1,0 +1,290 @@
+==============================================
+Running scenario: scenarios/001-new-year-party.md
+==============================================
+
+Parsing scenario file...
+
+=== Phase 1: Setup ===
+
+Registering user: Andrey (andrey@test.com)
+  ✓ Logged in (already registered)
+Registering user: Boris (boris@test.com)
+  ✓ Logged in (already registered)
+Registering user: Vika (vika@test.com)
+  ✓ Logged in (already registered)
+Registering user: Galya (galya@test.com)
+  ✓ Logged in (already registered)
+
+=== Executing Chat Steps ===
+
+Creating project: New Year Party 2025 (by Andrey)
+  ✓ Project created: 7f058235-e7bb-44b9-956f-387c700b5b89
+  Adding member: boris@test.com
+  Adding member: vika@test.com
+  Adding member: galya@test.com
+  ✓ All members added
+Adding member: boris@test.com
+  ✓ Member added
+Adding member: vika@test.com
+  ✓ Member added
+Adding member: galya@test.com
+  ✓ Member added
+--- Step 1 ---
+
+[Andrey]: Let's start planning our New Year party! I'm hosting at my dacha. We need to make a shopping list. First, I'll add some basics: we need champagne - 6 bottles, olivier salad ingredients for 8 people, and mandarin oranges - 3 kg.
+Agent: I've started a shopping list for your New Year's party:
+
+*   Champagne: 6 bottles
+*   Olivier salad ingredients: for 8 people
+*   Mandarin oranges: 3 kg
+
+What else should we add?
+--- Step 2 ---
+
+[Boris]: I think we need more alcohol. Let me add: vodka - 2 bottles, wine (red) - 3 bottles, wine (white) - 2 bottles. Also, we should get some snacks: cheese platter, crackers, and olives.
+Agent: I've noted that you'd like to add the following to your project:
+
+**Alcohol:**
+*   Vodka: 2 bottles
+*   Red Wine: 3 bottles
+*   White Wine: 2 bottles
+
+**Snacks:**
+*   Cheese platter
+*   Crackers
+*   Olives
+--- Step 3 ---
+
+[Vika]: For hot dishes, let's add: duck for roasting - 1 piece (about 2.5 kg), potatoes - 3 kg for baking, vegetables for salad - tomatoes 1 kg, cucumbers 0.5 kg. Also herring for shuba salad - 500g.
+Agent: I've added the following to your hot dishes list:
+* Duck for roasting - 1 piece (about 2.5 kg)
+* Potatoes - 3 kg for baking
+* Tomatoes - 1 kg
+* Cucumbers - 0.5 kg
+* Herring for shuba salad - 500g
+--- Step 4 ---
+
+[Galya]: Don't forget desserts! Adding: Napoleon cake from the bakery - 1, ice cream - 2 liters, chocolate candies - 500g. For decorations: balloons - 20 pieces, garland lights - 2 sets, New Year napkins - 2 packs. And fireworks - 5 small and 2 big ones!
+Agent: I've added the following items to your list:
+
+**Desserts:**
+* Napoleon cake: 1
+* Ice cream: 2 liters
+* Chocolate candies: 500g
+
+**Decorations:**
+* Balloons: 20 pieces
+* Garland lights: 2 sets
+* New Year napkins: 2 packs
+
+**Fireworks:**
+* Small: 5
+* Big: 2
+--- Step 5 ---
+
+[Boris]: What do we have on our shopping list so far? Can you show me everything?
+Agent: Of course, Boris. Here is the complete shopping list for the New Year party so far, broken down by category:
+
+**Main Dishes & Groceries:**
+*   Ingredients for Olivier salad (for 8 people)
+*   Duck for roasting (1, approx. 2.5 kg)
+*   Herring for shuba salad (500g)
+*   Potatoes for baking (3 kg)
+*   Tomatoes for a salad (1 kg)
+*   Cucumbers for a salad (0.5 kg)
+*   Mandarin oranges (3 kg)
+
+**Snacks:**
+*   A cheese platter
+*   Crackers
+*   Olives
+
+**Desserts:**
+*   Napoleon cake (1, from the bakery)
+*   Ice cream (2 liters)
+*   Chocolate candies (500g)
+
+**Drinks:**
+*   Champagne (6 bottles)
+*   Vodka (2 bottles)
+*   Red wine (3 bottles)
+*   White wine (2 bottles)
+
+**Decorations & Party Supplies:**
+*   Balloons (20)
+*   Garland lights (2 sets)
+*   New Year napkins (2 packs)
+*   Fireworks (5 small and 2 big ones)
+--- Step 6 ---
+
+[Vika]: 6 bottles of champagne is not enough for 4 people over the whole night. Change it to 10 bottles. Also add sparkling water - 6 bottles and regular water - 4 bottles.
+Agent: I can add those items for you. However, I don't have enough information to change the quantity of champagne. Could you please provide more details?
+--- Step 7 ---
+
+[Andrey]: Almost forgot - we need board games! Add Monopoly and Uno cards. Also, I'll rent a karaoke machine - adding that to the list.
+Agent: I've added Monopoly and Uno cards to the list. I've also noted that you'll be renting a karaoke machine.
+--- Step 8 ---
+
+[Galya]: We need disposable plates - 20 pieces and cups - 30 pieces. Also garbage bags - 1 roll. And don't forget the Christmas tree - artificial, 180cm! Who has one?
+Agent: I can help you list the items you need:
+
+*   Disposable plates: 20 pieces
+*   Cups: 30 pieces
+*   Garbage bags: 1 roll
+*   Artificial Christmas tree: 180cm
+
+I don't have information about who might have a Christmas tree in the knowledge graph.
+--- Step 9 ---
+
+[Andrey]: I have a Christmas tree, no need to buy. Remove it from the shopping list. But we need tree decorations - a box of ornaments.
+Agent: Okay, I've removed the Christmas tree from the shopping list and added a box of ornaments.
+--- Step 10 ---
+
+[Andrey]: Let's assign who buys what. Create tasks with deadline December 30: - Task for Boris: Buy all alcohol (champagne, vodka, wines) - Task for Vika: Buy all food (duck, vegetables, salads ingredients, herring) - Task for Galya: Buy desserts and decorations (cake, ice cream, candies, balloons, garlands, napkins, fireworks, ornaments) - Task for me (Andrey): Rent karaoke, buy board games, disposable dishes and garbage bags
+Agent: I can help you organize these tasks. Here's a breakdown of who is assigned what, with a deadline of December 30th:
+
+**For Boris:**
+*   Buy all alcohol (champagne, vodka, wines)
+
+**For Vika:**
+*   Buy all food (duck, vegetables, salads ingredients, herring)
+
+**For Galya:**
+*   Buy desserts and decorations (cake, ice cream, candies, balloons, garlands, napkins, fireworks, ornaments)
+
+**For Andrey (you):**
+*   Rent karaoke
+*   Buy board games
+*   Buy disposable dishes and garbage bags
+--- Step 11 ---
+
+[Boris]: What are my tasks for the New Year party?
+Agent: Based on the current plan for the New Year party, here are your assigned tasks:
+
+You are responsible for buying all the alcohol and snacks by the deadline of **December 30**.
+
+Specifically, this includes:
+*   **Alcohol:**
+    *   10 bottles of champagne
+    *   2 bottles of vodka
+    *   3 bottles of red wine
+    *   2 bottles of white wine
+*   **Snacks:**
+    *   A cheese platter
+    *   Crackers
+    *   Olives
+--- Step 12 ---
+
+[Vika]: How many items do I need to buy in total? List them please.
+Agent: Based on the information you've shared, you are responsible for buying all the food and water for the party.
+
+In total, you need to buy 9 items. Here is your list:
+
+*   Duck for roasting
+*   Potatoes for baking
+*   Tomatoes for a salad
+*   Cucumbers for a salad
+*   Herring for shuba salad
+*   Olivier salad ingredients
+*   Mandarin oranges (3 kg)
+*   Sparkling water (6 bottles)
+*   Regular water (4 bottles)
+--- Step 13 ---
+
+[Boris]: I've bought everything! Here are the expenses: - Champagne (10 bottles) - 8500 rubles - Vodka (2 bottles) - 1200 rubles - Red wine (3 bottles) - 2700 rubles - White wine (2 bottles) - 1600 rubles Total: 14000 rubles Mark my task as completed.
+Agent: Great! I've recorded all your expenses for the items: Champagne, Vodka, Red wine, and White wine. Your task is now marked as completed.
+--- Step 14 ---
+
+[Vika]: Done with shopping! Expenses: - Duck - 1500 rubles - Potatoes 3kg - 150 rubles - Tomatoes 1kg - 300 rubles - Cucumbers 0.5kg - 150 rubles - Herring 500g - 350 rubles - Olivier ingredients - 800 rubles - Mandarin oranges 3kg - 450 rubles - Cheese platter - 900 rubles - Crackers - 200 rubles - Olives - 300 rubles Total: 5100 rubles My task is done!
+Agent: I have recorded your shopping expenses. The total amount spent is 5100 rubles.
+--- Step 15 ---
+
+[Galya]: All bought! My expenses: - Napoleon cake - 1800 rubles - Ice cream 2L - 600 rubles - Chocolate candies - 400 rubles - Balloons 20 pcs - 500 rubles - Garland lights 2 sets - 1200 rubles - Napkins 2 packs - 200 rubles - Small fireworks 5 pcs - 2500 rubles - Big fireworks 2 pcs - 3000 rubles - Tree ornaments - 800 rubles Total: 11000 rubles Task completed!
+Agent: You've bought everything for your event! Here's a summary of your expenses:
+
+*   Napoleon cake: 1800 rubles
+*   Ice cream 2L: 600 rubles
+*   Chocolate candies: 400 rubles
+*   Balloons 20 pcs: 500 rubles
+*   Garland lights 2 sets: 1200 rubles
+*   Napkins 2 packs: 200 rubles
+*   Small fireworks 5 pcs: 2500 rubles
+*   Big fireworks 2 pcs: 3000 rubles
+*   Tree ornaments: 800 rubles
+
+Your total expenses are 11000 rubles.
+--- Step 16 ---
+
+[Andrey]: I'm done too: - Karaoke rental (2 days) - 3000 rubles - Monopoly - 1500 rubles - Uno cards - 300 rubles - Disposable plates 20pcs - 200 rubles - Disposable cups 30pcs - 150 rubles - Garbage bags - 100 rubles - Sparkling water 6 bottles - 300 rubles - Regular water 4 bottles - 200 rubles Total: 5750 rubles All my tasks are done!
+Agent: It looks like you've successfully completed your tasks and accounted for all the expenses! That's great to hear.
+--- Step 17 ---
+
+[Andrey]: Can you give me a summary of all expenses? How much did each person spend and what's the total?
+Agent: Of course, here is a summary of all expenses based on the information provided:
+
+The total cost for the party so far is **35,850 rubles**.
+
+Here is the breakdown by person:
+*   **Boris:** 14,000 rubles (alcohol)
+*   **Galya:** 11,000 rubles (desserts, decorations, fireworks)
+*   **Andrey:** 5,750 rubles (karaoke rental, games, water, disposable dishes)
+*   **Vika:** 5,100 rubles (food)
+--- Step 18 ---
+
+[Boris]: Calculate who owes whom money so we're all even.
+Agent: Of course. Based on the information provided, here is the breakdown of expenses to settle the costs for the party:
+
+**Total Spending per Person:**
+
+*   **Boris (Alcohol):** 14,000 rubles
+*   **Galya (Desserts & Decorations):** 11,000 rubles
+*   **Andrey (Entertainment & Supplies):** 5,750 rubles
+*   **Vika (Food):** 5,100 rubles
+
+**Calculation:**
+
+1.  **Total Party Cost:** 14,000 + 11,000 + 5,750 + 5,100 = **35,850 rubles**
+2.  **Cost per Person (split 4 ways):** 35,850 / 4 = **8,962.5 rubles**
+
+**Who Owes What:**
+
+*   **Vika owes:** 8,962.5 - 5,100 = **3,862.5 rubles**
+*   **Andrey owes:** 8,962.5 - 5,750 = **3,212.5 rubles**
+
+**Who is Owed Money:**
+
+*   **Boris is owed:** 14,000 - 8,962.5 = **5,037.5 rubles**
+*   **Galya is owed:** 11,000 - 8,962.5 = **2,037.5 rubles**
+
+---
+
+**To Settle Up:**
+
+Here is a simple way to get everyone even:
+1.  Andrey pays Galya **2,037.5 rubles**.
+2.  Andrey pays Boris **1,175 rubles**.
+3.  Vika pays Boris **3,862.5 rubles**.
+--- Step 19 ---
+
+[Galya]: Are all tasks for the party completed?
+Agent: Based on the information available, it appears that all the main tasks have been completed:
+
+*   **Your (Galya's) task** is marked as completed. You bought decorations, desserts, and fireworks.
+*   **Vika's task** to buy food is done.
+*   **Boris's task** to buy all the alcohol is completed.
+*   **Andrey's tasks** to rent a karaoke machine, buy board games, disposable dishes, and garbage bags also seem to be finished, as the items he was responsible for have been recorded as purchased or rented.
+
+==============================================
+Scenario execution completed
+==============================================
+
+Project ID: 7f058235-e7bb-44b9-956f-387c700b5b89
+
+=== Verification ===
+Checking Neo4j for entities (Graphiti):
+entity_count
+50
+
+Edges in Neo4j:
+edge_count
+193

@@ -46,8 +46,10 @@ class KnowledgeGraph:
 
         genai_client = get_gemini_client()
 
-        # Use Pro model for better entity extraction
-        llm_config = LLMConfig(model=settings.llm_model_pro)
+        # Use configurable model for entity extraction (default: Pro)
+        graphiti_model = settings.graphiti_model or settings.llm_model_pro
+        logger.info(f"Using model for Graphiti: {graphiti_model}")
+        llm_config = LLMConfig(model=graphiti_model)
         llm_client = GeminiClient(config=llm_config, client=genai_client)
 
         embedder_config = GeminiEmbedderConfig(
