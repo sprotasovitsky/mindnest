@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     graphiti_model: str = "gemini-2.5-flash"  # Best balance of speed and quality for entity extraction
     # Embeddings configured in Graphiti: gemini-embedding-001 (3072 dimensions)
 
+    # Search
+    search_limit: int = 40  # Max edges/nodes returned from search
+
     # App
     secret_key: str = Field(default="change-me-in-production")
     debug: bool = True

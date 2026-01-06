@@ -1,10 +1,9 @@
 """Chat API Router.
 
-New simplified flow:
-1. Classify message (DATA/QUESTION/COMMAND)
-2. DATA → add to graph + short ack
+Classification-based flow:
+1. Classify message (DATA/QUESTION)
+2. DATA → add to graph + context search + response
 3. QUESTION → search graph + LLM answer
-4. COMMAND → (future: actions) for now treat as DATA
 """
 
 import logging
@@ -22,6 +21,25 @@ from ..prompts import format_response_prompt
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/chat", tags=["chat"])
+
+
+def _format_context(edges: list[dict], nodes: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Format search results for LLM prompts."""
+    facts = [{"fact": e["fact"], **e} for e in edges]
+    entities = [{"name": n["name"], "summary": n["summary"], **n} for n in nodes]
+    return facts, entities
+
+
+def _log_context(query: str, edges: list[dict], nodes: list[dict]) -> None:
+    """Log search context for debugging."""
+    logger.info(f"=== CONTEXT FOR LLM ===")
+    logger.info(f"Query used: {query}")
+    logger.info(f"Edges ({len(edges)}):")
+    for e in edges[:10]:
+        logger.info(f"  - {e['fact']}")
+    logger.info(f"Nodes ({len(nodes)}):")
+    for n in nodes[:10]:
+        logger.info(f"  - {n['name']}: {n['summary'][:100] if n.get('summary') else 'no summary'}...")
 
 
 def get_current_user_optional(authorization: Optional[str] = Header(None)) -> Optional[dict]:
@@ -54,19 +72,6 @@ class ChatResponse(BaseModel):
     debug_context: Optional[dict] = None  # For debugging
 
 
-class SearchRequest(BaseModel):
-    """Search request."""
-    query: str = Field(..., min_length=1)
-    project_id: str = Field(..., min_length=1)
-    limit: int = Field(default=10, ge=1, le=100)
-
-
-class SearchResponse(BaseModel):
-    """Search response."""
-    edges: list[dict]
-    nodes: list[dict]
-
-
 async def process_message(
     request: ChatRequest,
     kg: KnowledgeGraph,
@@ -97,11 +102,7 @@ async def _handle_data(
     user_id: str,
     user_name: Optional[str],
 ) -> ChatResponse:
-    """Handle DATA message - add to graph with context-aware response.
-
-    Now includes search to provide context for better responses,
-    especially for corrections and updates.
-    """
+    """Handle DATA message - add to graph with context-aware response."""
     # Add to knowledge graph first
     add_result = await kg.add_episode(
         message=request.message,
@@ -114,15 +115,12 @@ async def _handle_data(
         logger.warning(f"Failed to add to graph: {add_result.get('error')}")
 
     # Search for context to generate better response
-    search_result = await kg.search(request.message, project_id, limit=20)
+    search_result = await kg.search(request.message, project_id)
     edges = search_result.get("edges", []) if search_result["success"] else []
     nodes = search_result.get("nodes", []) if search_result["success"] else []
 
-    # Format for prompts
-    facts = [{"fact": e["fact"], **e} for e in edges]
-    entities = [{"name": n["name"], "summary": n["summary"], **n} for n in nodes]
-
-    # Generate response with context
+    # Generate response
+    facts, entities = _format_context(edges, nodes)
     settings = get_settings()
     prompt = format_response_prompt(
         message=request.message,
@@ -155,7 +153,6 @@ async def _handle_question(
     search_query: Optional[str],
 ) -> ChatResponse:
     """Handle QUESTION message - search and answer."""
-    # Use classifier's search query or fall back to original message
     query = search_query or request.message
 
     # Search knowledge graph
@@ -167,21 +164,10 @@ async def _handle_question(
     edges = search_result.get("edges", [])
     nodes = search_result.get("nodes", [])
 
-    # Log what we're sending to LLM
-    logger.info(f"=== CONTEXT FOR LLM ===")
-    logger.info(f"Query used: {query}")
-    logger.info(f"Edges ({len(edges)}):")
-    for e in edges[:10]:
-        logger.info(f"  - {e['fact']}")
-    logger.info(f"Nodes ({len(nodes)}):")
-    for n in nodes:
-        logger.info(f"  - {n['name']}: {n['summary'][:100] if n.get('summary') else 'no summary'}...")
+    _log_context(query, edges, nodes)
 
-    # Format for prompts (convert to old format for compatibility)
-    facts = [{"fact": e["fact"], **e} for e in edges]
-    entities = [{"name": n["name"], "summary": n["summary"], **n} for n in nodes]
-
-    # Generate answer using Pro model for better reasoning
+    # Generate response
+    facts, entities = _format_context(edges, nodes)
     settings = get_settings()
     prompt = format_response_prompt(
         message=request.message,
@@ -222,21 +208,25 @@ async def send_message(
     return await process_message(request, kg, user)
 
 
-@router.post("/search", response_model=SearchResponse)
-async def search(
-    request: SearchRequest,
+class BuildCommunitiesRequest(BaseModel):
+    """Request to build communities."""
+    project_id: str = Field(..., min_length=1)
+
+
+@router.post("/build-communities")
+async def build_communities(
+    request: BuildCommunitiesRequest,
     kg: KnowledgeGraph = Depends(get_knowledge_graph),
-) -> SearchResponse:
-    """Search the knowledge graph."""
-    result = await kg.search(request.query, request.project_id, request.limit)
+) -> dict:
+    """Build communities for a project.
 
+    This is an expensive operation that clusters entities and generates
+    summaries using LLM. Run this after adding significant data.
+    """
+    result = await kg.build_communities(request.project_id)
     if not result["success"]:
-        raise HTTPException(status_code=500, detail=result.get("error", "Search failed"))
-
-    return SearchResponse(
-        edges=result["edges"],
-        nodes=result["nodes"],
-    )
+        raise HTTPException(status_code=500, detail=result.get("error", "Build failed"))
+    return {"status": "communities_built", "project_id": request.project_id}
 
 
 @router.get("/health")

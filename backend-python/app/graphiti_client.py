@@ -134,40 +134,66 @@ class KnowledgeGraph:
             logger.error(f"Failed to add episode: {e}")
             return {"success": False, "error": str(e)}
 
+    def _get_edge_config(self) -> EdgeSearchConfig:
+        """Get standard edge search config with BFS and cross-encoder."""
+        return EdgeSearchConfig(
+            search_methods=[
+                EdgeSearchMethod.bm25,
+                EdgeSearchMethod.cosine_similarity,
+                EdgeSearchMethod.bfs,
+            ],
+            reranker=EdgeReranker.cross_encoder,
+        )
+
+    def _get_node_config(self) -> NodeSearchConfig:
+        """Get standard node search config with BFS and cross-encoder."""
+        return NodeSearchConfig(
+            search_methods=[
+                NodeSearchMethod.bm25,
+                NodeSearchMethod.cosine_similarity,
+                NodeSearchMethod.bfs,
+            ],
+            reranker=NodeReranker.cross_encoder,
+        )
+
+    def _format_edges(self, edges: list) -> list[dict]:
+        """Format edge results for API response."""
+        return [
+            {
+                "fact": edge.fact,
+                "created_at": edge.created_at.isoformat() if edge.created_at else None,
+                "valid_at": edge.valid_at.isoformat() if edge.valid_at else None,
+                "expired_at": edge.expired_at.isoformat() if edge.expired_at else None,
+            }
+            for edge in edges
+        ]
+
+    def _format_nodes(self, nodes: list) -> list[dict]:
+        """Format node results for API response."""
+        return [
+            {
+                "name": node.name,
+                "summary": node.summary,
+                "created_at": node.created_at.isoformat() if node.created_at else None,
+            }
+            for node in nodes
+        ]
+
     async def search(
         self,
         query: str,
         project_id: str,
-        limit: int = 40,
+        limit: int | None = None,
     ) -> dict:
-        """Search the knowledge graph.
-
-        Uses hybrid search with graph traversal and cross-encoder reranking:
-        - BM25: keyword matching
-        - Cosine similarity: semantic search
-        - BFS: graph traversal to find connected entities
-        - Cross-encoder: neural reranking for better relevance
-        """
+        """Search the knowledge graph."""
+        settings = get_settings()
+        limit = limit or settings.search_limit
         logger.info(f"Searching: {query[:80]}...")
 
         try:
             config = SearchConfig(
-                edge_config=EdgeSearchConfig(
-                    search_methods=[
-                        EdgeSearchMethod.bm25,
-                        EdgeSearchMethod.cosine_similarity,
-                        EdgeSearchMethod.bfs,  # Graph traversal
-                    ],
-                    reranker=EdgeReranker.cross_encoder,  # Better ranking
-                ),
-                node_config=NodeSearchConfig(
-                    search_methods=[
-                        NodeSearchMethod.bm25,
-                        NodeSearchMethod.cosine_similarity,
-                        NodeSearchMethod.bfs,  # Graph traversal
-                    ],
-                    reranker=NodeReranker.cross_encoder,  # Better ranking
-                ),
+                edge_config=self._get_edge_config(),
+                node_config=self._get_node_config(),
                 limit=limit,
             )
 
@@ -184,27 +210,28 @@ class KnowledgeGraph:
 
             return {
                 "success": True,
-                "edges": [
-                    {
-                        "fact": edge.fact,
-                        "created_at": edge.created_at.isoformat() if edge.created_at else None,
-                        "valid_at": edge.valid_at.isoformat() if edge.valid_at else None,
-                        "expired_at": edge.expired_at.isoformat() if edge.expired_at else None,
-                    }
-                    for edge in edges
-                ],
-                "nodes": [
-                    {
-                        "name": node.name,
-                        "summary": node.summary,
-                        "created_at": node.created_at.isoformat() if node.created_at else None,
-                    }
-                    for node in nodes
-                ],
+                "edges": self._format_edges(edges),
+                "nodes": self._format_nodes(nodes),
             }
         except Exception as e:
             logger.error(f"Search failed: {e}")
             return {"success": False, "error": str(e), "edges": [], "nodes": []}
+
+    async def build_communities(self, project_id: str) -> dict:
+        """Build communities for a project.
+
+        Uses label propagation to cluster related entities
+        and generates summaries for each community.
+        """
+        logger.info(f"Building communities for project: {project_id}")
+
+        try:
+            await self.client.build_communities(group_ids=[project_id])
+            logger.info("Communities built successfully")
+            return {"success": True}
+        except Exception as e:
+            logger.error(f"Failed to build communities: {e}")
+            return {"success": False, "error": str(e)}
 
 
 # Global instance

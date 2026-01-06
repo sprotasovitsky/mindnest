@@ -1,9 +1,7 @@
 """MindNest Backend - FastAPI Application.
 
-This is the main entry point for the MindNest backend,
+Main entry point for the MindNest backend,
 powered by Graphiti for knowledge graph management.
-
-Replaces the Java Spring Boot backend with a simpler Python implementation.
 """
 
 import logging

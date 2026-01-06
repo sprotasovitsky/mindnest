@@ -4,7 +4,7 @@ This module handles loading and formatting prompts from external files.
 All prompts are stored as .txt files for easy editing and version control.
 """
 
-import os
+import json
 from pathlib import Path
 from functools import lru_cache
 from typing import Optional
@@ -67,8 +67,6 @@ def format_response_prompt(
     Returns:
         Formatted prompt ready for LLM
     """
-    import json
-
     # Pass raw data as JSON - let LLM interpret with full metadata
     facts_text = json.dumps(facts, indent=2, ensure_ascii=False) if facts else "[]"
     entities_text = json.dumps(entities, indent=2, ensure_ascii=False) if entities else "[]"

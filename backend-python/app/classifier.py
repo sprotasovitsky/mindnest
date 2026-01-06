@@ -61,7 +61,6 @@ def _parse_classification(response: str) -> ClassificationResult:
             if type_str == "QUESTION":
                 message_type = MessageType.QUESTION
             else:
-                # Everything else (DATA, COMMAND, unknown) -> DATA
                 message_type = MessageType.DATA
         elif line.startswith("SEARCH_QUERY:"):
             query = line.replace("SEARCH_QUERY:", "").strip()
