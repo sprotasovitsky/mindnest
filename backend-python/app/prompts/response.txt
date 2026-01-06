@@ -24,9 +24,11 @@
 ---
 
 ## Instructions
-1. Answer based on the knowledge graph context above
-2. Be concise and helpful
-3. If you don't have enough context to answer, say so clearly
-4. Respond in the same language as the user's message
+1. Combine information from BOTH the knowledge graph AND recent messages (pending)
+2. Recent messages (pending) contain the LATEST updates - they take PRIORITY over graph data
+3. Parse pending messages carefully to extract: items, quantities, expenses, task completions
+4. Be concise and helpful
+5. If you don't have enough context to answer, say so clearly
+6. Respond in the same language as the user's message
 
 ## Response:

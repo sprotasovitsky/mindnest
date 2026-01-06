@@ -82,13 +82,14 @@ class PendingCache:
 
         lines = [
             "",
-            "## Recent Messages (being processed)",
-            "These messages were just received and are being added to the knowledge graph.",
-            "Consider them as the most recent updates:",
+            "## Recent Messages (PRIORITY - not yet in graph)",
+            "These are the MOST RECENT messages. They override any conflicting information in the graph above.",
+            "Parse these messages to extract: shopping items, task assignments, expenses, task completions, etc.",
             "",
         ]
         for msg in messages:
-            lines.append(f"- [{msg.user_name}]: {msg.text}")
+            lines.append(f"[{msg.user_name}]: {msg.text}")
+        lines.append("")
 
         return "\n".join(lines)
 
