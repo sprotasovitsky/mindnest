@@ -135,25 +135,25 @@ class KnowledgeGraph:
             return {"success": False, "error": str(e)}
 
     def _get_edge_config(self) -> EdgeSearchConfig:
-        """Get standard edge search config with BFS and cross-encoder."""
+        """Get standard edge search config with BFS and RRF reranking."""
         return EdgeSearchConfig(
             search_methods=[
                 EdgeSearchMethod.bm25,
                 EdgeSearchMethod.cosine_similarity,
                 EdgeSearchMethod.bfs,
             ],
-            reranker=EdgeReranker.cross_encoder,
+            reranker=EdgeReranker.rrf,
         )
 
     def _get_node_config(self) -> NodeSearchConfig:
-        """Get standard node search config with BFS and cross-encoder."""
+        """Get standard node search config with BFS and RRF reranking."""
         return NodeSearchConfig(
             search_methods=[
                 NodeSearchMethod.bm25,
                 NodeSearchMethod.cosine_similarity,
                 NodeSearchMethod.bfs,
             ],
-            reranker=NodeReranker.cross_encoder,
+            reranker=NodeReranker.rrf,
         )
 
     def _format_edges(self, edges: list) -> list[dict]:
