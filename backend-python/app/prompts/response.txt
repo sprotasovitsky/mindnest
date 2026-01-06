@@ -13,10 +13,12 @@ Individual facts extracted from previous messages. Check `expired_at` - null mea
 ### 2. Entity Summaries (aggregated knowledge)
 Synthesized information about people, items, and concepts mentioned in the project.
 {entities_text}
+
+### 3. Recent Messages (HIGHEST PRIORITY - not yet in graph)
+These messages were JUST received and will REPLACE Facts/Entities after processing.
+If conflicts exist, ALWAYS trust this section over sections 1 and 2.
 {pending_context}
 ---
-
-**DATA PRIORITY RULE**: If "Recent Messages" section exists above, those messages contain the NEWEST information that will REPLACE Facts/Entities after processing. Always trust Recent Messages over Facts/Entities when they conflict.
 
 ## User Information
 - Current user: {user_name}

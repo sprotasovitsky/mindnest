@@ -76,20 +76,13 @@ class PendingCache:
         return self._cache.get(project_id, [])
 
     def format_for_prompt(self, messages: list[PendingMessage]) -> str:
-        """Format pending messages for LLM prompt."""
+        """Format pending messages as simple list."""
         if not messages:
             return ""
 
-        lines = [
-            "",
-            "### 3. Recent Messages (HIGHEST PRIORITY - not yet in graph)",
-            "Raw messages just received. These override any conflicting info from Facts or Entities above.",
-            "Extract: items, quantities, prices, task completions, assignments, corrections.",
-            "",
-        ]
+        lines = []
         for msg in messages:
             lines.append(f"[{msg.user_name}]: {msg.text}")
-        lines.append("")
 
         return "\n".join(lines)
 
