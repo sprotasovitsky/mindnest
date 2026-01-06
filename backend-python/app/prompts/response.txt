@@ -11,7 +11,7 @@
 
 ### Relevant Entities
 {entities_text}
-
+{pending_context}
 ---
 
 ## User Information

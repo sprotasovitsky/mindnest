@@ -54,6 +54,7 @@ def format_response_prompt(
     entities: list[dict],
     user_name: Optional[str] = None,
     project_id: Optional[str] = None,
+    pending_context: str = "",
 ) -> str:
     """Format the full response prompt with context.
 
@@ -63,6 +64,7 @@ def format_response_prompt(
         entities: List of entities from knowledge graph
         user_name: Current user's name
         project_id: Current project ID
+        pending_context: Recent messages not yet in graph
 
     Returns:
         Formatted prompt ready for LLM
@@ -82,6 +84,7 @@ def format_response_prompt(
         user_name=user_name or "Anonymous",
         project_id=project_id or "Unknown",
         message=message,
+        pending_context=pending_context,
     )
 
 

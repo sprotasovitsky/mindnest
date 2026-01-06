@@ -1,22 +1,24 @@
 """Chat API Router.
 
-Classification-based flow:
+Classification-based flow with background processing:
 1. Classify message (DATA/QUESTION)
-2. DATA → add to graph + context search + response
-3. QUESTION → search graph + LLM answer
+2. DATA → pending cache + background graph update + quick response
+3. QUESTION → search graph + pending + LLM answer
 """
 
 import logging
+import uuid
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Header
 from pydantic import BaseModel, Field
 
 from ..classifier import classify_message, MessageType
 from ..config import get_settings
 from ..graphiti_client import get_knowledge_graph, KnowledgeGraph
 from ..llm import generate_text
+from ..pending_cache import get_pending_cache
 from ..prompts import format_response_prompt
 
 logger = logging.getLogger(__name__)
@@ -69,12 +71,43 @@ class ChatResponse(BaseModel):
     confidence: float = 1.0
     entities_extracted: int = 0
     message_type: str = ""
-    debug_context: Optional[dict] = None  # For debugging
+    debug_context: Optional[dict] = None
+
+
+async def _add_to_graph_background(
+    message_id: str,
+    message: str,
+    project_id: str,
+    user_id: str,
+    user_name: Optional[str],
+) -> None:
+    """Background task: add to graph, then remove from pending."""
+    cache = get_pending_cache()
+    kg = await get_knowledge_graph()
+
+    try:
+        logger.info(f"Background: adding to graph {message_id[:8]}...")
+        result = await kg.add_episode(
+            message=message,
+            project_id=project_id,
+            user_id=user_id,
+            user_name=user_name,
+        )
+        if result["success"]:
+            logger.info(f"Background: completed {message_id[:8]}, nodes={result.get('nodes_created', 0)}")
+        else:
+            logger.warning(f"Background: failed {message_id[:8]}: {result.get('error')}")
+    except Exception as e:
+        logger.error(f"Background: error {message_id[:8]}: {e}")
+    finally:
+        await cache.remove(project_id, message_id)
+        logger.debug(f"Background: removed from pending {message_id[:8]}")
 
 
 async def process_message(
     request: ChatRequest,
     kg: KnowledgeGraph,
+    background_tasks: BackgroundTasks,
     user: Optional[dict] = None,
 ) -> ChatResponse:
     """Process a chat message with classification-based flow."""
@@ -91,8 +124,10 @@ async def process_message(
         return await _handle_question(
             request, kg, project_id, user_name, classification.search_query
         )
-    else:  # DATA (includes corrections, updates, commands)
-        return await _handle_data(request, kg, project_id, user_id, user_name)
+    else:  # DATA
+        return await _handle_data(
+            request, kg, project_id, user_id, user_name, background_tasks
+        )
 
 
 async def _handle_data(
@@ -101,25 +136,41 @@ async def _handle_data(
     project_id: str,
     user_id: str,
     user_name: Optional[str],
+    background_tasks: BackgroundTasks,
 ) -> ChatResponse:
-    """Handle DATA message - add to graph with context-aware response."""
-    # Add to knowledge graph first
-    add_result = await kg.add_episode(
+    """Handle DATA message with pending cache and background processing."""
+    cache = get_pending_cache()
+    message_id = str(uuid.uuid4())
+
+    # 1. Instantly add to pending cache
+    await cache.add(
+        project_id=project_id,
+        message_id=message_id,
+        user_name=user_name or "User",
+        text=request.message,
+    )
+    logger.info(f"Added to pending cache: {message_id[:8]}...")
+
+    # 2. Schedule background graph update
+    background_tasks.add_task(
+        _add_to_graph_background,
+        message_id=message_id,
         message=request.message,
         project_id=project_id,
         user_id=user_id,
         user_name=user_name,
     )
 
-    if not add_result["success"]:
-        logger.warning(f"Failed to add to graph: {add_result.get('error')}")
-
-    # Search for context to generate better response
+    # 3. Search graph for existing context
     search_result = await kg.search(request.message, project_id)
     edges = search_result.get("edges", []) if search_result["success"] else []
     nodes = search_result.get("nodes", []) if search_result["success"] else []
 
-    # Generate response
+    # 4. Get pending messages (including the one we just added)
+    pending = await cache.get_pending(project_id)
+    pending_context = cache.format_for_prompt(pending)
+
+    # 5. Generate response with graph + pending
     facts, entities = _format_context(edges, nodes)
     settings = get_settings()
     prompt = format_response_prompt(
@@ -128,6 +179,7 @@ async def _handle_data(
         entities=entities,
         user_name=user_name,
         project_id=project_id,
+        pending_context=pending_context,
     )
 
     try:
@@ -140,7 +192,7 @@ async def _handle_data(
         reply=reply,
         sources=[e["fact"] for e in edges[:3]],
         confidence=1.0,
-        entities_extracted=add_result.get("nodes_created", 0),
+        entities_extracted=0,  # Will be updated in background
         message_type="DATA",
     )
 
@@ -152,7 +204,8 @@ async def _handle_question(
     user_name: Optional[str],
     search_query: Optional[str],
 ) -> ChatResponse:
-    """Handle QUESTION message - search and answer."""
+    """Handle QUESTION message - search graph + pending and answer."""
+    cache = get_pending_cache()
     query = search_query or request.message
 
     # Search knowledge graph
@@ -166,7 +219,14 @@ async def _handle_question(
 
     _log_context(query, edges, nodes)
 
-    # Generate response
+    # Get pending messages for this project
+    pending = await cache.get_pending(project_id)
+    pending_context = cache.format_for_prompt(pending)
+
+    if pending:
+        logger.info(f"Including {len(pending)} pending messages in context")
+
+    # Generate response with graph + pending
     facts, entities = _format_context(edges, nodes)
     settings = get_settings()
     prompt = format_response_prompt(
@@ -175,6 +235,7 @@ async def _handle_question(
         entities=entities,
         user_name=user_name,
         project_id=project_id,
+        pending_context=pending_context,
     )
 
     try:
@@ -186,14 +247,14 @@ async def _handle_question(
     return ChatResponse(
         reply=reply,
         sources=[e["fact"] for e in edges[:5]],
-        confidence=1.0 if edges else 0.7,
+        confidence=1.0 if edges or pending else 0.7,
         entities_extracted=0,
         message_type="QUESTION",
         debug_context={
             "query_used": query,
-            "edges": edges[:15],
-            "nodes": nodes,
-            "prompt": prompt,
+            "edges_count": len(edges),
+            "nodes_count": len(nodes),
+            "pending_count": len(pending),
         },
     )
 
@@ -201,11 +262,12 @@ async def _handle_question(
 @router.post("", response_model=ChatResponse)
 async def send_message(
     request: ChatRequest,
+    background_tasks: BackgroundTasks,
     kg: KnowledgeGraph = Depends(get_knowledge_graph),
     user: Optional[dict] = Depends(get_current_user_optional),
 ) -> ChatResponse:
     """Process a chat message."""
-    return await process_message(request, kg, user)
+    return await process_message(request, kg, background_tasks, user)
 
 
 class BuildCommunitiesRequest(BaseModel):
@@ -218,11 +280,7 @@ async def build_communities(
     request: BuildCommunitiesRequest,
     kg: KnowledgeGraph = Depends(get_knowledge_graph),
 ) -> dict:
-    """Build communities for a project.
-
-    This is an expensive operation that clusters entities and generates
-    summaries using LLM. Run this after adding significant data.
-    """
+    """Build communities for a project."""
     result = await kg.build_communities(request.project_id)
     if not result["success"]:
         raise HTTPException(status_code=500, detail=result.get("error", "Build failed"))
@@ -234,8 +292,10 @@ async def health_check(
     kg: KnowledgeGraph = Depends(get_knowledge_graph),
 ) -> dict:
     """Health check endpoint."""
+    cache = get_pending_cache()
     return {
         "status": "healthy",
         "graphiti_initialized": kg._initialized,
+        "pending_cache": cache.get_stats(),
         "timestamp": datetime.now().isoformat(),
     }
