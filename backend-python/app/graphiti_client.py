@@ -21,6 +21,9 @@ from graphiti_core.search.search_config import (
     NodeSearchConfig,
     NodeSearchMethod,
     NodeReranker,
+    CommunitySearchConfig,
+    CommunitySearchMethod,
+    CommunityReranker,
 )
 
 from .config import get_settings
@@ -139,20 +142,31 @@ class KnowledgeGraph:
     ) -> dict:
         """Search the knowledge graph.
 
-        Returns raw results - no filtering or post-processing.
-        Let the LLM decide what's relevant.
+        Uses hybrid search with graph traversal and cross-encoder reranking:
+        - BM25: keyword matching
+        - Cosine similarity: semantic search
+        - BFS: graph traversal to find connected entities
+        - Cross-encoder: neural reranking for better relevance
         """
         logger.info(f"Searching: {query[:80]}...")
 
         try:
             config = SearchConfig(
                 edge_config=EdgeSearchConfig(
-                    search_methods=[EdgeSearchMethod.bm25, EdgeSearchMethod.cosine_similarity],
-                    reranker=EdgeReranker.rrf,
+                    search_methods=[
+                        EdgeSearchMethod.bm25,
+                        EdgeSearchMethod.cosine_similarity,
+                        EdgeSearchMethod.bfs,  # Graph traversal
+                    ],
+                    reranker=EdgeReranker.cross_encoder,  # Better ranking
                 ),
                 node_config=NodeSearchConfig(
-                    search_methods=[NodeSearchMethod.bm25, NodeSearchMethod.cosine_similarity],
-                    reranker=NodeReranker.rrf,
+                    search_methods=[
+                        NodeSearchMethod.bm25,
+                        NodeSearchMethod.cosine_similarity,
+                        NodeSearchMethod.bfs,  # Graph traversal
+                    ],
+                    reranker=NodeReranker.cross_encoder,  # Better ranking
                 ),
                 limit=limit,
             )

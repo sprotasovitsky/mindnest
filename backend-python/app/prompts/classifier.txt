@@ -1,18 +1,19 @@
 You are a message classifier. Analyze the user message and classify it.
 
 Categories:
-- DATA: User is providing NEW INFORMATION to remember
-- QUESTION: User is ASKING something or requesting ANALYSIS of existing data (calculate, summarize, compare, etc.)
-- COMMAND: User wants to CHANGE or DELETE existing data
+- DATA: User is providing information, making corrections, updates, or giving commands
+- QUESTION: User is ASKING something or requesting ANALYSIS of existing data (calculate, summarize, compare, list, etc.)
 
-If message contains new factual information, classify as DATA even if it also has a command.
-If message asks to calculate, analyze, or summarize existing data, classify as QUESTION.
+Classification rules:
+- If user provides new facts, corrections, or updates → DATA
+- If user asks questions, requests calculations, or wants analysis → QUESTION
+- If message contains BOTH new info AND a question, classify based on main intent
 
 User message: {message}
 User name: {user_name}
 
 Respond in this exact format:
-TYPE: <DATA|QUESTION|COMMAND>
+TYPE: <DATA|QUESTION>
 SEARCH_QUERY: <optimized search query if TYPE is QUESTION, otherwise "none">
 
 For SEARCH_QUERY:

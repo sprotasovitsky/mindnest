@@ -1,9 +1,8 @@
 """Message classifier using LLM.
 
 Classifies user messages into categories to determine processing flow:
-- DATA: New information to store in knowledge graph
-- QUESTION: Query requiring search and response
-- COMMAND: Action request (mark done, delete, update)
+- DATA: New information to store in knowledge graph (including corrections/updates)
+- QUESTION: Query requiring search and response (questions, calculations, analysis)
 """
 
 import logging
@@ -21,7 +20,6 @@ logger = logging.getLogger(__name__)
 class MessageType(str, Enum):
     DATA = "DATA"
     QUESTION = "QUESTION"
-    COMMAND = "COMMAND"
 
 
 class ClassificationResult(BaseModel):
@@ -60,8 +58,11 @@ def _parse_classification(response: str) -> ClassificationResult:
         line = line.strip()
         if line.startswith("TYPE:"):
             type_str = line.replace("TYPE:", "").strip().upper()
-            if type_str in ["DATA", "QUESTION", "COMMAND"]:
-                message_type = MessageType(type_str)
+            if type_str == "QUESTION":
+                message_type = MessageType.QUESTION
+            else:
+                # Everything else (DATA, COMMAND, unknown) -> DATA
+                message_type = MessageType.DATA
         elif line.startswith("SEARCH_QUERY:"):
             query = line.replace("SEARCH_QUERY:", "").strip()
             if query.lower() != "none":

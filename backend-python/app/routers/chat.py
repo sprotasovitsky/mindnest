@@ -82,15 +82,11 @@ async def process_message(
     logger.info(f"Classified as {classification.message_type}: {request.message[:50]}...")
 
     # Step 2: Process based on type
-    if classification.message_type == MessageType.DATA:
-        return await _handle_data(request, kg, project_id, user_id, user_name)
-
-    elif classification.message_type == MessageType.QUESTION:
+    if classification.message_type == MessageType.QUESTION:
         return await _handle_question(
             request, kg, project_id, user_name, classification.search_query
         )
-
-    else:  # COMMAND - treat as DATA for now
+    else:  # DATA (includes corrections, updates, commands)
         return await _handle_data(request, kg, project_id, user_id, user_name)
 
 
@@ -101,8 +97,12 @@ async def _handle_data(
     user_id: str,
     user_name: Optional[str],
 ) -> ChatResponse:
-    """Handle DATA message - add to graph and generate ack."""
-    # Add to knowledge graph
+    """Handle DATA message - add to graph with context-aware response.
+
+    Now includes search to provide context for better responses,
+    especially for corrections and updates.
+    """
+    # Add to knowledge graph first
     add_result = await kg.add_episode(
         message=request.message,
         project_id=project_id,
@@ -113,24 +113,34 @@ async def _handle_data(
     if not add_result["success"]:
         logger.warning(f"Failed to add to graph: {add_result.get('error')}")
 
-    # Generate acknowledgment response
+    # Search for context to generate better response
+    search_result = await kg.search(request.message, project_id, limit=20)
+    edges = search_result.get("edges", []) if search_result["success"] else []
+    nodes = search_result.get("nodes", []) if search_result["success"] else []
+
+    # Format for prompts
+    facts = [{"fact": e["fact"], **e} for e in edges]
+    entities = [{"name": n["name"], "summary": n["summary"], **n} for n in nodes]
+
+    # Generate response with context
+    settings = get_settings()
     prompt = format_response_prompt(
         message=request.message,
-        facts=[],  # No search for DATA
-        entities=[],
+        facts=facts,
+        entities=entities,
         user_name=user_name,
         project_id=project_id,
     )
 
     try:
-        reply = await generate_text(prompt)
+        reply = await generate_text(prompt, model=settings.llm_model_pro)
     except Exception as e:
         logger.error(f"Failed to generate response: {e}")
         reply = "Got it! I've recorded that information."
 
     return ChatResponse(
         reply=reply,
-        sources=[],
+        sources=[e["fact"] for e in edges[:3]],
         confidence=1.0,
         entities_extracted=add_result.get("nodes_created", 0),
         message_type="DATA",
