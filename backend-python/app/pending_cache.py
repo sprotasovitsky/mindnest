@@ -82,9 +82,9 @@ class PendingCache:
 
         lines = [
             "",
-            "## Recent Messages (PRIORITY - not yet in graph)",
-            "These are the MOST RECENT messages. They override any conflicting information in the graph above.",
-            "Parse these messages to extract: shopping items, task assignments, expenses, task completions, etc.",
+            "### 3. Recent Messages (HIGHEST PRIORITY - not yet in graph)",
+            "Raw messages just received. These override any conflicting info from Facts or Entities above.",
+            "Extract: items, quantities, prices, task completions, assignments, corrections.",
             "",
         ]
         for msg in messages:

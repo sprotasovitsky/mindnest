@@ -4,12 +4,14 @@
 
 ---
 
-## Current Knowledge Graph Context
+## Data Sources
 
-### Facts (ordered by time, newest first)
+### 1. Facts from Knowledge Graph (structured, processed)
+Individual facts extracted from previous messages. Check `expired_at` - null means current, timestamp means outdated.
 {facts_text}
 
-### Relevant Entities
+### 2. Entity Summaries (aggregated knowledge)
+Synthesized information about people, items, and concepts mentioned in the project.
 {entities_text}
 {pending_context}
 ---
