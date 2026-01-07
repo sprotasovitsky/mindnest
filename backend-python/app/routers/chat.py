@@ -233,6 +233,7 @@ async def process_message(
     background_tasks: BackgroundTasks,
     user: Optional[dict] = None,
     chat_history: str = "",
+    project_description: Optional[str] = None,
 ) -> ChatResponse:
     """Process a chat message with classification-based flow."""
     project_id = request.get_project_id()
@@ -246,11 +247,11 @@ async def process_message(
     # Step 2: Process based on type
     if classification.message_type == MessageType.QUESTION:
         return await _handle_question(
-            request, kg, project_id, user_name, classification.search_query, chat_history
+            request, kg, project_id, user_name, classification.search_query, chat_history, project_description
         )
     else:  # DATA
         return await _handle_data(
-            request, kg, project_id, user_id, user_name, background_tasks, chat_history
+            request, kg, project_id, user_id, user_name, background_tasks, chat_history, project_description
         )
 
 
@@ -262,6 +263,7 @@ async def _handle_data(
     user_name: Optional[str],
     background_tasks: BackgroundTasks,
     chat_history: str = "",
+    project_description: Optional[str] = None,
 ) -> ChatResponse:
     """Handle DATA message with pending cache and background processing."""
     cache = get_pending_cache()
@@ -295,7 +297,7 @@ async def _handle_data(
     pending = await cache.get_pending(project_id)
     pending_context = cache.format_for_prompt(pending)
 
-    # 5. Generate response with graph + pending + history
+    # 5. Generate response with graph + pending + history + project context
     facts, entities = _format_context(edges, nodes)
     settings = get_settings()
     prompt = format_response_prompt(
@@ -306,6 +308,7 @@ async def _handle_data(
         project_id=project_id,
         pending_context=pending_context,
         chat_history=chat_history,
+        project_description=project_description,
     )
 
     try:
@@ -330,6 +333,7 @@ async def _handle_question(
     user_name: Optional[str],
     search_query: Optional[str],
     chat_history: str = "",
+    project_description: Optional[str] = None,
 ) -> ChatResponse:
     """Handle QUESTION message - search graph + pending and answer."""
     cache = get_pending_cache()
@@ -354,7 +358,7 @@ async def _handle_question(
 
     _log_context(query, edges, nodes)
 
-    # Generate response with graph + pending + history
+    # Generate response with graph + pending + history + project context
     facts, entities = _format_context(edges, nodes)
     settings = get_settings()
     prompt = format_response_prompt(
@@ -365,6 +369,7 @@ async def _handle_question(
         project_id=project_id,
         pending_context=pending_context,
         chat_history=chat_history,
+        project_description=project_description,
     )
 
     try:
@@ -448,7 +453,9 @@ async def send_message(
             )
     else:
         # Normal flow - project has description
-        response = await process_message(request, kg, background_tasks, user, chat_history)
+        response = await process_message(
+            request, kg, background_tasks, user, chat_history, project.description
+        )
 
     # Save message to history (don't block on save errors)
     try:

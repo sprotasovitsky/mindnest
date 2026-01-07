@@ -24,6 +24,9 @@ Your previous responses in this conversation. Use this for consistency and conte
 {chat_history}
 ---
 
+## Project Context
+This project is about: {project_description}
+
 ## User Information
 - Current user: {user_name}
 - Project: {project_id}
