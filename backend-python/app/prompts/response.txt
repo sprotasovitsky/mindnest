@@ -18,6 +18,10 @@ Synthesized information about people, items, and concepts mentioned in the proje
 These messages were JUST received and will REPLACE Facts/Entities after processing.
 If conflicts exist, ALWAYS trust this section over sections 1 and 2.
 {pending_context}
+
+### 4. Conversation History (previous exchanges in this session)
+Your previous responses in this conversation. Use this for consistency and context.
+{chat_history}
 ---
 
 ## User Information
@@ -36,5 +40,6 @@ If conflicts exist, ALWAYS trust this section over sections 1 and 2.
 4. Be concise and helpful
 5. If you don't have enough context to answer, say so clearly
 6. Respond in the same language as the user's message
+7. Maintain consistency with your previous responses in the conversation history
 
 ## Response:

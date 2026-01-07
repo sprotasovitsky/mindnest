@@ -59,3 +59,20 @@ class ProjectMember(Base):
     __table_args__ = (
         UniqueConstraint("project_id", "user_id", name="uq_project_user"),
     )
+
+
+class ChatMessage(Base):
+    """Chat message history."""
+    __tablename__ = "chat_messages"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4()))
+    project_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_message: Mapped[str] = mapped_column(Text, nullable=False)
+    assistant_reply: Mapped[str] = mapped_column(Text, nullable=False)
+    message_type: Mapped[str] = mapped_column(String(20), nullable=False)  # DATA or QUESTION
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+
+    # Relationships
+    project: Mapped["Project"] = relationship()
+    user: Mapped["User"] = relationship()

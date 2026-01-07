@@ -55,6 +55,7 @@ def format_response_prompt(
     user_name: Optional[str] = None,
     project_id: Optional[str] = None,
     pending_context: str = "",
+    chat_history: str = "",
 ) -> str:
     """Format the full response prompt with context.
 
@@ -65,6 +66,7 @@ def format_response_prompt(
         user_name: Current user's name
         project_id: Current project ID
         pending_context: Recent messages not yet in graph
+        chat_history: Formatted previous conversation history
 
     Returns:
         Formatted prompt ready for LLM
@@ -85,6 +87,7 @@ def format_response_prompt(
         project_id=project_id or "Unknown",
         message=message,
         pending_context=pending_context,
+        chat_history=chat_history if chat_history else "No previous messages in this session.",
     )
 
 

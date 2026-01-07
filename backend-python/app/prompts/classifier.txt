@@ -21,6 +21,8 @@ For SEARCH_QUERY:
 - Include related terms and synonyms:
   - For "tasks completed": also include "bought", "paid", "purchased", "done", "finished"
   - For "expenses/costs": also include "paid", "spent", "bought", "purchased", "rented", "cost", "rubles"
+  - For "budget/spending questions": include "spent", "paid", "bought", "purchased", "rubles", "expenses", "cost", "shopping", "total" - this is CRITICAL to find actual transactions
   - For "summary": include names of all people involved
 - Include names of people if relevant to the question
 - Make the query broad enough to find all relevant information
+- IMPORTANT: For budget-related questions, always include "shopping", "total", "expenses" to find aggregated spending records

@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     # Search
     search_limit: int = 40  # Max edges/nodes returned from search
 
+    # Chat history
+    chat_history_limit: int = 10  # Number of recent messages to include in LLM context
+
     # App
     secret_key: str = Field(default="change-me-in-production")
     debug: bool = True
