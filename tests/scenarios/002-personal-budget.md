@@ -19,9 +19,23 @@ Single user (Marina) tracks her monthly expenses through chat. She:
 
 ## Users
 
-| Name   | Email              | Password |
-|--------|-------------------|----------|
-| Marina | marina@test.com   | test123  |
+| Name   | Email              | Password | Role   |
+|--------|-------------------|----------|--------|
+| Marina | marina@test.com   | test123  | owner  |
+
+## Project
+
+| Field       | Value                          |
+|-------------|--------------------------------|
+| Name        | My Budget December 2025        |
+
+## Onboarding
+
+```
+Description: "I want to track my personal monthly expenses by categories like food, transport, entertainment, etc."
+Answers: "1. Personal budget tracking with categories and limits. 2. Just me. 3. Stay within monthly budget limits and see spending patterns."
+Confirm: "Yes, save it."
+```
 
 ## Test Execution
 

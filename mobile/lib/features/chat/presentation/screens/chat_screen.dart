@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/api/api_client.dart';
 import '../../../../core/auth/auth_state.dart';
 import '../../../../core/projects/project_state.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/chat_input.dart';
+import '../../../projects/presentation/widgets/project_settings_sheet.dart';
 
 class ChatMessage {
   final String content;
@@ -22,12 +24,27 @@ class ChatMessage {
   }) : timestamp = timestamp ?? DateTime.now();
 }
 
-final messagesProvider = StateProvider<List<ChatMessage>>((ref) => [
-      ChatMessage(
-        content: 'Hi! I\'m MindNest — your personal assistant for knowledge and task management. How can I help?',
-        isUser: false,
-      ),
-    ]);
+/// Get the appropriate first message based on project state
+String _getFirstMessage(Project? project, String? userId) {
+  if (project == null) {
+    return 'Hi! I\'m MindNest — your personal assistant for knowledge and task management. How can I help?';
+  }
+
+  final isOwner = userId != null && project.ownerId == userId;
+
+  if (project.needsOnboarding && isOwner) {
+    // Owner sees onboarding prompt
+    return 'Welcome to your new project! Please tell me what this project is about so I can help you better. What are you working on?';
+  } else if (!project.needsOnboarding) {
+    // Member (or owner after onboarding) sees welcome with project name
+    return 'Welcome to "${project.name}"! How can I help you today?';
+  } else {
+    // Edge case: member joined project without description (shouldn't happen with backend check)
+    return 'Welcome to "${project.name}"! How can I help you today?';
+  }
+}
+
+final messagesProvider = StateProvider<List<ChatMessage>>((ref) => []);
 
 final isLoadingProvider = StateProvider<bool>((ref) => false);
 
@@ -40,6 +57,30 @@ class ChatScreen extends ConsumerStatefulWidget {
 
 class _ChatScreenState extends ConsumerState<ChatScreen> {
   final ScrollController _scrollController = ScrollController();
+  String? _lastProjectId;
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize messages after first frame when providers are ready
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeMessages();
+    });
+  }
+
+  void _initializeMessages() {
+    final projectState = ref.read(projectProvider);
+    final authState = ref.read(authProvider);
+    final project = projectState.currentProject;
+
+    if (project != null && _lastProjectId != project.id) {
+      _lastProjectId = project.id;
+      final firstMessage = _getFirstMessage(project, authState.userId);
+      ref.read(messagesProvider.notifier).state = [
+        ChatMessage(content: firstMessage, isUser: false),
+      ];
+    }
+  }
 
   @override
   void dispose() {
@@ -56,15 +97,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           curve: Curves.easeOut,
         );
       }
-    });
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    // Load projects when chat screen initializes
-    Future.microtask(() {
-      ref.read(projectProvider.notifier).loadProjects();
     });
   }
 
@@ -94,6 +126,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
       final reply = response['reply'] as String? ?? 'No response';
       final confidence = (response['confidence'] as num?)?.toDouble();
+      final messageType = response['message_type'] as String? ?? '';
 
       messages.state = [
         ...messages.state,
@@ -103,6 +136,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           confidence: confidence,
         ),
       ];
+
+      // After onboarding response, refresh project to get updated description
+      if (messageType == 'ONBOARDING') {
+        await ref.read(projectProvider.notifier).loadProjects();
+      }
     } catch (e) {
       String errorMessage;
       if (e is ApiException) {
@@ -124,10 +162,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
   }
 
-  void _showProjectSwitcher(BuildContext context) {
+  void _showProjectSettings() {
     showModalBottomSheet(
       context: context,
-      builder: (context) => const ProjectSwitcherSheet(),
+      isScrollControlled: true,
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: const ProjectSettingsSheet(),
+      ),
     );
   }
 
@@ -135,24 +179,38 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Widget build(BuildContext context) {
     final messages = ref.watch(messagesProvider);
     final isLoading = ref.watch(isLoadingProvider);
+    final projectState = ref.watch(projectProvider);
+    final project = projectState.currentProject;
+    final canAddMembers = project != null && !project.needsOnboarding;
+
+    // Check if project changed and reinitialize messages
+    if (project != null && _lastProjectId != project.id) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _initializeMessages();
+      });
+    }
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('MindNest'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.go('/projects'),
+        ),
+        title: Text(project?.name ?? 'Chat'),
         actions: [
+          // Only show members button after onboarding is complete
+          if (canAddMembers)
+            IconButton(
+              key: const Key('members_button'),
+              icon: const Icon(Icons.group_outlined),
+              onPressed: () => context.push('/members'),
+              tooltip: 'Members',
+            ),
           IconButton(
-            icon: const Icon(Icons.folder_outlined),
-            onPressed: () {
-              _showProjectSwitcher(context);
-            },
-            tooltip: 'Projects',
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () {
-              ref.read(authProvider.notifier).logout();
-            },
-            tooltip: 'Logout',
+            key: const Key('settings_button'),
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: _showProjectSettings,
+            tooltip: 'Settings',
           ),
         ],
       ),
@@ -194,157 +252,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ],
         ),
       ),
-    );
-  }
-}
-
-class ProjectSwitcherSheet extends ConsumerStatefulWidget {
-  const ProjectSwitcherSheet({super.key});
-
-  @override
-  ConsumerState<ProjectSwitcherSheet> createState() => _ProjectSwitcherSheetState();
-}
-
-class _ProjectSwitcherSheetState extends ConsumerState<ProjectSwitcherSheet> {
-  final _nameController = TextEditingController();
-  bool _isCreating = false;
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _createProject() async {
-    if (_nameController.text.trim().isEmpty) return;
-
-    setState(() => _isCreating = true);
-    final project = await ref.read(projectProvider.notifier).createProject(
-          _nameController.text.trim(),
-          null,
-        );
-    setState(() => _isCreating = false);
-
-    if (project != null && mounted) {
-      _nameController.clear();
-      Navigator.pop(context);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final projectState = ref.watch(projectProvider);
-
-    return DraggableScrollableSheet(
-      initialChildSize: 0.5,
-      minChildSize: 0.3,
-      maxChildSize: 0.9,
-      expand: false,
-      builder: (context, scrollController) {
-        return Container(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Projects',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 16),
-
-              // Create new project
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _nameController,
-                      decoration: const InputDecoration(
-                        hintText: 'New project name',
-                        border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      ),
-                      onSubmitted: (_) => _createProject(),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton.filled(
-                    onPressed: _isCreating ? null : _createProject,
-                    icon: _isCreating
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.add),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // Project list
-              Expanded(
-                child: projectState.isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : projectState.projects.isEmpty
-                        ? const Center(
-                            child: Text('No projects yet. Create your first project above.'),
-                          )
-                        : ListView.builder(
-                            controller: scrollController,
-                            itemCount: projectState.projects.length,
-                            itemBuilder: (context, index) {
-                              final project = projectState.projects[index];
-                              final isSelected = project.id == projectState.currentProject?.id;
-
-                              return ListTile(
-                                leading: Icon(
-                                  isSelected ? Icons.folder : Icons.folder_outlined,
-                                  color: isSelected
-                                      ? Theme.of(context).colorScheme.primary
-                                      : null,
-                                ),
-                                title: Text(
-                                  project.name,
-                                  style: TextStyle(
-                                    fontWeight: isSelected ? FontWeight.bold : null,
-                                  ),
-                                ),
-                                subtitle: project.description != null
-                                    ? Text(
-                                        project.description!,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      )
-                                    : null,
-                                trailing: isSelected
-                                    ? Icon(
-                                        Icons.check_circle,
-                                        color: Theme.of(context).colorScheme.primary,
-                                      )
-                                    : null,
-                                onTap: () {
-                                  ref.read(projectProvider.notifier).selectProject(project);
-                                  Navigator.pop(context);
-                                },
-                              );
-                            },
-                          ),
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
 }

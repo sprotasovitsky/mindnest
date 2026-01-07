@@ -19,10 +19,24 @@ Two friends (Lena and Katya) run a book club. They:
 
 ## Users
 
-| Name  | Email           | Password |
-|-------|----------------|----------|
-| Lena  | lena@test.com  | test123  |
-| Katya | katya@test.com | test123  |
+| Name  | Email           | Password | Role   |
+|-------|----------------|----------|--------|
+| Lena  | lena@test.com  | test123  | owner  |
+| Katya | katya@test.com | test123  | member |
+
+## Project
+
+| Field       | Value                          |
+|-------------|--------------------------------|
+| Name        | Our Book Club 2025             |
+
+## Onboarding
+
+```
+Description: "We run a book club together and want to track books, ratings, quotes, and schedule meetings."
+Answers: "1. Track read books, save quotes, rate books, plan next reads. 2. Two friends - Lena and Katya. 3. Organized book tracking and fun discussions."
+Confirm: "Yes, save it."
+```
 
 ## Test Execution
 

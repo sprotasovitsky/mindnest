@@ -117,12 +117,14 @@ async def save_chat_message(
 async def get_chat_history(
     db: AsyncSession,
     project_id: str,
+    user_id: str,
     limit: int = 10,
 ) -> list[ChatMessage]:
-    """Get recent chat history for a project."""
+    """Get recent chat history for a user in a project."""
     query = (
         select(ChatMessage)
         .where(ChatMessage.project_id == project_id)
+        .where(ChatMessage.user_id == user_id)
         .order_by(desc(ChatMessage.created_at))
         .limit(limit)
     )
@@ -313,6 +315,9 @@ async def _handle_data(
 
     try:
         reply = await generate_text(prompt, model=settings.llm_model_pro)
+        if not reply or not reply.strip():
+            logger.warning("LLM returned empty response for DATA message")
+            reply = "Got it! I've recorded that information."
     except Exception as e:
         logger.error(f"Failed to generate response: {e}")
         reply = "Got it! I've recorded that information."
@@ -374,6 +379,9 @@ async def _handle_question(
 
     try:
         reply = await generate_text(prompt, model=settings.llm_model_pro)
+        if not reply or not reply.strip():
+            logger.warning("LLM returned empty response for QUESTION message")
+            reply = "Sorry, I couldn't generate a response. Please try again."
     except Exception as e:
         logger.error(f"Failed to generate response: {e}")
         reply = "Sorry, I encountered an error. Please try again."
@@ -406,9 +414,9 @@ async def send_message(
     user_id = request.user_id or (user["id"] if user else "anonymous")
     user_name = request.user_name or (user.get("name") if user else None)
 
-    # Get chat history for context
+    # Get chat history for context (user-specific)
     settings = get_settings()
-    history_messages = await get_chat_history(db, project_id, settings.chat_history_limit)
+    history_messages = await get_chat_history(db, project_id, user_id, settings.chat_history_limit)
     chat_history = format_history_for_prompt(history_messages)
 
     # Check if project needs onboarding (no description set)
@@ -495,9 +503,11 @@ async def get_history(
     project_id: str = Query(..., description="Project ID to get history for"),
     limit: int = Query(default=50, le=100, description="Max messages to return"),
     db: AsyncSession = Depends(get_db),
+    user: Optional[dict] = Depends(get_current_user_optional),
 ) -> ChatHistoryResponse:
-    """Get chat history for a project."""
-    messages = await get_chat_history(db, project_id, limit)
+    """Get chat history for a project (filtered by user)."""
+    user_id = user["id"] if user else "anonymous"
+    messages = await get_chat_history(db, project_id, user_id, limit)
     return ChatHistoryResponse(
         messages=[
             ChatHistoryItem(

@@ -27,6 +27,12 @@ class CreateProjectRequest(BaseModel):
     description: Optional[str] = None
 
 
+class UpdateProjectRequest(BaseModel):
+    """Update project request."""
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+
 class AddMemberRequest(BaseModel):
     """Add member request."""
     email: EmailStr
@@ -148,6 +154,13 @@ async def add_member(
             detail="Not a member of this project",
         )
 
+    # Block adding members until onboarding is complete (description exists)
+    if not project.description:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Complete project onboarding before adding members",
+        )
+
     # Get member user
     member_user = await get_user_by_email(db, request.email)
     if not member_user:
@@ -184,6 +197,100 @@ async def add_member(
         email=member_user.email,
         role="member",
     )
+
+
+@router.patch("/{project_id}", response_model=ProjectResponse)
+async def update_project(
+    project_id: str,
+    request: UpdateProjectRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ProjectResponse:
+    """Update a project."""
+    logger.info(f"Updating project: {project_id}")
+
+    # Get project with members
+    result = await db.execute(
+        select(Project)
+        .options(selectinload(Project.members))
+        .where(Project.id == project_id)
+    )
+    project = result.scalar_one_or_none()
+
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found",
+        )
+
+    # Check if user is member
+    is_member = any(m.user_id == user.id for m in project.members)
+    if not is_member:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not a member of this project",
+        )
+
+    # Update fields
+    if request.name is not None:
+        project.name = request.name
+    if request.description is not None:
+        project.description = request.description
+
+    await db.commit()
+    await db.refresh(project)
+
+    logger.info(f"Project updated: {project_id}")
+
+    return ProjectResponse(
+        id=project.id,
+        name=project.name,
+        description=project.description,
+        owner_id=project.owner_id,
+    )
+
+
+@router.get("/{project_id}/members", response_model=list[MemberResponse])
+async def get_members(
+    project_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[MemberResponse]:
+    """Get all members of a project."""
+    # Get project with members
+    result = await db.execute(
+        select(Project)
+        .options(selectinload(Project.members))
+        .where(Project.id == project_id)
+    )
+    project = result.scalar_one_or_none()
+
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found",
+        )
+
+    # Check if user is member
+    is_member = any(m.user_id == user.id for m in project.members)
+    if not is_member:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not a member of this project",
+        )
+
+    # Get user details for each member
+    members = []
+    for m in project.members:
+        member_user = await get_user_by_id(db, m.user_id)
+        if member_user:
+            members.append(MemberResponse(
+                user_id=m.user_id,
+                email=member_user.email,
+                role=m.role,
+            ))
+
+    return members
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)

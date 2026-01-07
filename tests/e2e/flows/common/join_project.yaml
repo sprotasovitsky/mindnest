@@ -1,0 +1,17 @@
+# Join an existing project (for members added by owner)
+# Input: PROJECT_NAME - name of the project to join
+# Assumes user is on Projects List screen after login
+appId: com.mindnest.mindnest
+---
+# Wait for project to appear in list (owner must have added this user)
+- extendedWaitUntil:
+    visible: ${PROJECT_NAME}
+    timeout: 60000
+
+# Tap on project to open it
+- tapOn: ${PROJECT_NAME}
+
+# Wait for chat screen
+- extendedWaitUntil:
+    visible: "Type a message..."
+    timeout: 15000

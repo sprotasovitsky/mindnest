@@ -63,6 +63,7 @@ class _ChatInputState extends State<ChatInput> {
         children: [
           Expanded(
             child: TextField(
+              key: const Key('chat_input_field'),
               controller: _controller,
               maxLines: 5,
               minLines: 1,
@@ -87,6 +88,7 @@ class _ChatInputState extends State<ChatInput> {
           AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             child: IconButton.filled(
+              key: const Key('send_button'),
               onPressed: _hasText ? _send : null,
               icon: const Icon(Icons.send_rounded),
               style: IconButton.styleFrom(

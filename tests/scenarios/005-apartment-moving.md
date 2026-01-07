@@ -19,11 +19,25 @@ A family of three (Pavel - husband, Anya - wife, Grandma Vera) moves to a new ap
 
 ## Users
 
-| Name  | Email           | Password |
-|-------|----------------|----------|
-| Pavel | pavel@test.com | test123  |
-| Anya  | anya@test.com  | test123  |
-| Vera  | vera@test.com  | test123  |
+| Name  | Email           | Password | Role   |
+|-------|----------------|----------|--------|
+| Pavel | pavel@test.com | test123  | owner  |
+| Anya  | anya@test.com  | test123  | member |
+| Vera  | vera@test.com  | test123  | member |
+
+## Project
+
+| Field       | Value                          |
+|-------------|--------------------------------|
+| Name        | Moving to New Apartment        |
+
+## Onboarding
+
+```
+Description: "Our family is moving to a new apartment in January. We need to coordinate packing, logistics, and track everything."
+Answers: "1. Inventory by room, packing tasks, moving day logistics. 2. Three family members - Pavel, Anya, and Grandma Vera. 3. Smooth move with nothing lost or forgotten."
+Confirm: "Yes, save it."
+```
 
 ## Test Execution
 

@@ -40,11 +40,14 @@ Synthesize all information into a final description. Format:
 
 Does this capture it well? Reply 'yes' to confirm, or tell me what to adjust."
 
-### Step 4: User confirmed (said yes, ok, correct, да, ок, верно, etc.)
-Respond with EXACTLY this format (the system will parse it):
-"DESCRIPTION_CONFIRMED: [The final description text]
+### Step 4: User confirmed (said yes, ok, correct, да, ок, верно, save, looks good, perfect, etc.)
+CRITICAL: You MUST respond with EXACTLY this format. The system parses this marker to save the description:
 
-Great! Your project is all set up. You can now start adding information and asking questions. How can I help you today?"
+DESCRIPTION_CONFIRMED: [Copy the exact final description text here]
+
+Great! Your project is all set up. You can now start adding information and asking questions. How can I help you today?
+
+IMPORTANT: The line starting with "DESCRIPTION_CONFIRMED:" is REQUIRED for the system to work. Without it, the project setup will not complete.
 
 ## Context
 

@@ -1,0 +1,68 @@
+# Complete project onboarding
+# Input:
+#   PROJECT_DESCRIPTION - initial project description
+#   ONBOARDING_ANSWERS - answers to clarifying questions (optional)
+#   ONBOARDING_CONFIRM - confirmation message (optional, default: "Yes, save it.")
+# Assumes user is on Chat screen after creating project
+appId: com.mindnest.mindnest
+---
+# Verify we see the onboarding prompt (first message for owner)
+- extendedWaitUntil:
+    visible: ".*Welcome to your new project.*"
+    timeout: 10000
+
+# Enter project description
+- tapOn: "Type a message..."
+- inputText: ${PROJECT_DESCRIPTION}
+- hideKeyboard
+
+# Send (tap the send button)
+- tapOn:
+    point: "95%,92%"
+
+# Wait for response
+- extendedWaitUntil:
+    visible: "Thinking..."
+    timeout: 10000
+- extendedWaitUntil:
+    notVisible: "Thinking..."
+    timeout: 60000
+
+# LLM will ask clarifying questions - answer them
+- tapOn: "Type a message..."
+- inputText: ${ONBOARDING_ANSWERS}
+- hideKeyboard
+
+# Send
+- tapOn:
+    point: "95%,92%"
+
+# Wait for response
+- extendedWaitUntil:
+    visible: "Thinking..."
+    timeout: 10000
+- extendedWaitUntil:
+    notVisible: "Thinking..."
+    timeout: 60000
+
+# LLM should present summary - confirm it
+- tapOn: "Type a message..."
+- inputText: ${ONBOARDING_CONFIRM}
+- hideKeyboard
+
+# Send
+- tapOn:
+    point: "95%,92%"
+
+# Wait for response
+- extendedWaitUntil:
+    visible: "Thinking..."
+    timeout: 10000
+- extendedWaitUntil:
+    notVisible: "Thinking..."
+    timeout: 60000
+
+# After onboarding complete, members button should appear
+- extendedWaitUntil:
+    visible: ".*Members.*"
+    timeout: 15000

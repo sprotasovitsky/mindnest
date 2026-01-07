@@ -16,9 +16,23 @@ Test edge cases and robustness:
 
 ## Users
 
-| Name   | Email              | Password |
-|--------|--------------------|----------|
-| Тестер | tester@test.com    | test123  |
+| Name   | Email              | Password | Role   |
+|--------|--------------------|----------|--------|
+| Тестер | tester@test.com    | test123  | owner  |
+
+## Project
+
+| Field       | Value                          |
+|-------------|--------------------------------|
+| Name        | Edge Cases Test                |
+
+## Onboarding
+
+```
+Description: "Testing edge cases: long messages, special characters, emoji, unicode, deletions."
+Answers: "1. Test robustness with edge cases. 2. Just me - the tester. 3. Verify system handles all edge cases correctly."
+Confirm: "Yes, save it."
+```
 
 ## Test Execution
 

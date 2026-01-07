@@ -46,7 +46,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
 
     if (success && mounted) {
-      context.go('/chat');
+      context.go('/projects');
     }
   }
 
@@ -92,6 +92,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                     if (!_isLogin) ...[
                       TextFormField(
+                        key: const Key('register_name_field'),
                         controller: _nameController,
                         decoration: const InputDecoration(
                           labelText: 'Name (optional)',
@@ -104,6 +105,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ],
 
                     TextFormField(
+                      key: Key(_isLogin ? 'login_email_field' : 'register_email_field'),
                       controller: _emailController,
                       decoration: const InputDecoration(
                         labelText: 'Email',
@@ -125,6 +127,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     const SizedBox(height: 16),
 
                     TextFormField(
+                      key: Key(_isLogin ? 'login_password_field' : 'register_password_field'),
                       controller: _passwordController,
                       decoration: InputDecoration(
                         labelText: 'Password',

@@ -94,7 +94,10 @@ async def generate_text(
             model=model_name,
             contents=prompt,
         )
-        return response.text
+        text = response.text
+        if not text or not text.strip():
+            logger.warning(f"LLM returned empty response. Candidates: {response.candidates}")
+        return text or ""
     except Exception as e:
         logger.error(f"Failed to generate text: {e}")
         raise

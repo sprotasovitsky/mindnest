@@ -27,7 +27,7 @@ class ApiClient {
       BaseOptions(
         baseUrl: const String.fromEnvironment(
           'API_URL',
-          defaultValue: 'http://localhost:8080/api',
+          defaultValue: 'http://10.0.2.2:8000/api',
         ),
         connectTimeout: const Duration(seconds: 30),
         receiveTimeout: const Duration(seconds: 60),
@@ -170,6 +170,37 @@ class ApiClient {
           'name': name,
           if (description != null) 'description': description,
         },
+      );
+      return response.data as Map<String, dynamic>;
+    });
+  }
+
+  Future<Map<String, dynamic>> updateProject(String projectId, {String? name, String? description}) async {
+    return _retryRequest(() async {
+      final response = await _dio.patch(
+        '/projects/$projectId',
+        data: {
+          if (name != null) 'name': name,
+          if (description != null) 'description': description,
+        },
+      );
+      return response.data as Map<String, dynamic>;
+    });
+  }
+
+  // Members endpoints
+  Future<List<dynamic>> getProjectMembers(String projectId) async {
+    return _retryRequest(() async {
+      final response = await _dio.get('/projects/$projectId/members');
+      return response.data as List<dynamic>;
+    });
+  }
+
+  Future<Map<String, dynamic>> addProjectMember(String projectId, String email) async {
+    return _retryRequest(() async {
+      final response = await _dio.post(
+        '/projects/$projectId/members',
+        data: {'email': email},
       );
       return response.data as Map<String, dynamic>;
     });

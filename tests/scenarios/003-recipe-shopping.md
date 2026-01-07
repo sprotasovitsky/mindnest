@@ -19,9 +19,23 @@ Single user (Dmitry) plans a dinner party. He:
 
 ## Users
 
-| Name   | Email            | Password |
-|--------|-----------------|----------|
-| Dmitry | dmitry@test.com | test123  |
+| Name   | Email            | Password | Role   |
+|--------|-----------------|----------|--------|
+| Dmitry | dmitry@test.com | test123  | owner  |
+
+## Project
+
+| Field       | Value                          |
+|-------------|--------------------------------|
+| Name        | Dinner Party Menu              |
+
+## Onboarding
+
+```
+Description: "I'm planning a dinner party and need to manage recipes and shopping lists."
+Answers: "1. Store recipes, extract shopping lists, track what's bought. 2. Just me cooking. 3. Have everything ready for Saturday dinner."
+Confirm: "Yes, save it."
+```
 
 ## Test Execution
 

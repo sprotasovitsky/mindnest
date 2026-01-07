@@ -1,0 +1,29 @@
+# Login an existing user
+# Input: EMAIL, PASSWORD
+appId: com.mindnest.mindnest
+---
+- clearState
+- launchApp
+
+# Wait for login screen
+- extendedWaitUntil:
+    visible: "Sign In"
+    timeout: 60000
+
+# Fill email
+- tapOn: "Email"
+- inputText: ${EMAIL}
+- hideKeyboard
+
+# Fill password
+- tapOn: "Password"
+- inputText: ${PASSWORD}
+- hideKeyboard
+
+# Submit
+- tapOn: "Sign In"
+
+# Wait for projects list (MindNest header appears)
+- extendedWaitUntil:
+    visible: "MindNest"
+    timeout: 30000
