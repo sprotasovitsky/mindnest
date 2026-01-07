@@ -56,6 +56,7 @@ def format_response_prompt(
     project_id: Optional[str] = None,
     pending_context: str = "",
     chat_history: str = "",
+    project_description: Optional[str] = None,
 ) -> str:
     """Format the full response prompt with context.
 
@@ -67,6 +68,7 @@ def format_response_prompt(
         project_id: Current project ID
         pending_context: Recent messages not yet in graph
         chat_history: Formatted previous conversation history
+        project_description: Project description for context
 
     Returns:
         Formatted prompt ready for LLM
@@ -88,6 +90,36 @@ def format_response_prompt(
         message=message,
         pending_context=pending_context,
         chat_history=chat_history if chat_history else "No previous messages in this session.",
+        project_description=project_description or "No description provided yet.",
+    )
+
+
+def get_onboarding_template() -> str:
+    """Get the onboarding prompt template."""
+    return load_prompt("onboarding")
+
+
+def format_onboarding_prompt(
+    message: str,
+    chat_history: str = "",
+    user_name: Optional[str] = None,
+) -> str:
+    """Format the onboarding prompt.
+
+    Args:
+        message: User's current message
+        chat_history: Formatted previous conversation history
+        user_name: Current user's name
+
+    Returns:
+        Formatted prompt for onboarding flow
+    """
+    template = get_onboarding_template()
+
+    return template.format(
+        message=message,
+        chat_history=chat_history if chat_history else "No previous messages.",
+        user_name=user_name or "User",
     )
 
 

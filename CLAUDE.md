@@ -76,7 +76,8 @@ docker-compose logs -f       # View logs
 │   │   ├── system.txt
 │   │   ├── context_guide.txt
 │   │   ├── classifier.txt            # Classification prompt
-│   │   └── response.txt
+│   │   ├── response.txt
+│   │   └── onboarding.txt            # Project onboarding flow
 │   └── routers/
 │       ├── auth.py               # User registration/login
 │       ├── projects.py           # Project management
@@ -120,7 +121,9 @@ User Message → POST /api/chat
                     ▼
            ┌─────────────────────────────────────┐
            │  1. Load Chat History (last 10 msgs) │
-           │  2. Classify Message (DATA/QUESTION) │
+           │  2. Check if project needs onboarding│
+           │     (no description → onboarding)    │
+           │  3. Classify Message (DATA/QUESTION) │
            └─────────────────────────────────────┘
                     │
         ┌───────────┴───────────┐
@@ -140,6 +143,7 @@ User Message → POST /api/chat
            ┌────────────────────────────────────┐
            │  Generate Response (Gemini Pro):    │
            │  • System prompt + context guide    │
+           │  • Project description (context)    │
            │  • Graph facts + entities           │
            │  • Pending messages (HIGHEST PRIO)  │
            │  • Chat history (for consistency)   │
@@ -181,6 +185,20 @@ Config setting:
 ```python
 chat_history_limit: int = 10  # Number of recent messages in context
 ```
+
+### Project Onboarding
+
+When a project has no description set, the system enters **onboarding mode**:
+
+1. **Detection**: Check if `project.description` is empty/null
+2. **Onboarding Flow**: Uses `onboarding.txt` prompt instead of normal processing
+3. **Conversation**: LLM asks user to describe the project, asks 3 clarifying questions
+4. **Confirmation**: User confirms the final description
+5. **Save**: LLM outputs `DESCRIPTION_CONFIRMED: <description>` marker, backend saves to DB
+
+The onboarding uses chat history as a state machine - no explicit state tracking needed.
+
+After onboarding completes, the project description is passed to all subsequent LLM calls via `format_response_prompt()`, providing context about the project's purpose.
 
 ## Graphiti Knowledge Graph
 
@@ -344,6 +362,7 @@ All prompts are stored in `backend-python/app/prompts/`:
 | `context_guide.txt` | How LLM should interpret graph data (expired_at, etc.) |
 | `classifier.txt` | Message classification prompt (DATA vs QUESTION) |
 | `response.txt` | Template combining system prompt + context + user message |
+| `onboarding.txt` | Project onboarding flow (gathering project description) |
 
 ### Data Source Priority (in response.txt)
 
@@ -351,13 +370,15 @@ The LLM receives data from multiple sources with this priority:
 1. **Pending Messages** (HIGHEST) - Just received, not yet in graph
 2. **Knowledge Graph** - Facts and entity summaries from Graphiti
 3. **Chat History** - Previous conversation for consistency
+4. **Project Description** - Context about the project's purpose
 
 ### Prompt Loading
 
 Prompts are loaded via `prompts/__init__.py`:
 - `get_system_prompt()` → loads `system.txt`
 - `get_context_guide()` → loads `context_guide.txt`
-- `format_response_prompt()` → combines all prompts with context
+- `format_response_prompt()` → combines all prompts with context (including project description)
+- `format_onboarding_prompt()` → loads `onboarding.txt` for new projects
 
 ### Modifying Prompts
 

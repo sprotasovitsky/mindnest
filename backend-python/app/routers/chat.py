@@ -21,9 +21,9 @@ from ..config import get_settings
 from ..database import get_db
 from ..graphiti_client import get_knowledge_graph, KnowledgeGraph
 from ..llm import generate_text
-from ..models import ChatMessage
+from ..models import ChatMessage, Project
 from ..pending_cache import get_pending_cache
-from ..prompts import format_response_prompt
+from ..prompts import format_response_prompt, format_onboarding_prompt
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -146,6 +146,57 @@ def format_history_for_prompt(messages: list[ChatMessage]) -> str:
     return "\n".join(lines)
 
 
+async def get_project(db: AsyncSession, project_id: str) -> Optional[Project]:
+    """Get project by ID."""
+    result = await db.execute(select(Project).where(Project.id == project_id))
+    return result.scalar_one_or_none()
+
+
+async def update_project_description(db: AsyncSession, project_id: str, description: str) -> bool:
+    """Update project description."""
+    result = await db.execute(select(Project).where(Project.id == project_id))
+    project = result.scalar_one_or_none()
+    if project:
+        project.description = description
+        await db.commit()
+        return True
+    return False
+
+
+def parse_description_confirmation(reply: str) -> Optional[str]:
+    """Parse DESCRIPTION_CONFIRMED from LLM reply.
+
+    Returns the description if confirmed, None otherwise.
+    """
+    marker = "DESCRIPTION_CONFIRMED:"
+    if marker in reply:
+        # Extract description after the marker
+        parts = reply.split(marker, 1)
+        if len(parts) > 1:
+            # Get the description (first line after marker)
+            description_part = parts[1].strip()
+            # Description ends at double newline or end of string
+            if "\n\n" in description_part:
+                return description_part.split("\n\n")[0].strip()
+            return description_part.split("\n")[0].strip()
+    return None
+
+
+async def process_onboarding(
+    message: str,
+    chat_history: str,
+    user_name: Optional[str],
+) -> str:
+    """Process message in onboarding mode."""
+    settings = get_settings()
+    prompt = format_onboarding_prompt(
+        message=message,
+        chat_history=chat_history,
+        user_name=user_name,
+    )
+    return await generate_text(prompt, model=settings.llm_model_pro)
+
+
 async def _add_to_graph_background(
     message_id: str,
     message: str,
@@ -182,6 +233,7 @@ async def process_message(
     background_tasks: BackgroundTasks,
     user: Optional[dict] = None,
     chat_history: str = "",
+    project_description: Optional[str] = None,
 ) -> ChatResponse:
     """Process a chat message with classification-based flow."""
     project_id = request.get_project_id()
@@ -195,11 +247,11 @@ async def process_message(
     # Step 2: Process based on type
     if classification.message_type == MessageType.QUESTION:
         return await _handle_question(
-            request, kg, project_id, user_name, classification.search_query, chat_history
+            request, kg, project_id, user_name, classification.search_query, chat_history, project_description
         )
     else:  # DATA
         return await _handle_data(
-            request, kg, project_id, user_id, user_name, background_tasks, chat_history
+            request, kg, project_id, user_id, user_name, background_tasks, chat_history, project_description
         )
 
 
@@ -211,6 +263,7 @@ async def _handle_data(
     user_name: Optional[str],
     background_tasks: BackgroundTasks,
     chat_history: str = "",
+    project_description: Optional[str] = None,
 ) -> ChatResponse:
     """Handle DATA message with pending cache and background processing."""
     cache = get_pending_cache()
@@ -244,7 +297,7 @@ async def _handle_data(
     pending = await cache.get_pending(project_id)
     pending_context = cache.format_for_prompt(pending)
 
-    # 5. Generate response with graph + pending + history
+    # 5. Generate response with graph + pending + history + project context
     facts, entities = _format_context(edges, nodes)
     settings = get_settings()
     prompt = format_response_prompt(
@@ -255,6 +308,7 @@ async def _handle_data(
         project_id=project_id,
         pending_context=pending_context,
         chat_history=chat_history,
+        project_description=project_description,
     )
 
     try:
@@ -279,6 +333,7 @@ async def _handle_question(
     user_name: Optional[str],
     search_query: Optional[str],
     chat_history: str = "",
+    project_description: Optional[str] = None,
 ) -> ChatResponse:
     """Handle QUESTION message - search graph + pending and answer."""
     cache = get_pending_cache()
@@ -303,7 +358,7 @@ async def _handle_question(
 
     _log_context(query, edges, nodes)
 
-    # Generate response with graph + pending + history
+    # Generate response with graph + pending + history + project context
     facts, entities = _format_context(edges, nodes)
     settings = get_settings()
     prompt = format_response_prompt(
@@ -314,6 +369,7 @@ async def _handle_question(
         project_id=project_id,
         pending_context=pending_context,
         chat_history=chat_history,
+        project_description=project_description,
     )
 
     try:
@@ -348,14 +404,58 @@ async def send_message(
     """Process a chat message."""
     project_id = request.get_project_id()
     user_id = request.user_id or (user["id"] if user else "anonymous")
+    user_name = request.user_name or (user.get("name") if user else None)
 
     # Get chat history for context
     settings = get_settings()
     history_messages = await get_chat_history(db, project_id, settings.chat_history_limit)
     chat_history = format_history_for_prompt(history_messages)
 
-    # Process message with history context
-    response = await process_message(request, kg, background_tasks, user, chat_history)
+    # Check if project needs onboarding (no description set)
+    project = await get_project(db, project_id)
+    needs_onboarding = project is None or not project.description
+
+    if needs_onboarding:
+        # Onboarding flow
+        logger.info(f"Onboarding mode for project {project_id}")
+        try:
+            reply = await process_onboarding(
+                message=request.message,
+                chat_history=chat_history,
+                user_name=user_name,
+            )
+
+            # Check if description was confirmed
+            confirmed_description = parse_description_confirmation(reply)
+            if confirmed_description:
+                logger.info(f"Description confirmed for project {project_id}: {confirmed_description[:50]}...")
+                await update_project_description(db, project_id, confirmed_description)
+                # Clean up the reply - remove the marker
+                reply = reply.replace(f"DESCRIPTION_CONFIRMED: {confirmed_description}", "").strip()
+                if reply.startswith("\n"):
+                    reply = reply.lstrip("\n")
+
+            response = ChatResponse(
+                reply=reply,
+                sources=[],
+                confidence=1.0,
+                entities_extracted=0,
+                message_type="ONBOARDING",
+            )
+        except Exception as e:
+            logger.error(f"Onboarding error: {e}")
+            response = ChatResponse(
+                reply="Hi! Please tell me what this project is about so I can help you better.",
+                sources=[],
+                confidence=1.0,
+                entities_extracted=0,
+                message_type="ONBOARDING",
+            )
+    else:
+        # Normal flow - project has description
+        response = await process_message(
+            request, kg, background_tasks, user, chat_history, project.description
+        )
 
     # Save message to history (don't block on save errors)
     try:
