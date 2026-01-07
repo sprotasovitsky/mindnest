@@ -91,6 +91,35 @@ def format_response_prompt(
     )
 
 
+def get_onboarding_template() -> str:
+    """Get the onboarding prompt template."""
+    return load_prompt("onboarding")
+
+
+def format_onboarding_prompt(
+    message: str,
+    chat_history: str = "",
+    user_name: Optional[str] = None,
+) -> str:
+    """Format the onboarding prompt.
+
+    Args:
+        message: User's current message
+        chat_history: Formatted previous conversation history
+        user_name: Current user's name
+
+    Returns:
+        Formatted prompt for onboarding flow
+    """
+    template = get_onboarding_template()
+
+    return template.format(
+        message=message,
+        chat_history=chat_history if chat_history else "No previous messages.",
+        user_name=user_name or "User",
+    )
+
+
 def clear_prompt_cache():
     """Clear the prompt cache (useful for development/testing)."""
     load_prompt.cache_clear()
