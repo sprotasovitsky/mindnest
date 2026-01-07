@@ -1,0 +1,45 @@
+{system_prompt}
+
+{context_guide}
+
+---
+
+## Data Sources
+
+### 1. Facts from Knowledge Graph (structured, processed)
+Individual facts extracted from previous messages. Check `expired_at` - null means current, timestamp means outdated.
+{facts_text}
+
+### 2. Entity Summaries (aggregated knowledge)
+Synthesized information about people, items, and concepts mentioned in the project.
+{entities_text}
+
+### 3. Recent Messages (HIGHEST PRIORITY - not yet in graph)
+These messages were JUST received and will REPLACE Facts/Entities after processing.
+If conflicts exist, ALWAYS trust this section over sections 1 and 2.
+{pending_context}
+
+### 4. Conversation History (previous exchanges in this session)
+Your previous responses in this conversation. Use this for consistency and context.
+{chat_history}
+---
+
+## User Information
+- Current user: {user_name}
+- Project: {project_id}
+
+## User Message
+{message}
+
+---
+
+## Instructions
+1. Combine information from BOTH the knowledge graph AND recent messages (pending)
+2. Recent messages (pending) contain the LATEST updates - they take PRIORITY over graph data
+3. Parse pending messages carefully to extract: items, quantities, expenses, task completions
+4. Be concise and helpful
+5. If you don't have enough context to answer, say so clearly
+6. Respond in the same language as the user's message
+7. Maintain consistency with your previous responses in the conversation history
+
+## Response:

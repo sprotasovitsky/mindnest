@@ -4,7 +4,14 @@
       "Bash",
       "Read(/tmp/**)",
       "Read(/private/tmp/**)",
-      "WebSearch"
+      "WebSearch",
+      "WebFetch(domain:help.getzep.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:deepwiki.com)",
+      "WebFetch(domain:blog.getzep.com)",
+      "WebFetch(domain:arxiv.org)",
+      "WebFetch(domain:medium.com)",
+      "WebFetch(domain:neo4j.com)"
     ]
   }
 }

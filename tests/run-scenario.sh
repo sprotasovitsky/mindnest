@@ -5,7 +5,7 @@
 # Compatible with macOS (zsh/bash 3.x) - no associative arrays
 
 SCENARIO_FILE="$1"
-BASE_URL="http://localhost:8080"
+BASE_URL="${TEST_BASE_URL:-http://localhost:8000}"
 
 if [ -z "$SCENARIO_FILE" ]; then
     echo "Usage: ./run-scenario.sh <scenario-file.md>"
@@ -311,13 +311,12 @@ echo ""
 # Verification
 echo "=== Verification ==="
 if [ -n "$PROJECT_ID" ]; then
-    echo "Items in Qdrant:"
-    curl -s "http://localhost:6333/collections/knowledge_vectors/points/count" \
-        -H "Content-Type: application/json" \
-        -d "{\"filter\":{\"must\":[{\"key\":\"projectId\",\"match\":{\"value\":\"$PROJECT_ID\"}}]}}" | jq '.result.count'
+    echo "Checking Neo4j for entities (Graphiti):"
+    docker exec mindnest-neo4j cypher-shell -u neo4j -p mindnest123 \
+        "MATCH (n:Entity) WHERE n.group_id = '$PROJECT_ID' RETURN count(n) as entity_count" 2>/dev/null || echo "Neo4j query failed (container may have different name)"
 
     echo ""
-    echo "Items in Neo4j:"
-    docker exec mindnest-neo4j cypher-shell -u neo4j -p mindnest \
-        "MATCH (k:KnowledgeItem {projectId: '$PROJECT_ID'}) RETURN k.type, count(*) as count" 2>/dev/null || echo "Neo4j query failed"
+    echo "Edges in Neo4j:"
+    docker exec mindnest-neo4j cypher-shell -u neo4j -p mindnest123 \
+        "MATCH ()-[r]->() WHERE r.group_id = '$PROJECT_ID' RETURN count(r) as edge_count" 2>/dev/null || echo "Neo4j query failed"
 fi

@@ -1,0 +1,27 @@
+## Knowledge Graph Data Format
+
+Data is provided as JSON arrays with full metadata.
+
+### Facts (edges)
+Each fact represents an atomic piece of information:
+- `fact`: the statement
+- `created_at`: when recorded
+- `valid_at`: when became true
+- `expired_at`: null = current, timestamp = superseded by newer information
+
+### Entities (nodes)
+Each entity represents a person, item, or concept:
+- `name`: entity identifier
+- `summary`: aggregated, synthesized information about this entity
+- `created_at`: when this version was created
+
+Multiple entities with same name represent evolution over time (newer created_at = more complete).
+
+### Recent Messages (pending)
+Messages in "Recent Messages" section are the MOST RECENT updates that haven't been processed into the graph yet.
+
+**IMPORTANT: Pending messages take PRIORITY over graph data!**
+- If pending says "task completed" but graph doesn't show it → trust pending
+- If pending says "changed to 10 bottles" but graph says "6 bottles" → use 10
+- Extract ALL relevant information from pending messages (items, quantities, expenses, task status)
+- Pending messages are raw text in format `[UserName]: message content`
