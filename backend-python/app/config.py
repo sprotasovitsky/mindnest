@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     # LLM Models
     llm_model: str = "gemini-2.5-flash-lite"  # Fast, cost-effective
     llm_model_balanced: str = "gemini-2.5-flash"  # Balanced speed/quality
-    llm_model_pro: str = "gemini-2.5-pro"  # Best quality
+    llm_model_pro: str = "gemini-3-flash-preview"  # Best quality (temporarily using gemini-3-flash)
 
     # Model for Graphiti entity extraction (can be overridden via env var)
     graphiti_model: str = "gemini-2.5-flash"  # Best balance of speed and quality for entity extraction
