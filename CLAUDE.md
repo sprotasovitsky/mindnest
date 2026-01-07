@@ -66,18 +66,21 @@ docker-compose logs -f       # View logs
 │   ├── main.py                   # FastAPI app entry point
 │   ├── config.py                 # Settings from environment (Pydantic V2)
 │   ├── database.py               # PostgreSQL connection (SQLAlchemy async)
-│   ├── models.py                 # SQLAlchemy models
+│   ├── models.py                 # SQLAlchemy models (User, Project, ChatMessage)
 │   ├── graphiti_client.py        # Graphiti wrapper
 │   ├── llm.py                    # Shared Gemini client (singleton)
+│   ├── classifier.py             # Message classifier (DATA/QUESTION)
+│   ├── pending_cache.py          # In-memory cache for instant message availability
 │   ├── prompts/                  # LLM prompt templates
 │   │   ├── __init__.py               # Prompt loading/formatting
 │   │   ├── system.txt
 │   │   ├── context_guide.txt
+│   │   ├── classifier.txt            # Classification prompt
 │   │   └── response.txt
 │   └── routers/
 │       ├── auth.py               # User registration/login
 │       ├── projects.py           # Project management
-│       └── chat.py               # Chat API
+│       └── chat.py               # Chat API with history support
 ├── alembic.ini               # Alembic configuration
 ├── docker-compose.yml        # Neo4j + PostgreSQL
 └── requirements.txt          # Python dependencies
@@ -109,39 +112,74 @@ Key fields:
 
 ### Chat Processing Flow
 
+The chat uses a **classification-based flow** with background processing:
+
 ```
 User Message → POST /api/chat
                     │
                     ▼
-           KnowledgeGraph.add_message()
+           ┌─────────────────────────────────────┐
+           │  1. Load Chat History (last 10 msgs) │
+           │  2. Classify Message (DATA/QUESTION) │
+           └─────────────────────────────────────┘
+                    │
+        ┌───────────┴───────────┐
+        ▼                       ▼
+   [DATA message]          [QUESTION message]
+        │                       │
+        ▼                       ▼
+   Add to Pending Cache    Get Pending Messages
+   (instant availability)  (before graph search)
+        │                       │
+        ▼                       ▼
+   Background Task:        Search Knowledge Graph
+   Add to Graphiti         (BM25 + semantic + BFS)
+        │                       │
+        └───────────┬───────────┘
+                    ▼
            ┌────────────────────────────────────┐
-           │  Graphiti automatically:            │
-           │  • Extracts entities from text      │
-           │  • Creates/updates edges (facts)    │
-           │  • Handles temporal invalidation    │
-           │  • Normalizes edge types            │
+           │  Generate Response (Gemini Pro):    │
+           │  • System prompt + context guide    │
+           │  • Graph facts + entities           │
+           │  • Pending messages (HIGHEST PRIO)  │
+           │  • Chat history (for consistency)   │
            └────────────────────────────────────┘
                     │
                     ▼
-           KnowledgeGraph.get_context_for_response()
-           ┌────────────────────────────────────┐
-           │  Hybrid search:                     │
-           │  • Semantic similarity (embeddings) │
-           │  • BM25 keyword matching            │
-           │  • Graph traversal                  │
-           └────────────────────────────────────┘
+           Save to Chat History (PostgreSQL)
                     │
                     ▼
-           generate_response()
-           ┌────────────────────────────────────┐
-           │  LLM (Gemini) generates response:   │
-           │  • Uses system prompt               │
-           │  • Uses context guide               │
-           │  • Facts + entities as context      │
-           └────────────────────────────────────┘
-                    │
-                    ▼
-           ChatResponse (reply, sources, confidence)
+           ChatResponse (reply, sources, message_type)
+```
+
+### Message Classification
+
+Messages are classified using `gemini-2.5-flash-lite`:
+- **DATA**: New information to store (expenses, tasks, items, updates)
+- **QUESTION**: Queries requiring search and response (summaries, calculations)
+
+For QUESTION messages, the classifier also generates an optimized `search_query`.
+
+### Pending Cache
+
+The pending cache (`pending_cache.py`) provides **instant message availability**:
+- DATA messages are added to cache immediately (before graph processing)
+- QUESTION messages include pending cache in context
+- Background task processes message into Graphiti graph
+- Message removed from cache after successful graph insertion
+
+This ensures new information is immediately available for queries, even while Graphiti is processing.
+
+### Chat History
+
+Conversation history is stored in PostgreSQL (`chat_messages` table):
+- Each message exchange (user + assistant) is saved
+- Last N messages (configurable via `chat_history_limit`) included in LLM context
+- Helps LLM maintain consistency across related questions (e.g., budget calculations)
+
+Config setting:
+```python
+chat_history_limit: int = 10  # Number of recent messages in context
 ```
 
 ## Graphiti Knowledge Graph
@@ -158,8 +196,8 @@ Graphiti replaces the previous custom implementation:
 1. **Automatic Entity Extraction**: Graphiti LLM extracts entities from text
 2. **Emergent Schema**: Edge types are created and normalized automatically
 3. **Temporal Invalidation**: Old facts get `expired_at` when superseded
-4. **Hybrid Search**: Combines BM25 + semantic similarity + graph traversal
-5. **Cross-encoder Reranking**: Results are reranked for relevance
+4. **Hybrid Search**: Combines BM25 + semantic similarity + BFS graph traversal
+5. **RRF Reranking**: Reciprocal Rank Fusion combines results from multiple search methods
 
 ### Temporal Model
 
@@ -182,12 +220,16 @@ llm_model_balanced: str = "gemini-2.5-flash"   # Reserved for future use
 llm_model_pro: str = "gemini-2.5-pro"          # Chat responses (best quality)
 graphiti_model: str = "gemini-2.5-flash"       # Entity extraction (best balance)
 # Embeddings: gemini-embedding-001 (3072 dimensions, 100+ languages)
+
+# Other settings
+search_limit: int = 40                          # Max edges/nodes from search
+chat_history_limit: int = 10                    # Messages in LLM context
 ```
 
 **Currently used:**
-- Message classifier: `llm_model` (gemini-2.5-flash-lite) - fast classification
-- Chat responses: `llm_model_pro` (gemini-2.5-pro) - best quality
-- Graphiti entity extraction: `graphiti_model` (gemini-2.5-flash) - balanced
+- **Message classifier**: `llm_model` (gemini-2.5-flash-lite) - classifies DATA vs QUESTION
+- **Chat responses**: `llm_model_pro` (gemini-2.5-pro) - generates user-facing responses
+- **Graphiti entity extraction**: `graphiti_model` (gemini-2.5-flash) - extracts entities/edges
 
 **Model selection rationale** (based on comparative testing):
 - `gemini-2.5-flash` chosen for Graphiti after testing flash-lite, flash, pro, and gemini-3 models
@@ -300,7 +342,15 @@ All prompts are stored in `backend-python/app/prompts/`:
 |------|---------|
 | `system.txt` | System prompt defining assistant role |
 | `context_guide.txt` | How LLM should interpret graph data (expired_at, etc.) |
+| `classifier.txt` | Message classification prompt (DATA vs QUESTION) |
 | `response.txt` | Template combining system prompt + context + user message |
+
+### Data Source Priority (in response.txt)
+
+The LLM receives data from multiple sources with this priority:
+1. **Pending Messages** (HIGHEST) - Just received, not yet in graph
+2. **Knowledge Graph** - Facts and entity summaries from Graphiti
+3. **Chat History** - Previous conversation for consistency
 
 ### Prompt Loading
 
@@ -319,8 +369,9 @@ Prompts are loaded via `prompts/__init__.py`:
 
 ### Chat
 - `POST /api/chat` - Send message, process through knowledge graph
-- `POST /api/chat/search` - Search knowledge graph
-- `GET /api/chat/health` - Health check
+- `GET /api/chat/history` - Get chat history for a project
+- `POST /api/chat/build-communities` - Build graph communities for a project
+- `GET /api/chat/health` - Health check with pending cache stats
 
 ### Auth
 - `POST /api/auth/register` - Register new user
@@ -363,6 +414,8 @@ curl -X POST http://localhost:8000/api/chat/search \
 | "No results from search" | Check project_id matches, add some messages first |
 | "Empty response" | Check GOOGLE_API_KEY is set |
 | Import errors | Run `pip install -r requirements.txt` |
+| Inconsistent calculations | Check `chat_history_limit` is adequate (default: 10) |
+| Missing recent data | Pending cache may have cleared; check background task logs |
 
 ### Adding New Functionality
 
