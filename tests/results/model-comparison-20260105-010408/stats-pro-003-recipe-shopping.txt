@@ -1,3 +1,0 @@
-project_id: 0b62ad43-58cb-494c-b288-65c8e14ccee3
-entities: 32
-edges: 127

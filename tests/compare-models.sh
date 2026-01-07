@@ -11,11 +11,11 @@ RESULTS_DIR="$SCRIPT_DIR/results/model-comparison-$(date +%Y%m%d-%H%M%S)"
 
 mkdir -p "$RESULTS_DIR"
 
-MODELS=("gemini-2.5-flash-lite" "gemini-2.5-flash" "gemini-2.5-pro")
-MODEL_NAMES=("flash-lite" "flash" "pro")
+MODELS=("gemini-2.5-flash-lite" "gemini-2.5-flash")
+MODEL_NAMES=("flash-lite" "flash")
 SCENARIOS=("001-new-year-party" "002-personal-budget" "003-recipe-shopping")
 
-echo "=== Model Comparison Test (3 models × 3 scenarios) ==="
+echo "=== Model Comparison Test (2 models × 3 scenarios) ==="
 echo "Results will be saved to: $RESULTS_DIR"
 echo ""
 
@@ -136,15 +136,15 @@ echo "Generating comparison report..."
 echo "========================================="
 
 cat > "$RESULTS_DIR/comparison.md" << 'HEADER'
-# Model Comparison Report (3 models × 3 scenarios)
+# Model Comparison Report (2 models × 3 scenarios)
 
 ## Timing Results (seconds)
 
 HEADER
 
 # Timing table
-echo "| Scenario | flash-lite | flash | pro |" >> "$RESULTS_DIR/comparison.md"
-echo "|----------|------------|-------|-----|" >> "$RESULTS_DIR/comparison.md"
+echo "| Scenario | flash-lite | flash |" >> "$RESULTS_DIR/comparison.md"
+echo "|----------|------------|-------|" >> "$RESULTS_DIR/comparison.md"
 
 for scenario in "${SCENARIOS[@]}"; do
     line="| $scenario |"
@@ -158,8 +158,8 @@ done
 echo "" >> "$RESULTS_DIR/comparison.md"
 echo "## Data Statistics (Entities / Edges)" >> "$RESULTS_DIR/comparison.md"
 echo "" >> "$RESULTS_DIR/comparison.md"
-echo "| Scenario | flash-lite | flash | pro |" >> "$RESULTS_DIR/comparison.md"
-echo "|----------|------------|-------|-----|" >> "$RESULTS_DIR/comparison.md"
+echo "| Scenario | flash-lite | flash |" >> "$RESULTS_DIR/comparison.md"
+echo "|----------|------------|-------|" >> "$RESULTS_DIR/comparison.md"
 
 for scenario in "${SCENARIOS[@]}"; do
     line="| $scenario |"
@@ -179,8 +179,8 @@ done
 echo "" >> "$RESULTS_DIR/comparison.md"
 echo "## Project IDs (for database comparison)" >> "$RESULTS_DIR/comparison.md"
 echo "" >> "$RESULTS_DIR/comparison.md"
-echo "| Scenario | flash-lite | flash | pro |" >> "$RESULTS_DIR/comparison.md"
-echo "|----------|------------|-------|-----|" >> "$RESULTS_DIR/comparison.md"
+echo "| Scenario | flash-lite | flash |" >> "$RESULTS_DIR/comparison.md"
+echo "|----------|------------|-------|" >> "$RESULTS_DIR/comparison.md"
 
 for scenario in "${SCENARIOS[@]}"; do
     line="| $scenario |"
@@ -202,4 +202,4 @@ echo ""
 cat "$RESULTS_DIR/comparison.md"
 
 echo ""
-echo "All 9 projects are saved in Neo4j database for comparison."
+echo "All 6 projects are saved in Neo4j database for comparison."
