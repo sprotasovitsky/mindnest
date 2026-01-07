@@ -205,4 +205,18 @@ class ApiClient {
       return response.data as Map<String, dynamic>;
     });
   }
+
+  // Chat history endpoint
+  Future<Map<String, dynamic>> getChatHistory(String projectId, {int limit = 50}) async {
+    return _retryRequest(() async {
+      final response = await _dio.get(
+        '/chat/history',
+        queryParameters: {
+          'project_id': projectId,
+          'limit': limit,
+        },
+      );
+      return response.data as Map<String, dynamic>;
+    });
+  }
 }

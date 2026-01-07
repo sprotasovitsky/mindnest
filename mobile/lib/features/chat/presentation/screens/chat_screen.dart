@@ -48,6 +48,8 @@ final messagesProvider = StateProvider<List<ChatMessage>>((ref) => []);
 
 final isLoadingProvider = StateProvider<bool>((ref) => false);
 
+final isLoadingHistoryProvider = StateProvider<bool>((ref) => false);
+
 class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({super.key});
 
@@ -68,13 +70,57 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     });
   }
 
-  void _initializeMessages() {
+  Future<void> _initializeMessages() async {
     final projectState = ref.read(projectProvider);
     final authState = ref.read(authProvider);
+    final apiClient = ref.read(apiClientProvider);
     final project = projectState.currentProject;
 
     if (project != null && _lastProjectId != project.id) {
       _lastProjectId = project.id;
+      ref.read(isLoadingHistoryProvider.notifier).state = true;
+
+      // Try to load chat history from backend
+      try {
+        final historyData = await apiClient.getChatHistory(project.id);
+        final messages = historyData['messages'] as List<dynamic>? ?? [];
+
+        if (messages.isNotEmpty) {
+          // Convert history to ChatMessage list (already oldest first from backend)
+          final chatMessages = messages.map((msg) {
+            final userMessage = msg['user_message'] as String?;
+            final assistantReply = msg['assistant_reply'] as String?;
+            final createdAt = DateTime.tryParse(msg['created_at'] ?? '');
+
+            return [
+              if (userMessage != null && userMessage.isNotEmpty)
+                ChatMessage(
+                  content: userMessage,
+                  isUser: true,
+                  timestamp: createdAt,
+                ),
+              if (assistantReply != null && assistantReply.isNotEmpty)
+                ChatMessage(
+                  content: assistantReply,
+                  isUser: false,
+                  timestamp: createdAt,
+                ),
+            ];
+          }).expand((e) => e).toList();
+
+          ref.read(messagesProvider.notifier).state = chatMessages;
+          ref.read(isLoadingHistoryProvider.notifier).state = false;
+          _scrollToBottom();
+          return;
+        }
+      } catch (e) {
+        // If history loading fails, show welcome message
+        print('Failed to load chat history: $e');
+      }
+
+      ref.read(isLoadingHistoryProvider.notifier).state = false;
+
+      // No history - show welcome message
       final firstMessage = _getFirstMessage(project, authState.userId);
       ref.read(messagesProvider.notifier).state = [
         ChatMessage(content: firstMessage, isUser: false),
@@ -179,6 +225,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Widget build(BuildContext context) {
     final messages = ref.watch(messagesProvider);
     final isLoading = ref.watch(isLoadingProvider);
+    final isLoadingHistory = ref.watch(isLoadingHistoryProvider);
     final projectState = ref.watch(projectProvider);
     final project = projectState.currentProject;
     final canAddMembers = project != null && !project.needsOnboarding;
@@ -218,35 +265,46 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         child: Column(
           children: [
             Expanded(
-              child: ListView.builder(
-                controller: _scrollController,
-                padding: const EdgeInsets.all(16),
-                itemCount: messages.length + (isLoading ? 1 : 0),
-                itemBuilder: (context, index) {
-                  if (index == messages.length && isLoading) {
-                    return const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 8),
-                      child: Row(
+              child: isLoadingHistory
+                  ? const Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                          SizedBox(width: 8),
-                          Text('Thinking...'),
+                          CircularProgressIndicator(),
+                          SizedBox(height: 16),
+                          Text('Loading chat history...'),
                         ],
                       ),
-                    );
-                  }
-                  final message = messages[index];
-                  return MessageBubble(
-                    message: message.content,
-                    isUser: message.isUser,
-                    isError: message.isError,
-                  );
-                },
-              ),
+                    )
+                  : ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.all(16),
+                      itemCount: messages.length + (isLoading ? 1 : 0),
+                      itemBuilder: (context, index) {
+                        if (index == messages.length && isLoading) {
+                          return const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 8),
+                            child: Row(
+                              children: [
+                                SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                ),
+                                SizedBox(width: 8),
+                                Text('Thinking...'),
+                              ],
+                            ),
+                          );
+                        }
+                        final message = messages[index];
+                        return MessageBubble(
+                          message: message.content,
+                          isUser: message.isUser,
+                          isError: message.isError,
+                        );
+                      },
+                    ),
             ),
             ChatInput(onSend: _sendMessage),
           ],
