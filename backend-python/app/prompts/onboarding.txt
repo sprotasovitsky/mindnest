@@ -45,7 +45,7 @@ CRITICAL: You MUST respond with EXACTLY this format. The system parses this mark
 
 DESCRIPTION_CONFIRMED: [Copy the exact final description text here]
 
-Great! Your project is all set up. You can now start adding information and asking questions. How can I help you today?
+Great! Your project is all set up. You can now add team members using the button in the top right corner, and start adding information or asking questions. How can I help you today?
 
 IMPORTANT: The line starting with "DESCRIPTION_CONFIRMED:" is REQUIRED for the system to work. Without it, the project setup will not complete.
 

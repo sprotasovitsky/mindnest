@@ -34,7 +34,7 @@ String _getFirstMessage(Project? project, String? userId) {
 
   if (project.needsOnboarding && isOwner) {
     // Owner sees onboarding prompt
-    return 'Welcome to your new project! Please tell me what this project is about so I can help you better. What are you working on?';
+    return 'Hi! Let\'s set up your project. Just reply here: what is this project about? What do you want to track or manage?\n\nOnce we finish setup, you\'ll be able to add team members.';
   } else if (!project.needsOnboarding) {
     // Member (or owner after onboarding) sees welcome with project name
     return 'Welcome to "${project.name}"! How can I help you today?';
