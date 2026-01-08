@@ -88,14 +88,22 @@ docker-compose logs -f       # View logs
 ```
 
 ### Mobile Structure (`mobile/lib/`)
+
+The mobile app follows **Clean Architecture** with Repository pattern:
+
 ```
 ├── core/
-│   ├── api/           # HTTP client (Dio-based ApiClient)
-│   ├── auth/          # Auth state management (Riverpod)
-│   ├── members/       # Project members state
-│   ├── projects/      # Projects state
-│   ├── router/        # Navigation (go_router)
-│   └── theme/         # UI theming
+│   ├── api/              # HTTP client (Dio-based ApiClient)
+│   ├── auth/             # Auth service (token storage)
+│   ├── constants/        # AppConfig (API URL, timeouts, storage keys)
+│   ├── error/            # AppError sealed classes (NetworkError, AuthError, ValidationError)
+│   ├── models/           # @freezed data classes (User, Project, Member, ChatMessage)
+│   ├── providers/        # @riverpod state management (auth, projects, members, chat)
+│   ├── repositories/     # Repository pattern (abstract + impl for each domain)
+│   ├── router/           # Navigation (go_router)
+│   └── theme/            # UI theming
+├── shared/
+│   └── widgets/          # Reusable widgets (LoadingOverlay, ErrorView, EmptyState)
 └── features/
     ├── auth/
     │   └── presentation/screens/    # LoginScreen
@@ -107,8 +115,6 @@ docker-compose logs -f       # View logs
     │   └── presentation/
     │       ├── screens/             # MembersScreen
     │       └── widgets/             # AddMemberModal
-    ├── onboarding/
-    │   └── presentation/screens/    # OnboardingScreen
     ├── profile/
     │   └── presentation/screens/    # ProfileScreen
     └── projects/
@@ -116,6 +122,58 @@ docker-compose logs -f       # View logs
             ├── screens/             # ProjectsListScreen
             └── widgets/             # CreateProjectModal, ProjectSettingsSheet
 ```
+
+### Mobile Architecture Layers
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Presentation Layer (features/*/presentation/)              │
+│  - Screens (ConsumerWidget/ConsumerStatefulWidget)          │
+│  - Widgets (stateless UI components)                        │
+│  - Uses: ref.watch(provider), ref.read(provider.notifier)   │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│  State Layer (core/providers/)                              │
+│  - @riverpod annotated Notifier classes                     │
+│  - @freezed State classes with copyWith                     │
+│  - Handles: loading, error, data states                     │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Repository Layer (core/repositories/)                      │
+│  - Abstract interfaces (AuthRepository, ProjectRepository)  │
+│  - Implementations (*RepositoryImpl)                        │
+│  - Maps API responses to domain models                      │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Data Layer (core/api/, core/models/)                       │
+│  - ApiClient (Dio HTTP client)                              │
+│  - @freezed models with @JsonSerializable                   │
+│  - AuthService (token storage)                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Code Generation
+
+The mobile app uses code generation for boilerplate:
+
+```bash
+# Run after modifying @freezed, @riverpod, or @JsonSerializable classes
+cd mobile
+dart run build_runner build
+
+# Watch mode for development
+dart run build_runner watch
+```
+
+Generated files:
+- `*.freezed.dart` - copyWith, == operator, toString
+- `*.g.dart` - JSON serialization, Riverpod providers
 
 ### Data Model (Graphiti)
 
