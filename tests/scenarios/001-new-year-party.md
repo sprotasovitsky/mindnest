@@ -17,12 +17,27 @@ Four friends (Andrey, Boris, Vika, Galya) collaborate to plan a New Year's Eve p
 
 ## Users
 
-| Name   | Email                | Password   |
-|--------|---------------------|------------|
-| Andrey | andrey@test.com     | test123    |
-| Boris  | boris@test.com      | test123    |
-| Vika   | vika@test.com       | test123    |
-| Galya  | galya@test.com      | test123    |
+| Name   | Email                | Password   | Role   |
+|--------|---------------------|------------|--------|
+| Andrey | andrey@test.com     | test123    | owner  |
+| Boris  | boris@test.com      | test123    | member |
+| Vika   | vika@test.com       | test123    | member |
+| Galya  | galya@test.com      | test123    | member |
+
+## Project
+
+| Field       | Value                                                    |
+|-------------|----------------------------------------------------------|
+| Name        | New Year Party 2025                                      |
+| Description | Planning our NYE celebration at the dacha                |
+
+## Onboarding
+
+```
+Description: "We're planning a New Year's Eve party at my dacha. Four friends will collaborate on shopping list, task assignments, and expense tracking."
+Answers: "1. Shopping list management, task assignments, and expense splitting. 2. Four friends - Andrey (host), Boris, Vika, and Galya. 3. Successfully plan the party with clear task ownership and fair expense distribution."
+Confirm: "Yes, that's perfect. Please save it."
+```
 
 ## Test Execution
 

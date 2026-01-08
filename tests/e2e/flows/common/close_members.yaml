@@ -1,0 +1,11 @@
+# Close members screen and return to chat
+# Assumes user is on Members screen
+appId: com.mindnest.mindnest
+---
+# Go back to chat
+- back
+
+# Wait for chat screen
+- extendedWaitUntil:
+    visible: "Type a message..."
+    timeout: 5000

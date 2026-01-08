@@ -1,0 +1,22 @@
+# Send a chat message and wait for response
+# Input: MESSAGE
+# Assumes user is on Chat screen
+appId: com.mindnest.mindnest
+---
+# Enter message
+- tapOn: "Type a message..."
+- inputText: ${MESSAGE}
+- hideKeyboard
+
+# Send button by Semantics label
+- tapOn: "Send message"
+
+# Wait for "Thinking..." to appear (message sent)
+- extendedWaitUntil:
+    visible: "Thinking..."
+    timeout: 10000
+
+# Wait for "Thinking..." to disappear (response received)
+- extendedWaitUntil:
+    notVisible: "Thinking..."
+    timeout: 180000

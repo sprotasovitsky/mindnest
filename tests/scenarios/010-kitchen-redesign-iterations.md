@@ -25,10 +25,24 @@ A couple (Igor and Sveta) redesigns their kitchen. This scenario tests:
 
 ## Users
 
-| Name  | Email           | Password |
-|-------|----------------|----------|
-| Igor  | igor@test.com  | test123  |
-| Sveta | sveta@test.com | test123  |
+| Name  | Email           | Password | Role   |
+|-------|----------------|----------|--------|
+| Igor  | igor@test.com  | test123  | owner  |
+| Sveta | sveta@test.com | test123  | member |
+
+## Project
+
+| Field       | Value                          |
+|-------------|--------------------------------|
+| Name        | Kitchen Redesign 2025          |
+
+## Onboarding
+
+```
+Description: "We're redesigning our kitchen. Need to track design iterations, decisions, budget, and contractor feedback."
+Answers: "1. Design iterations tracking, decision history, budget management. 2. Igor and Sveta - a couple. 3. Dream kitchen within budget."
+Confirm: "Yes, save it."
+```
 
 ## Test Execution
 

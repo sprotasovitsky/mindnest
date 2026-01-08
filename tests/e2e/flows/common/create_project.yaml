@@ -1,0 +1,26 @@
+# Create a new project
+# Input: PROJECT_NAME
+# Assumes user is on Projects List screen
+appId: com.mindnest.mindnest
+---
+- assertVisible: "MindNest"
+
+# Tap Create Project button
+- tapOn: "Create Project"
+
+# Wait for modal
+- extendedWaitUntil:
+    visible: "New Project"
+    timeout: 5000
+
+# Enter project name (field is already focused)
+- inputText: ${PROJECT_NAME}
+- hideKeyboard
+
+# Submit
+- tapOn: "Create"
+
+# Wait for chat screen
+- extendedWaitUntil:
+    visible: ${PROJECT_NAME}
+    timeout: 15000

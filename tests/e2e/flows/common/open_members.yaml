@@ -1,0 +1,12 @@
+# Open members screen
+# Assumes user is on Chat screen with Members button visible
+appId: com.mindnest.mindnest
+---
+# Tap members icon in header
+- tapOn:
+    point: "82%,5%"
+
+# Wait for members screen
+- extendedWaitUntil:
+    visible: ".*Members.*"
+    timeout: 10000

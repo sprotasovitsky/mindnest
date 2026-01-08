@@ -72,7 +72,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
       await _authService.saveAuthData(
         token: response['token'],
-        userId: response['userId'],
+        userId: response['user_id'],
         email: response['email'],
         name: response['name'],
       );
@@ -81,7 +81,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
       state = AuthState(
         isAuthenticated: true,
-        userId: response['userId'],
+        userId: response['user_id'],
         email: response['email'],
         name: response['name'],
       );
@@ -102,7 +102,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
       await _authService.saveAuthData(
         token: response['token'],
-        userId: response['userId'],
+        userId: response['user_id'],
         email: response['email'],
         name: response['name'],
       );
@@ -111,7 +111,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
       state = AuthState(
         isAuthenticated: true,
-        userId: response['userId'],
+        userId: response['user_id'],
         email: response['email'],
         name: response['name'],
       );

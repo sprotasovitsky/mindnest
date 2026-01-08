@@ -19,13 +19,27 @@ A team of 5 (CEO Alex, CTO Roman, Designer Lisa, Backend Dev Max, Frontend Dev Y
 
 ## Users
 
-| Name  | Role     | Email            | Password |
-|-------|----------|-----------------|----------|
-| Alex  | CEO      | alex@test.com   | test123  |
-| Roman | CTO      | roman@test.com  | test123  |
-| Lisa  | Designer | lisa@test.com   | test123  |
-| Max   | Backend  | max@test.com    | test123  |
-| Yulia | Frontend | yulia@test.com  | test123  |
+| Name  | Email            | Password | Role   |
+|-------|-----------------|----------|--------|
+| Alex  | alex@test.com   | test123  | owner  |
+| Roman | roman@test.com  | test123  | member |
+| Lisa  | lisa@test.com   | test123  | member |
+| Max   | max@test.com    | test123  | member |
+| Yulia | yulia@test.com  | test123  | member |
+
+## Project
+
+| Field       | Value                          |
+|-------------|--------------------------------|
+| Name        | FoodRush MVP                   |
+
+## Onboarding
+
+```
+Description: "Startup team building MVP for food delivery app. Need to track features, tasks, blockers, and technical decisions."
+Answers: "1. Feature prioritization, task assignment, progress tracking, tech decisions. 2. CEO Alex, CTO Roman, Designer Lisa, Backend Max, Frontend Yulia. 3. Launch MVP on time with core features."
+Confirm: "Yes, save it."
+```
 
 ## Test Execution
 

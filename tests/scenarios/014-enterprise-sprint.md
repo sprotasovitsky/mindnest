@@ -31,14 +31,28 @@ A development team of 6 people runs a 4-week sprint on a complex e-commerce proj
 
 ## Users
 
-| Name    | Role              | Email             | Password |
-|---------|-------------------|-------------------|----------|
-| Alexei  | Tech Lead         | alexei@test.com   | test123  |
-| Marina  | Product Manager   | marina@test.com   | test123  |
-| Pavel   | Backend Dev       | pavel@test.com    | test123  |
-| Yana    | Frontend Dev      | yana@test.com     | test123  |
-| Dmitry  | QA Engineer       | dmitry@test.com   | test123  |
-| Olga    | Designer          | olga@test.com     | test123  |
+| Name    | Email             | Password | Role   |
+|---------|-------------------|----------|--------|
+| Alexei  | alexei@test.com   | test123  | owner  |
+| Marina  | marina@test.com   | test123  | member |
+| Pavel   | pavel@test.com    | test123  | member |
+| Yana    | yana@test.com     | test123  | member |
+| Dmitry  | dmitry@test.com   | test123  | member |
+| Olga    | olga@test.com     | test123  | member |
+
+## Project
+
+| Field       | Value                          |
+|-------------|--------------------------------|
+| Name        | E-Commerce Sprint Q1           |
+
+## Onboarding
+
+```
+Description: "Development team running a 4-week sprint on e-commerce project. High volume: 200+ items, tasks, decisions, notes."
+Answers: "1. Task tracking, decisions, notes, complex relationships. 2. Six team members - Tech Lead, PM, Backend, Frontend, QA, Designer. 3. Successful sprint delivery with clear documentation."
+Confirm: "Yes, save it."
+```
 
 ## Test Execution
 

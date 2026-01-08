@@ -17,6 +17,12 @@ Each entity represents a person, item, or concept:
 
 Multiple entities with same name represent evolution over time (newer created_at = more complete).
 
+### Handling Conflicts Between Facts and Entity Summaries
+- If Facts and Entity Summaries contain conflicting information, ALWAYS prioritize Facts
+- Entity summaries are aggregated over time and may contain outdated or incorrectly attributed data
+- For calculations (expenses, totals, settlements): be extra careful and cross-check with individual Facts
+- When summing expenses: use specific expense facts (e.g., "Boris spent 14000 rubles") rather than entity summary totals
+
 ### Recent Messages (pending)
 Messages in "Recent Messages" section are the MOST RECENT updates that haven't been processed into the graph yet.
 

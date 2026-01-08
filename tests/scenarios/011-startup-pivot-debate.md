@@ -26,13 +26,27 @@ A startup team (5 people) debates whether to pivot their failing product. This s
 
 ## Users
 
-| Name   | Role       | Email            | Password |
-|--------|-----------|-----------------|----------|
-| Vlad   | CEO       | vlad@test.com   | test123  |
-| Kirill | CTO       | kirill@test.com | test123  |
-| Anya   | Product   | anya@test.com   | test123  |
-| Sergey | Sales     | sergey@test.com | test123  |
-| Mila   | Marketing | mila@test.com   | test123  |
+| Name   | Email            | Password | Role   |
+|--------|-----------------|----------|--------|
+| Vlad   | vlad@test.com   | test123  | owner  |
+| Kirill | kirill@test.com | test123  | member |
+| Anya   | anya@test.com   | test123  | member |
+| Sergey | sergey@test.com | test123  | member |
+| Mila   | mila@test.com   | test123  | member |
+
+## Project
+
+| Field       | Value                          |
+|-------------|--------------------------------|
+| Name        | SnapTask Pivot Decision        |
+
+## Onboarding
+
+```
+Description: "Startup team deciding whether to pivot our failing product. Need to track arguments, positions, and decisions."
+Answers: "1. Strategy discussions, argument tracking, position changes, voting. 2. CEO Vlad, CTO Kirill, Product Anya, Sales Sergey, Marketing Mila. 3. Make the right strategic decision for the company."
+Confirm: "Yes, save it."
+```
 
 ## Test Execution
 

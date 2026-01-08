@@ -19,13 +19,27 @@ Five friends (Sasha, Dima, Oleg, Nastya, Ira) plan a 7-day trip to Georgia. They
 
 ## Users
 
-| Name   | Email            | Password |
-|--------|-----------------|----------|
-| Sasha  | sasha@test.com  | test123  |
-| Dima   | dima@test.com   | test123  |
-| Oleg   | oleg@test.com   | test123  |
-| Nastya | nastya@test.com | test123  |
-| Ira    | ira@test.com    | test123  |
+| Name   | Email            | Password | Role   |
+|--------|-----------------|----------|--------|
+| Sasha  | sasha@test.com  | test123  | owner  |
+| Dima   | dima@test.com   | test123  | member |
+| Oleg   | oleg@test.com   | test123  | member |
+| Nastya | nastya@test.com | test123  | member |
+| Ira    | ira@test.com    | test123  | member |
+
+## Project
+
+| Field       | Value                          |
+|-------------|--------------------------------|
+| Name        | Georgia Trip 2025              |
+
+## Onboarding
+
+```
+Description: "Five friends planning a 7-day trip to Georgia. Need to plan route, book places, track shared expenses."
+Answers: "1. Route planning, accommodation/transport bookings, expense tracking. 2. Five friends - Sasha, Dima, Oleg, Nastya, Ira. 3. Amazing trip with fair expense splitting."
+Confirm: "Yes, save it."
+```
 
 ## Test Execution
 

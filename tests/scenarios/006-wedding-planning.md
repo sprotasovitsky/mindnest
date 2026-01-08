@@ -19,11 +19,25 @@ A couple (Nikita and Masha) with help from parents (Olga - Masha's mom) plan the
 
 ## Users
 
-| Name   | Email            | Password |
-|--------|-----------------|----------|
-| Nikita | nikita@test.com | test123  |
-| Masha  | masha@test.com  | test123  |
-| Olga   | olga@test.com   | test123  |
+| Name   | Email            | Password | Role   |
+|--------|-----------------|----------|--------|
+| Nikita | nikita@test.com | test123  | owner  |
+| Masha  | masha@test.com  | test123  | member |
+| Olga   | olga@test.com   | test123  | member |
+
+## Project
+
+| Field       | Value                          |
+|-------------|--------------------------------|
+| Name        | Wedding Nikita & Masha         |
+
+## Onboarding
+
+```
+Description: "We're planning our wedding for March 15, 2025. Need to manage guests, vendors, budget, and tasks."
+Answers: "1. Guest list, venue/catering bookings, budget tracking, task assignments. 2. Nikita (groom), Masha (bride), Olga (mother of bride). 3. Perfect wedding day with no stress."
+Confirm: "Yes, save it."
+```
 
 ## Test Execution
 

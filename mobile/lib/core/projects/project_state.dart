@@ -5,11 +5,13 @@ class Project {
   final String id;
   final String name;
   final String? description;
+  final String ownerId;
 
   Project({
     required this.id,
     required this.name,
     this.description,
+    required this.ownerId,
   });
 
   factory Project.fromJson(Map<String, dynamic> json) {
@@ -17,8 +19,11 @@ class Project {
       id: json['id'],
       name: json['name'],
       description: json['description'],
+      ownerId: json['owner_id'] ?? '',
     );
   }
+
+  bool get needsOnboarding => description == null || description!.isEmpty;
 }
 
 class ProjectState {
@@ -59,10 +64,22 @@ class ProjectNotifier extends StateNotifier<ProjectState> {
     try {
       final response = await _apiClient.getProjects();
       final projects = response.map((json) => Project.fromJson(json)).toList();
+
+      // Update currentProject with fresh data from server
+      Project? updatedCurrentProject;
+      if (state.currentProject != null) {
+        updatedCurrentProject = projects.firstWhere(
+          (p) => p.id == state.currentProject!.id,
+          orElse: () => state.currentProject!,
+        );
+      } else if (projects.isNotEmpty) {
+        updatedCurrentProject = projects.first;
+      }
+
       state = state.copyWith(
         isLoading: false,
         projects: projects,
-        currentProject: state.currentProject ?? (projects.isNotEmpty ? projects.first : null),
+        currentProject: updatedCurrentProject,
       );
     } catch (e) {
       state = state.copyWith(
@@ -87,6 +104,26 @@ class ProjectNotifier extends StateNotifier<ProjectState> {
       return project;
     } catch (e) {
       state = state.copyWith(error: 'Failed to create project');
+      return null;
+    }
+  }
+
+  Future<Project?> updateProject(String projectId, {String? name, String? description}) async {
+    try {
+      final response = await _apiClient.updateProject(projectId, name: name, description: description);
+      final updatedProject = Project.fromJson(response);
+
+      final updatedProjects = state.projects.map((p) {
+        return p.id == projectId ? updatedProject : p;
+      }).toList();
+
+      state = state.copyWith(
+        projects: updatedProjects,
+        currentProject: state.currentProject?.id == projectId ? updatedProject : state.currentProject,
+      );
+      return updatedProject;
+    } catch (e) {
+      state = state.copyWith(error: 'Failed to update project');
       return null;
     }
   }

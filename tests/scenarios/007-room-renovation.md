@@ -19,11 +19,25 @@ Three roommates (Kostya, Denis, Artem) renovate their shared living room. They:
 
 ## Users
 
-| Name   | Email            | Password |
-|--------|-----------------|----------|
-| Kostya | kostya@test.com | test123  |
-| Denis  | denis@test.com  | test123  |
-| Artem  | artem@test.com  | test123  |
+| Name   | Email            | Password | Role   |
+|--------|-----------------|----------|--------|
+| Kostya | kostya@test.com | test123  | owner  |
+| Denis  | denis@test.com  | test123  | member |
+| Artem  | artem@test.com  | test123  | member |
+
+## Project
+
+| Field       | Value                          |
+|-------------|--------------------------------|
+| Name        | Living Room Renovation         |
+
+## Onboarding
+
+```
+Description: "Three roommates renovating our shared living room. Need to track phases, materials, costs, and contractors."
+Answers: "1. Renovation phases, materials/costs tracking, contractor management. 2. Kostya, Denis, Artem - roommates. 3. Beautiful living room on budget and on time."
+Confirm: "Yes, save it."
+```
 
 ## Test Execution
 

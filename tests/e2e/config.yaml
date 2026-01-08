@@ -1,0 +1,16 @@
+# Maestro E2E Test Configuration
+# https://maestro.mobile.dev/
+
+appId: com.mindnest.mindnest
+
+# Environment variables for tests
+env:
+  API_URL: http://localhost:8000
+
+# Default timeout for assertions
+timeout: 10000
+
+# Tags for filtering tests
+tags:
+  - e2e
+  - multi-user

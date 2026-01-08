@@ -1,0 +1,43 @@
+# Add a member to current project
+# Input: MEMBER_EMAIL
+# Assumes user is on Chat screen with Members button visible
+appId: com.mindnest.mindnest
+---
+# Tap members icon in header (left of settings icon)
+- tapOn:
+    point: "82%,5%"
+
+# Wait for members screen
+- extendedWaitUntil:
+    visible: ".*Members.*"
+    timeout: 10000
+
+# First member is always the owner - if empty state, tap "Add Member" button
+# Otherwise tap the add icon in header
+- tapOn: ".*Add Member.*"
+
+# Wait for modal
+- extendedWaitUntil:
+    visible: ".*Add Member.*"
+    timeout: 5000
+
+# Enter email
+- tapOn: ".*Email.*"
+- inputText: ${MEMBER_EMAIL}
+- hideKeyboard
+
+# Submit
+- tapOn: "Add"
+
+# Wait for member to appear in list
+- extendedWaitUntil:
+    visible: ${MEMBER_EMAIL}
+    timeout: 10000
+
+# Go back to chat
+- back
+
+# Wait for chat screen
+- extendedWaitUntil:
+    visible: "Type a message..."
+    timeout: 5000
