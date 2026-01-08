@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../constants/app_config.dart';
+import '../utils/logger.dart';
 
 final apiClientProvider = Provider<ApiClient>((ref) {
   return ApiClient();
@@ -36,8 +37,11 @@ class ApiClient {
         return handler.next(options);
       },
       onError: (error, handler) {
-        // Log errors for debugging
-        print('API Error: ${error.message}');
+        AppLogger.error(
+          'API Error: ${error.message}',
+          error: error,
+          tag: 'ApiClient',
+        );
         return handler.next(error);
       },
     ));

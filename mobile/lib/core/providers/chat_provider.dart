@@ -5,6 +5,7 @@ import '../error/app_error.dart';
 import '../models/chat_message.dart';
 import '../models/project.dart';
 import '../repositories/chat_repository.dart';
+import '../utils/logger.dart';
 import 'auth_provider.dart';
 import 'project_provider.dart';
 
@@ -62,8 +63,10 @@ class Chat extends _$Chat {
         return;
       }
     } catch (e) {
-      // If history loading fails, show welcome message
-      print('Failed to load chat history: $e');
+      AppLogger.warning(
+        'Failed to load chat history: $e',
+        tag: 'ChatProvider',
+      );
     }
 
     // No history - show welcome message
