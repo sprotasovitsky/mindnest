@@ -1,0 +1,24 @@
+# Add a member (assumes already on Members screen)
+# Input: MEMBER_EMAIL
+appId: com.mindnest.mindnest
+---
+# Tap add member button
+- tapOn: ".*Add Member.*"
+
+# Wait for modal
+- extendedWaitUntil:
+    visible: ".*Add Member.*"
+    timeout: 5000
+
+# Enter email
+- tapOn: ".*Email.*"
+- inputText: ${MEMBER_EMAIL}
+- hideKeyboard
+
+# Submit
+- tapOn: "Add"
+
+# Wait for member to appear in list
+- extendedWaitUntil:
+    visible: ${MEMBER_EMAIL}
+    timeout: 10000

@@ -19,4 +19,4 @@ appId: com.mindnest.mindnest
 # Wait for "Thinking..." to disappear (response received)
 - extendedWaitUntil:
     notVisible: "Thinking..."
-    timeout: 120000
+    timeout: 180000

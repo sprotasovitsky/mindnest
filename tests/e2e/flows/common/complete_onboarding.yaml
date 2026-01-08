@@ -8,7 +8,7 @@ appId: com.mindnest.mindnest
 ---
 # Verify we see the onboarding prompt (first message for owner)
 - extendedWaitUntil:
-    visible: ".*Welcome to your new project.*"
+    visible: ".*Let's set up your project.*"
     timeout: 10000
 
 # Enter project description

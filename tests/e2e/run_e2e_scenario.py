@@ -201,13 +201,22 @@ def run_owner_flow(data: dict, email_map: dict, timestamp: str, device: str) -> 
         print("  ❌ Onboarding failed")
         return False
 
-    # Step 4: Add members
-    for member in members:
-        print(f"  → Adding member: {member['name']}")
-        if not run_maestro_flow("common/add_member.yaml", {
-            "MEMBER_EMAIL": email_map[member["name"]],
-        }, device):
-            print(f"  ❌ Failed to add member {member['name']}")
+    # Step 4: Add members (open once, add all, close once)
+    if members:
+        if not run_maestro_flow("common/open_members.yaml", {}, device):
+            print("  ❌ Failed to open members screen")
+            return False
+
+        for member in members:
+            print(f"  → Adding member: {member['name']}")
+            if not run_maestro_flow("common/add_member_inline.yaml", {
+                "MEMBER_EMAIL": email_map[member["name"]],
+            }, device):
+                print(f"  ❌ Failed to add member {member['name']}")
+                return False
+
+        if not run_maestro_flow("common/close_members.yaml", {}, device):
+            print("  ❌ Failed to close members screen")
             return False
 
     print("  ✅ Owner flow completed")
