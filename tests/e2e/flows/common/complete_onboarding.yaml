@@ -16,9 +16,8 @@ appId: com.mindnest.mindnest
 - inputText: ${PROJECT_DESCRIPTION}
 - hideKeyboard
 
-# Send (tap the send button)
-- tapOn:
-    point: "95%,92%"
+# Send button by Semantics label
+- tapOn: "Send message"
 
 # Wait for response
 - extendedWaitUntil:
@@ -34,8 +33,7 @@ appId: com.mindnest.mindnest
 - hideKeyboard
 
 # Send
-- tapOn:
-    point: "95%,92%"
+- tapOn: "Send message"
 
 # Wait for response
 - extendedWaitUntil:
@@ -51,8 +49,7 @@ appId: com.mindnest.mindnest
 - hideKeyboard
 
 # Send
-- tapOn:
-    point: "95%,92%"
+- tapOn: "Send message"
 
 # Wait for response
 - extendedWaitUntil:

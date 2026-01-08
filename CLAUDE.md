@@ -90,14 +90,31 @@ docker-compose logs -f       # View logs
 ### Mobile Structure (`mobile/lib/`)
 ```
 ├── core/
-│   ├── api/        # HTTP client (Dio-based)
-│   ├── router/     # Navigation (go_router)
-│   └── theme/      # UI theming
+│   ├── api/           # HTTP client (Dio-based ApiClient)
+│   ├── auth/          # Auth state management (Riverpod)
+│   ├── members/       # Project members state
+│   ├── projects/      # Projects state
+│   ├── router/        # Navigation (go_router)
+│   └── theme/         # UI theming
 └── features/
-    └── chat/
+    ├── auth/
+    │   └── presentation/screens/    # LoginScreen
+    ├── chat/
+    │   └── presentation/
+    │       ├── screens/             # ChatScreen
+    │       └── widgets/             # MessageBubble, ChatInput
+    ├── members/
+    │   └── presentation/
+    │       ├── screens/             # MembersScreen
+    │       └── widgets/             # AddMemberModal
+    ├── onboarding/
+    │   └── presentation/screens/    # OnboardingScreen
+    ├── profile/
+    │   └── presentation/screens/    # ProfileScreen
+    └── projects/
         └── presentation/
-            ├── screens/   # ChatScreen
-            └── widgets/   # MessageBubble, ChatInput
+            ├── screens/             # ProjectsListScreen
+            └── widgets/             # CreateProjectModal, ProjectSettingsSheet
 ```
 
 ### Data Model (Graphiti)
@@ -529,6 +546,84 @@ Since Graphiti handles entity extraction automatically:
 2. Check if edges capture the relationships correctly
 3. Verify `expired_at` is set when facts are superseded
 4. Check LLM responses are contextually accurate
+
+## E2E Testing with Maestro
+
+End-to-end tests use [Maestro](https://maestro.mobile.dev/) for multi-device mobile testing.
+
+### Prerequisites
+
+1. **Java 17+** required for Maestro 2.0
+   ```bash
+   # Check Java version
+   java -version
+
+   # If needed, use Homebrew Java
+   export JAVA_HOME=/opt/homebrew/Cellar/openjdk@17/17.0.17/libexec/openjdk.jdk/Contents/Home
+   ```
+
+2. **Install Maestro**
+   ```bash
+   curl -Ls "https://get.maestro.mobile.dev" | bash
+   ```
+
+3. **Android emulators** configured and running
+
+### Running E2E Tests
+
+```bash
+cd tests/e2e
+
+# Run scenario on multiple emulators
+python3 run_e2e_scenario.py ../scenarios/001-new-year-party.md
+
+# Skip chat messages (only setup - useful for debugging)
+python3 run_e2e_scenario.py ../scenarios/001-new-year-party.md --skip-chat
+```
+
+### E2E Test Structure
+
+```
+tests/e2e/
+├── README.md              # Setup and usage guide
+├── config.yaml            # Test configuration
+├── run_e2e_scenario.py    # Multi-device test runner
+└── flows/common/          # Reusable Maestro flows
+    ├── login.yaml
+    ├── create_project.yaml
+    ├── join_project.yaml
+    ├── add_member.yaml
+    ├── complete_onboarding.yaml
+    └── send_message.yaml
+```
+
+### Flutter Element Selection in Maestro
+
+**IMPORTANT**: For Flutter widgets, use `Semantics` label instead of `tooltip` for element selection.
+
+```dart
+// In Flutter widget code
+Semantics(
+  label: 'Send message',  // ← Maestro finds this
+  button: true,
+  child: IconButton.filled(
+    tooltip: 'Send',      // ← Maestro does NOT find this reliably
+    ...
+  ),
+)
+```
+
+```yaml
+# In Maestro test
+- tapOn: "Send message"   # ✓ Works - uses Semantics label
+- tapOn: "Send"           # ✗ May fail - tooltip not always accessible
+```
+
+### Key Widgets with Semantics
+
+| Widget | Semantics Label | File |
+|--------|-----------------|------|
+| Send button | `Send message` | `chat_input.dart` |
 
 ## State Management (Mobile)
 

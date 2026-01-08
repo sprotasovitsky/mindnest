@@ -8,9 +8,8 @@ appId: com.mindnest.mindnest
 - inputText: ${MESSAGE}
 - hideKeyboard
 
-# Send (tap the send button area on the right)
-- tapOn:
-    point: "95%,92%"
+# Send button by Semantics label
+- tapOn: "Send message"
 
 # Wait for "Thinking..." to appear (message sent)
 - extendedWaitUntil:

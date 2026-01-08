@@ -87,15 +87,20 @@ class _ChatInputState extends State<ChatInput> {
           const SizedBox(width: 8),
           AnimatedContainer(
             duration: const Duration(milliseconds: 200),
-            child: IconButton.filled(
-              key: const Key('send_button'),
-              onPressed: _hasText ? _send : null,
-              icon: const Icon(Icons.send_rounded),
-              style: IconButton.styleFrom(
-                backgroundColor:
-                    _hasText ? colorScheme.primary : colorScheme.surfaceContainerHighest,
-                foregroundColor:
-                    _hasText ? colorScheme.onPrimary : colorScheme.outline,
+            child: Semantics(
+              label: 'Send message',
+              button: true,
+              child: IconButton.filled(
+                key: const Key('send_button'),
+                onPressed: _hasText ? _send : null,
+                tooltip: 'Send',
+                icon: const Icon(Icons.send_rounded),
+                style: IconButton.styleFrom(
+                  backgroundColor:
+                      _hasText ? colorScheme.primary : colorScheme.surfaceContainerHighest,
+                  foregroundColor:
+                      _hasText ? colorScheme.onPrimary : colorScheme.outline,
+                ),
               ),
             ),
           ),

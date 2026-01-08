@@ -3,13 +3,23 @@
 # Assumes user is on Projects List screen after login
 appId: com.mindnest.mindnest
 ---
+# Small delay to let projects list load
+- waitForAnimationToEnd
+
+# Pull to refresh projects list
+- swipe:
+    start: "50%,30%"
+    end: "50%,70%"
+
 # Wait for project to appear in list (owner must have added this user)
 - extendedWaitUntil:
-    visible: ${PROJECT_NAME}
+    visible:
+      text: ".*${PROJECT_NAME}.*"
     timeout: 60000
 
 # Tap on project to open it
-- tapOn: ${PROJECT_NAME}
+- tapOn:
+    text: ".*${PROJECT_NAME}.*"
 
 # Wait for chat screen
 - extendedWaitUntil:
