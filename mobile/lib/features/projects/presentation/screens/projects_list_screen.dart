@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../../core/projects/project_state.dart';
+
+import '../../../../core/models/project.dart';
+import '../../../../core/providers/project_provider.dart';
+import '../../../../shared/widgets/widgets.dart';
 import '../widgets/create_project_modal.dart';
 
 class ProjectsListScreen extends ConsumerStatefulWidget {
@@ -16,7 +19,7 @@ class _ProjectsListScreenState extends ConsumerState<ProjectsListScreen> {
   void initState() {
     super.initState();
     Future.microtask(() {
-      ref.read(projectProvider.notifier).loadProjects();
+      ref.read(projectsProvider.notifier).loadProjects();
     });
   }
 
@@ -34,13 +37,13 @@ class _ProjectsListScreenState extends ConsumerState<ProjectsListScreen> {
   }
 
   void _openProject(Project project) {
-    ref.read(projectProvider.notifier).selectProject(project);
+    ref.read(projectsProvider.notifier).selectProject(project);
     context.push('/chat');
   }
 
   @override
   Widget build(BuildContext context) {
-    final projectState = ref.watch(projectProvider);
+    final projectState = ref.watch(projectsProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -59,53 +62,26 @@ class _ProjectsListScreenState extends ConsumerState<ProjectsListScreen> {
         child: const Icon(Icons.add),
       ),
       body: projectState.isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : projectState.projects.isEmpty
-              ? _buildEmptyState()
-              : _buildProjectList(projectState.projects),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.folder_open_outlined,
-              size: 80,
-              color: Theme.of(context).colorScheme.outline,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'No projects yet',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Create your first project to get started',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            FilledButton.icon(
-              onPressed: _showCreateProjectModal,
-              icon: const Icon(Icons.add),
-              label: const Text('Create Project'),
-            ),
-          ],
-        ),
-      ),
+          ? const LoadingOverlay(message: 'Loading projects...')
+          : projectState.error != null
+              ? ErrorView(
+                  message: projectState.error!,
+                  onRetry: () => ref.read(projectsProvider.notifier).loadProjects(),
+                )
+              : projectState.projects.isEmpty
+                  ? EmptyState(
+                      message: 'No projects yet\nCreate your first project to get started',
+                      actionLabel: 'Create Project',
+                      onAction: _showCreateProjectModal,
+                      icon: Icons.folder_open_outlined,
+                    )
+                  : _buildProjectList(projectState.projects),
     );
   }
 
   Widget _buildProjectList(List<Project> projects) {
     return RefreshIndicator(
-      onRefresh: () => ref.read(projectProvider.notifier).loadProjects(),
+      onRefresh: () => ref.read(projectsProvider.notifier).loadProjects(),
       child: ListView.builder(
         padding: const EdgeInsets.symmetric(vertical: 8),
         itemCount: projects.length,

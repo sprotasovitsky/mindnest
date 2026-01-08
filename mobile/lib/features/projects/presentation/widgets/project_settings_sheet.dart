@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../core/projects/project_state.dart';
+
+import '../../../../core/providers/project_provider.dart';
+import '../../../../shared/widgets/widgets.dart';
 
 class ProjectSettingsSheet extends ConsumerStatefulWidget {
   const ProjectSettingsSheet({super.key});
@@ -17,7 +19,7 @@ class _ProjectSettingsSheetState extends ConsumerState<ProjectSettingsSheet> {
   @override
   void initState() {
     super.initState();
-    final currentProject = ref.read(projectProvider).currentProject;
+    final currentProject = ref.read(projectsProvider).currentProject;
     if (currentProject != null) {
       _nameController.text = currentProject.name;
     }
@@ -32,12 +34,12 @@ class _ProjectSettingsSheetState extends ConsumerState<ProjectSettingsSheet> {
   Future<void> _saveProject() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final currentProject = ref.read(projectProvider).currentProject;
+    final currentProject = ref.read(projectsProvider).currentProject;
     if (currentProject == null) return;
 
     setState(() => _isSaving = true);
 
-    final updatedProject = await ref.read(projectProvider.notifier).updateProject(
+    final updatedProject = await ref.read(projectsProvider.notifier).updateProject(
           currentProject.id,
           name: _nameController.text.trim(),
         );
@@ -46,16 +48,9 @@ class _ProjectSettingsSheetState extends ConsumerState<ProjectSettingsSheet> {
 
     if (updatedProject != null && mounted) {
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Project updated')),
-      );
+      showSuccessSnackBar(context, 'Project updated');
     } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Failed to update project'),
-          backgroundColor: Theme.of(context).colorScheme.error,
-        ),
-      );
+      showErrorSnackBar(context, 'Failed to update project');
     }
   }
 

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../core/members/members_state.dart';
-import '../../../../core/projects/project_state.dart';
+
+import '../../../../core/models/member.dart';
+import '../../../../core/providers/members_provider.dart';
+import '../../../../core/providers/project_provider.dart';
+import '../../../../shared/widgets/widgets.dart';
 import '../widgets/add_member_modal.dart';
 
 class MembersScreen extends ConsumerStatefulWidget {
@@ -16,7 +19,7 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
   void initState() {
     super.initState();
     Future.microtask(() {
-      final currentProject = ref.read(projectProvider).currentProject;
+      final currentProject = ref.read(projectsProvider).currentProject;
       if (currentProject != null) {
         ref.read(membersProvider.notifier).loadMembers(currentProject.id);
       }
@@ -53,54 +56,32 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
         ],
       ),
       body: membersState.isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : membersState.members.isEmpty
-              ? _buildEmptyState()
-              : _buildMembersList(membersState.members),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.group_outlined,
-              size: 80,
-              color: Theme.of(context).colorScheme.outline,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'No members yet',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Add members to collaborate on this project',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            FilledButton.icon(
-              onPressed: _showAddMemberModal,
-              icon: const Icon(Icons.person_add),
-              label: const Text('Add Member'),
-            ),
-          ],
-        ),
-      ),
+          ? const LoadingOverlay(message: 'Loading members...')
+          : membersState.error != null
+              ? ErrorView(
+                  message: membersState.error!,
+                  onRetry: () {
+                    final currentProject = ref.read(projectsProvider).currentProject;
+                    if (currentProject != null) {
+                      ref.read(membersProvider.notifier).loadMembers(currentProject.id);
+                    }
+                  },
+                )
+              : membersState.members.isEmpty
+                  ? EmptyState(
+                      message: 'No members yet\nAdd members to collaborate on this project',
+                      actionLabel: 'Add Member',
+                      onAction: _showAddMemberModal,
+                      icon: Icons.group_outlined,
+                    )
+                  : _buildMembersList(membersState.members),
     );
   }
 
   Widget _buildMembersList(List<Member> members) {
     return RefreshIndicator(
       onRefresh: () async {
-        final currentProject = ref.read(projectProvider).currentProject;
+        final currentProject = ref.read(projectsProvider).currentProject;
         if (currentProject != null) {
           await ref.read(membersProvider.notifier).loadMembers(currentProject.id);
         }

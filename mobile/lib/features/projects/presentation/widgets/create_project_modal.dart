@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../../core/projects/project_state.dart';
+
+import '../../../../core/providers/project_provider.dart';
 
 class CreateProjectModal extends ConsumerStatefulWidget {
   const CreateProjectModal({super.key});
@@ -26,7 +27,7 @@ class _CreateProjectModalState extends ConsumerState<CreateProjectModal> {
 
     setState(() => _isCreating = true);
 
-    final project = await ref.read(projectProvider.notifier).createProject(
+    final project = await ref.read(projectsProvider.notifier).createProject(
           _nameController.text.trim(),
           null,
         );

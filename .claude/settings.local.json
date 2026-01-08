@@ -11,7 +11,8 @@
       "WebFetch(domain:blog.getzep.com)",
       "WebFetch(domain:arxiv.org)",
       "WebFetch(domain:medium.com)",
-      "WebFetch(domain:neo4j.com)"
+      "WebFetch(domain:neo4j.com)",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ]
   }
 }

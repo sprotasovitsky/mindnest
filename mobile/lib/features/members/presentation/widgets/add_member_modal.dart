@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../core/members/members_state.dart';
-import '../../../../core/projects/project_state.dart';
+
+import '../../../../core/providers/members_provider.dart';
+import '../../../../core/providers/project_provider.dart';
+import '../../../../shared/widgets/widgets.dart';
 
 class AddMemberModal extends ConsumerStatefulWidget {
   const AddMemberModal({super.key});
@@ -24,7 +26,7 @@ class _AddMemberModalState extends ConsumerState<AddMemberModal> {
   Future<void> _addMember() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final currentProject = ref.read(projectProvider).currentProject;
+    final currentProject = ref.read(projectsProvider).currentProject;
     if (currentProject == null) return;
 
     setState(() => _isAdding = true);
@@ -38,16 +40,9 @@ class _AddMemberModalState extends ConsumerState<AddMemberModal> {
 
     if (success && mounted) {
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Member added successfully')),
-      );
+      showSuccessSnackBar(context, 'Member added successfully');
     } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Failed to add member'),
-          backgroundColor: Theme.of(context).colorScheme.error,
-        ),
-      );
+      showErrorSnackBar(context, 'Failed to add member');
     }
   }
 
