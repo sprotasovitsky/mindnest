@@ -10,7 +10,7 @@ MindNest is an AI-first platform for knowledge and task management through a cha
 
 - **Backend**: Python 3.12 + FastAPI + Graphiti
 - **Mobile/Web**: Flutter + Dart (iOS, Android, Web from single codebase)
-- **AI**: Google Gemini (gemini-2.5-flash-lite for LLM, gemini-embedding-001 for embeddings)
+- **AI**: Google Gemini (gemini-3-flash-preview for chat, gemini-2.5-flash for Graphiti, gemini-embedding-001 for embeddings)
 - **Knowledge Graph**: Graphiti (built on Neo4j) - handles entity extraction, temporal relations, hybrid search
 - **Databases**: Neo4j (knowledge graph via Graphiti), PostgreSQL (users, projects, members)
 - **Infrastructure**: Docker Compose for local dev
@@ -30,7 +30,7 @@ source venv/bin/activate
 uvicorn app.main:app --reload --port 8000
 
 # Or with environment variables
-GOOGLE_API_KEY=your-key uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 8000
 ```
 
 ### Mobile (from `mobile/` directory)
@@ -341,7 +341,7 @@ Settings in `backend-python/app/config.py`:
 ```python
 llm_model: str = "gemini-2.5-flash-lite"       # Message classifier (fast)
 llm_model_balanced: str = "gemini-2.5-flash"   # Reserved for future use
-llm_model_pro: str = "gemini-2.5-pro"          # Chat responses (best quality)
+llm_model_pro: str = "gemini-3-flash-preview"  # Chat responses (requires Vertex AI)
 graphiti_model: str = "gemini-2.5-flash"       # Entity extraction (best balance)
 # Embeddings: gemini-embedding-001 (3072 dimensions, 100+ languages)
 
@@ -352,7 +352,7 @@ chat_history_limit: int = 10                    # Messages in LLM context
 
 **Currently used:**
 - **Message classifier**: `llm_model` (gemini-2.5-flash-lite) - classifies DATA vs QUESTION
-- **Chat responses**: `llm_model_pro` (gemini-2.5-pro) - generates user-facing responses
+- **Chat responses**: `llm_model_pro` (gemini-3-flash-preview) - generates user-facing responses (**requires Vertex AI, not API key**)
 - **Graphiti entity extraction**: `graphiti_model` (gemini-2.5-flash) - extracts entities/edges
 
 **Model selection rationale** (based on comparative testing):
@@ -382,22 +382,26 @@ client = get_gemini_client()
 response = await generate_text("Your prompt here")
 ```
 
-The client auto-detects authentication:
-1. If `GOOGLE_API_KEY` is set → uses API key auth
-2. Otherwise → uses Vertex AI with service account
+All models use Vertex AI with service account credentials.
 
 ## Environment Variables
 
-### Required for Google AI
-```bash
-# Option 1: API Key (recommended for development)
-GOOGLE_API_KEY=your-api-key
+### Vertex AI (required)
 
-# Option 2: Vertex AI with service account
-GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
+```bash
 VERTEX_AI_PROJECT_ID=your-project-id
-VERTEX_AI_LOCATION=us-central1
+GCP_SERVICE_ACCOUNT_EMAIL=your-sa@project.iam.gserviceaccount.com
+GCP_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
 ```
+
+### Setting up Vertex AI
+
+1. Create service account in GCP Console with "Vertex AI User" role
+2. Create key (JSON) and extract:
+   - `project_id` → `VERTEX_AI_PROJECT_ID`
+   - `client_email` → `GCP_SERVICE_ACCOUNT_EMAIL`
+   - `private_key` → `GCP_PRIVATE_KEY`
+3. Add to `.env` file
 
 ### Database
 ```bash
@@ -411,7 +415,7 @@ DATABASE_URL=postgresql+asyncpg://mindnest:mindnest@localhost:5432/mindnest
 ```bash
 cd backend-python
 source venv/bin/activate
-GOOGLE_API_KEY=your-key uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 8000
 ```
 
 ## Database Access
@@ -539,7 +543,7 @@ curl -X POST http://localhost:8000/api/chat/search \
 |-------|----------|
 | "Graphiti not initialized" | Check Neo4j is running, credentials are correct |
 | "No results from search" | Check project_id matches, add some messages first |
-| "Empty response" | Check GOOGLE_API_KEY is set |
+| "Empty response" | Check Vertex AI credentials are set |
 | Import errors | Run `pip install -r requirements.txt` |
 | Inconsistent calculations | Check `chat_history_limit` is adequate (default: 10) |
 | Missing recent data | Pending cache may have cleared; check background task logs |
@@ -735,13 +739,13 @@ dart run build_runner build
 The following models are intentionally chosen and must NOT be changed:
 ```python
 llm_model = "gemini-2.5-flash-lite"       # Classifier - fast, cost-effective
-llm_model_pro = "gemini-2.5-pro"          # Chat responses - NOT gemini-2.0-pro
+llm_model_pro = "gemini-3-flash-preview"  # Chat responses - requires Vertex AI auth
 graphiti_model = "gemini-2.5-flash"       # Entity extraction - NOT gemini-3, NOT flash-lite
 embedding_model = "gemini-embedding-001"  # NOT text-embedding-004
 embedding_dim = 3072                      # NOT 768
 ```
 
-These are the latest and most capable models. Do not "update" or "fix" them based on assumptions.
+**Important:** `gemini-3-flash-preview` does NOT support API keys. It requires Vertex AI authentication (OAuth2 or service account).
 
 **Why gemini-2.5-flash for Graphiti:**
 - Tested against flash-lite, pro, and gemini-3 models

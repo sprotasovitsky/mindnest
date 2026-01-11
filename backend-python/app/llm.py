@@ -4,11 +4,11 @@ Provides a shared Google Gemini client for the application.
 Used by both Graphiti and direct LLM calls for response generation.
 """
 
-import os
 import logging
 from typing import Optional
 
 from google import genai
+from google.oauth2 import service_account
 
 from .config import get_settings
 
@@ -17,11 +17,41 @@ logger = logging.getLogger(__name__)
 # Singleton client instances
 _client: Optional[genai.Client] = None
 _global_client: Optional[genai.Client] = None  # For gemini-3 models that require global endpoint
+_credentials: Optional[service_account.Credentials] = None
 
 
 def _is_gemini3_model(model_name: str) -> bool:
     """Check if model requires global endpoint (gemini-3 models)."""
     return model_name.startswith("gemini-3")
+
+
+def _get_vertex_credentials() -> Optional[service_account.Credentials]:
+    """Get Vertex AI credentials from env vars."""
+    global _credentials
+
+    if _credentials is not None:
+        return _credentials
+
+    settings = get_settings()
+
+    if not settings.gcp_service_account_email or not settings.gcp_private_key:
+        return None
+
+    # Replace literal \n with actual newlines in private key
+    private_key = settings.gcp_private_key.replace("\\n", "\n")
+
+    _credentials = service_account.Credentials.from_service_account_info(
+        {
+            "type": "service_account",
+            "project_id": settings.vertex_ai_project_id,
+            "private_key": private_key,
+            "client_email": settings.gcp_service_account_email,
+            "token_uri": "https://oauth2.googleapis.com/token",
+        },
+        scopes=["https://www.googleapis.com/auth/cloud-platform"],
+    )
+
+    return _credentials
 
 
 def get_gemini_client(model: Optional[str] = None) -> genai.Client:
@@ -36,38 +66,36 @@ def get_gemini_client(model: Optional[str] = None) -> genai.Client:
     global _client, _global_client
 
     settings = get_settings()
-    api_key = settings.google_api_key or os.getenv("GOOGLE_API_KEY", "")
 
-    # For API key auth, same client works for all models
-    if api_key:
-        if _client is None:
-            logger.info("Initializing Gemini client with API key")
-            _client = genai.Client(api_key=api_key)
-        return _client
+    # Get credentials from env vars
+    credentials = _get_vertex_credentials()
+    if not credentials:
+        raise ValueError(
+            "Vertex AI credentials required. Set GCP_SERVICE_ACCOUNT_EMAIL, "
+            "GCP_PRIVATE_KEY, and VERTEX_AI_PROJECT_ID environment variables."
+        )
 
-    # For Vertex AI, gemini-3 models need global endpoint
+    # gemini-3 models need global endpoint
     use_global = model and _is_gemini3_model(model)
 
     if use_global:
         if _global_client is None:
             logger.info("Initializing Gemini client with Vertex AI (global endpoint for gemini-3)")
-            if settings.google_application_credentials:
-                os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = settings.google_application_credentials
             _global_client = genai.Client(
                 vertexai=True,
                 project=settings.vertex_ai_project_id,
                 location="global",
+                credentials=credentials,
             )
         return _global_client
     else:
         if _client is None:
             logger.info("Initializing Gemini client with Vertex AI")
-            if settings.google_application_credentials:
-                os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = settings.google_application_credentials
             _client = genai.Client(
                 vertexai=True,
                 project=settings.vertex_ai_project_id,
                 location=settings.vertex_ai_location,
+                credentials=credentials,
             )
         return _client
 

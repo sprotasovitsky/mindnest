@@ -23,16 +23,16 @@ class Settings(BaseSettings):
     # PostgreSQL
     database_url: str = "postgresql+asyncpg://mindnest:mindnest@localhost:5432/mindnest"
 
-    # Google AI
-    google_api_key: str = ""
-    google_application_credentials: str = ""
+    # Vertex AI credentials
     vertex_ai_project_id: str = ""
     vertex_ai_location: str = "us-central1"
+    gcp_service_account_email: str = ""
+    gcp_private_key: str = ""  # PEM format
 
     # LLM Models
     llm_model: str = "gemini-2.5-flash-lite"  # Fast, cost-effective
     llm_model_balanced: str = "gemini-2.5-flash"  # Balanced speed/quality
-    llm_model_pro: str = "gemini-3-flash-preview"  # Best quality (temporarily using gemini-3-flash)
+    llm_model_pro: str = "gemini-3-flash-preview"  # Best quality (requires Vertex AI, not API key)
 
     # Model for Graphiti entity extraction (can be overridden via env var)
     graphiti_model: str = "gemini-2.5-flash"  # Best balance of speed and quality for entity extraction

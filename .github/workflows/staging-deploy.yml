@@ -86,7 +86,9 @@ jobs:
             cat > .env << 'ENVEOF'
             NEO4J_PASSWORD=${{ secrets.STAGING_NEO4J_PASSWORD }}
             DATABASE_URL=postgresql+asyncpg://mindnest:${{ secrets.STAGING_POSTGRES_PASSWORD }}@termly-postgres:5432/mindnest_staging
-            GOOGLE_API_KEY=${{ secrets.STAGING_GOOGLE_API_KEY }}
+            VERTEX_AI_PROJECT_ID=${{ secrets.STAGING_GCP_PROJECT_ID }}
+            GCP_SERVICE_ACCOUNT_EMAIL=${{ secrets.STAGING_GCP_SERVICE_ACCOUNT_EMAIL }}
+            GCP_PRIVATE_KEY=${{ secrets.STAGING_GCP_PRIVATE_KEY }}
             SECRET_KEY=${{ secrets.STAGING_JWT_SECRET }}
             ENVEOF
             chmod 600 .env

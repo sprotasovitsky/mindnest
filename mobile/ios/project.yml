@@ -59,7 +59,7 @@ targets:
         SWIFT_VERSION: "5.0"
         ENABLE_BITCODE: NO
         SWIFT_OBJC_BRIDGING_HEADER: Runner/Runner-Bridging-Header.h
-        ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES: YES
+        ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES: $(inherited)
     preBuildScripts:
       - name: "Run Script"
         script: |
