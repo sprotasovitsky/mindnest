@@ -1,14 +1,15 @@
 // Staging Configuration
-// Staging/TestFlight environment
+#include "../Flutter/Generated.xcconfig"
 
-ENVIRONMENT_NAME = Staging
-API_BASE_URL = https://dev-api.mindnest.one/api
-
-// Bundle ID (allows installing all 3 envs on same device)
+// App identity
 PRODUCT_BUNDLE_IDENTIFIER = com.mindnest.mindnest.staging
 PRODUCT_NAME = MindNest Staging
 DISPLAY_NAME = MindNest Staging
 
 // Build settings
-SWIFT_ACTIVE_COMPILATION_CONDITIONS = STAGING
 SWIFT_OPTIMIZATION_LEVEL = -O
+GCC_OPTIMIZATION_LEVEL = s
+SWIFT_COMPILATION_MODE = wholemodule
+
+// Flutter
+FLUTTER_BUILD_MODE = release

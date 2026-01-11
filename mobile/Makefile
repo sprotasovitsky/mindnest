@@ -1,49 +1,71 @@
-.PHONY: run-dev run-staging run-prod build-staging build-prod clean
+.PHONY: run-dev run-staging run-prod build-dev build-staging build-prod clean setup
 
-# Development (local backend)
+# === Setup (run after clone) ===
+
+setup:
+	flutter pub get
+	cd ios && xcodegen generate && pod install
+
+# === Run (Flutter) ===
+
 run-dev:
 	flutter run --dart-define=ENVIRONMENT=dev --dart-define=API_URL=http://localhost:8000/api
 
-run-dev-ios:
-	flutter run -d iPhone --dart-define=ENVIRONMENT=dev --dart-define=API_URL=http://localhost:8000/api
-
-# Staging (dev-api.mindnest.one)
 run-staging:
 	flutter run --dart-define=ENVIRONMENT=staging --dart-define=API_URL=https://dev-api.mindnest.one/api
 
+run-prod:
+	flutter run --dart-define=ENVIRONMENT=prod --dart-define=API_URL=https://api.mindnest.one/api
+
+# === iOS Builds (xcodebuild) ===
+
+build-dev-ios:
+	flutter build bundle --dart-define=ENVIRONMENT=dev --dart-define=API_URL=http://localhost:8000/api
+	cd ios && xcodebuild -workspace Runner.xcworkspace -scheme dev -configuration Dev -sdk iphoneos CODE_SIGNING_ALLOWED=NO
+
 build-staging-ios:
-	flutter build ios --dart-define=ENVIRONMENT=staging --dart-define=API_URL=https://dev-api.mindnest.one/api
+	flutter build bundle --dart-define=ENVIRONMENT=staging --dart-define=API_URL=https://dev-api.mindnest.one/api
+	cd ios && xcodebuild -workspace Runner.xcworkspace -scheme staging -configuration Staging -sdk iphoneos CODE_SIGNING_ALLOWED=NO
+
+build-prod-ios:
+	flutter build bundle --dart-define=ENVIRONMENT=prod --dart-define=API_URL=https://api.mindnest.one/api
+	cd ios && xcodebuild -workspace Runner.xcworkspace -scheme prod -configuration Prod -sdk iphoneos CODE_SIGNING_ALLOWED=NO
+
+# === Android Builds ===
 
 build-staging-apk:
 	flutter build apk --dart-define=ENVIRONMENT=staging --dart-define=API_URL=https://dev-api.mindnest.one/api
 
-# Production (api.mindnest.one)
-run-prod:
-	flutter run --release --dart-define=ENVIRONMENT=prod --dart-define=API_URL=https://api.mindnest.one/api
-
-build-prod-ios:
-	flutter build ios --release --dart-define=ENVIRONMENT=prod --dart-define=API_URL=https://api.mindnest.one/api
-
 build-prod-apk:
 	flutter build apk --release --dart-define=ENVIRONMENT=prod --dart-define=API_URL=https://api.mindnest.one/api
 
-# Utilities
+# === Utilities ===
+
 clean:
 	flutter clean
+	cd ios && rm -rf Pods Podfile.lock Runner.xcodeproj Runner.xcworkspace
 
-deps:
-	flutter pub get
+regen:
+	cd ios && xcodegen generate && pod install
 
-build-runner:
-	dart run build_runner build --delete-conflicting-outputs
-
-# Help
 help:
-	@echo "Available commands:"
-	@echo "  make run-dev          - Run with local backend"
-	@echo "  make run-staging      - Run with staging backend"
-	@echo "  make run-prod         - Run with production backend"
-	@echo "  make build-staging-ios - Build iOS for staging"
-	@echo "  make build-prod-ios   - Build iOS for production"
-	@echo "  make clean            - Clean Flutter build"
-	@echo "  make deps             - Get dependencies"
+	@echo "Setup:"
+	@echo "  make setup       - Run after clone (flutter pub get, xcodegen, pod install)"
+	@echo ""
+	@echo "Run:"
+	@echo "  make run-dev     - Local backend (.dev bundle)"
+	@echo "  make run-staging - Staging backend (.staging bundle)"
+	@echo "  make run-prod    - Production backend (prod bundle)"
+	@echo ""
+	@echo "Build iOS:"
+	@echo "  make build-dev-ios     - Dev build"
+	@echo "  make build-staging-ios - Staging build"
+	@echo "  make build-prod-ios    - Production build"
+	@echo ""
+	@echo "Build Android:"
+	@echo "  make build-staging-apk"
+	@echo "  make build-prod-apk"
+	@echo ""
+	@echo "Utilities:"
+	@echo "  make clean  - Clean all"
+	@echo "  make regen  - Regenerate Xcode project"

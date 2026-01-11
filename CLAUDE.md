@@ -35,13 +35,44 @@ GOOGLE_API_KEY=your-key uvicorn app.main:app --reload --port 8000
 
 ### Mobile (from `mobile/` directory)
 ```bash
-flutter pub get              # Install dependencies
-flutter run                  # Run on connected device/emulator
-flutter run -d chrome        # Run in web browser
-flutter build apk            # Build Android APK
-flutter build ios            # Build iOS app
+# Initial setup (after clone)
+make setup                   # flutter pub get + xcodegen + pod install
+
+# Run with different environments
+make run-dev                 # Local backend (bundle: .dev)
+make run-staging             # Staging backend (bundle: .staging)
+make run-prod                # Production backend (bundle: prod)
+
+# Build iOS (via xcodebuild)
+make build-dev-ios
+make build-staging-ios
+make build-prod-ios
+
+# Build Android
+make build-staging-apk
+make build-prod-apk
+
+# Utilities
+make regen                   # Regenerate Xcode project (xcodegen + pod install)
+make clean                   # Clean all build artifacts
 dart run build_runner build  # Generate code (freezed, json_serializable, riverpod)
 ```
+
+### iOS Project Structure
+```
+mobile/ios/
+├── project.yml              # XcodeGen config (generates .xcodeproj)
+├── Podfile                  # CocoaPods dependencies
+├── Configurations/
+│   ├── Dev.xcconfig         # → com.mindnest.mindnest.dev
+│   ├── Staging.xcconfig     # → com.mindnest.mindnest.staging
+│   └── Prod.xcconfig        # → com.mindnest.mindnest
+├── Runner/                  # App source files
+└── ci_scripts/
+    └── ci_post_clone.sh     # Xcode Cloud script
+```
+
+**Note:** `.xcodeproj` and `Pods/` are gitignored. Run `make setup` after clone.
 
 ### Docker (from `backend-python/` directory)
 ```bash

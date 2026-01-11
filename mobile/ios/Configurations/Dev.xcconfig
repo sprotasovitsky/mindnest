@@ -1,13 +1,16 @@
-// Development Configuration
-// Local development environment
+// Dev Configuration
+#include "../Flutter/Generated.xcconfig"
 
-ENVIRONMENT_NAME = Development
-API_BASE_URL = http://localhost:8000/api
-
-// Bundle ID (allows installing all 3 envs on same device)
+// App identity
 PRODUCT_BUNDLE_IDENTIFIER = com.mindnest.mindnest.dev
 PRODUCT_NAME = MindNest Dev
 DISPLAY_NAME = MindNest Dev
 
 // Build settings
-SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG DEV
+SWIFT_OPTIMIZATION_LEVEL = -Onone
+GCC_OPTIMIZATION_LEVEL = 0
+ENABLE_TESTABILITY = YES
+ONLY_ACTIVE_ARCH = YES
+
+// Flutter
+FLUTTER_BUILD_MODE = debug
