@@ -47,7 +47,7 @@ AI-first knowledge and task management platform powered by [Graphiti](https://gi
 
 - Python 3.10+
 - Docker
-- Google API Key (for Gemini)
+- GCP Service Account with Vertex AI access
 
 ### 2. Setup
 
@@ -63,7 +63,7 @@ pip install -r requirements.txt
 
 # Copy environment file
 cp .env.example .env
-# Edit .env and add your GOOGLE_API_KEY
+# Edit .env and add your Vertex AI credentials
 ```
 
 ### 3. Start Neo4j
@@ -216,7 +216,9 @@ Search combines:
 | `NEO4J_URI` | Neo4j Bolt URI | `bolt://localhost:7687` |
 | `NEO4J_USER` | Neo4j username | `neo4j` |
 | `NEO4J_PASSWORD` | Neo4j password | `mindnest123` |
-| `GOOGLE_API_KEY` | Google AI API key | required |
+| `VERTEX_AI_PROJECT_ID` | GCP Project ID | required |
+| `GCP_SERVICE_ACCOUNT_EMAIL` | Service account email | required |
+| `GCP_PRIVATE_KEY` | Service account private key | required |
 | `DEBUG` | Enable debug mode | `true` |
 
 ## Development

@@ -35,8 +35,8 @@ async def lifespan(app: FastAPI):
     logger.info("Starting MindNest backend...")
     settings = get_settings()
 
-    if not settings.google_api_key:
-        logger.warning("GOOGLE_API_KEY not set! LLM features will not work.")
+    if not settings.gcp_service_account_email or not settings.gcp_private_key:
+        logger.warning("Vertex AI credentials not set! LLM features will not work.")
 
     # Initialize PostgreSQL
     try:
