@@ -61,7 +61,7 @@ async def main():
     # Test 1: Add a task
     print("[2/6] Adding task episode...")
     try:
-        episode1 = await kg.graphiti.add_episode(
+        episode1 = await kg._client.add_episode(
             name="test_task_1",
             episode_body="Buy milk tomorrow, assigned to Petya. Priority: high.",
             source_description="test_user",
@@ -79,7 +79,7 @@ async def main():
     # Test 2: Add an expense
     print("[3/6] Adding expense episode...")
     try:
-        episode2 = await kg.graphiti.add_episode(
+        episode2 = await kg._client.add_episode(
             name="test_expense_1",
             episode_body="Maria paid 500 rubles for dinner. Split between Maria, Petya, and Ivan.",
             source_description="test_user",
@@ -97,7 +97,7 @@ async def main():
     # Test 3: Update (edge invalidation)
     print("[4/6] Testing edge invalidation (task completion)...")
     try:
-        episode3 = await kg.graphiti.add_episode(
+        episode3 = await kg._client.add_episode(
             name="test_update_1",
             episode_body="Petya bought the milk. Task completed.",
             source_description="test_user",
