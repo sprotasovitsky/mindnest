@@ -99,7 +99,7 @@ jobs:
             fi
 
             # Start services
-            docker compose up -d
+            docker-compose up -d
 
             # Wait for backend to be healthy
             echo "Waiting for backend to start..."
