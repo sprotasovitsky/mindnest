@@ -75,6 +75,7 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            set -e
             cd /opt/mindnest
 
             # Create .env file
@@ -86,27 +87,37 @@ jobs:
             ENVEOF
             chmod 600 .env
 
-            # Copy nginx config to Termly nginx directory
-            cp nginx/dev-api.mindnest.one.conf /opt/termly/nginx/conf.d/
-
             # Login to GitHub Container Registry
-            echo ${{ secrets.GHCR_PAT }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u sprotasovitsky --password-stdin
 
             # Pull the new image
-            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:staging
+            docker pull ghcr.io/sprotasovitsky/mindnest/backend:staging
 
-            # Rename compose file and start services
-            mv docker-compose.staging.yml docker-compose.yml
+            # Rename compose file if needed
+            if [ -f docker-compose.staging.yml ]; then
+              mv docker-compose.staging.yml docker-compose.yml
+            fi
+
+            # Start services
             docker compose up -d
 
-            # Reload nginx to pick up new config
+            # Wait for backend to be healthy
+            echo "Waiting for backend to start..."
+            for i in $(seq 1 30); do
+              if docker exec mindnest-backend curl -sf http://localhost:8000/health > /dev/null 2>&1; then
+                echo "Backend is healthy!"
+                break
+              fi
+              echo "Waiting... ($i/30)"
+              sleep 5
+            done
+
+            # Copy nginx config and reload AFTER backend is up
+            cp nginx/dev-api.mindnest.one.conf /opt/termly/nginx/conf.d/
             docker exec termly-nginx nginx -s reload
 
-            # Wait for services to start
-            sleep 15
-
-            # Health check
-            curl -f http://mindnest-backend:8000/health || exit 1
+            # Final health check
+            docker exec mindnest-backend curl -f http://localhost:8000/health
 
       - name: External health check
         run: |
