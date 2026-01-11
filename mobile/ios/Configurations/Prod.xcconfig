@@ -1,0 +1,14 @@
+// Production Configuration
+// App Store release environment
+
+ENVIRONMENT_NAME = Production
+API_BASE_URL = https://api.mindnest.one/api
+
+// Bundle ID (production)
+PRODUCT_BUNDLE_IDENTIFIER = com.mindnest.mindnest
+PRODUCT_NAME = MindNest
+DISPLAY_NAME = MindNest
+
+// Build settings
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = RELEASE PROD
+SWIFT_OPTIMIZATION_LEVEL = -O

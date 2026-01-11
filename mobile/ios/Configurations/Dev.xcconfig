@@ -1,0 +1,13 @@
+// Development Configuration
+// Local development environment
+
+ENVIRONMENT_NAME = Development
+API_BASE_URL = http://localhost:8000/api
+
+// Bundle ID (allows installing all 3 envs on same device)
+PRODUCT_BUNDLE_IDENTIFIER = com.mindnest.mindnest.dev
+PRODUCT_NAME = MindNest Dev
+DISPLAY_NAME = MindNest Dev
+
+// Build settings
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG DEV

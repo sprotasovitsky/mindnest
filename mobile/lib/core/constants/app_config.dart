@@ -2,11 +2,25 @@
 class AppConfig {
   AppConfig._();
 
+  /// Environment name (dev, staging, prod)
+  static const String environment = String.fromEnvironment(
+    'ENVIRONMENT',
+    defaultValue: 'dev',
+  );
+
   /// API Configuration
   static const String apiUrl = String.fromEnvironment(
     'API_URL',
     defaultValue: 'http://10.0.2.2:8000/api',
   );
+
+  /// Environment helpers
+  static bool get isDev => environment == 'dev';
+  static bool get isStaging => environment == 'staging';
+  static bool get isProd => environment == 'prod';
+
+  /// Debug logging (enabled in dev and staging)
+  static bool get enableDebugLogs => !isProd;
 
   /// Timeouts
   static const Duration connectTimeout = Duration(seconds: 30);
