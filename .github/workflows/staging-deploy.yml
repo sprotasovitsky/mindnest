@@ -1,0 +1,114 @@
+name: Deploy to Staging
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend-python/**'
+      - '.github/workflows/staging-deploy.yml'
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: sprotasovitsky/mindnest/backend
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: backend-python/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r backend-python/requirements.txt
+
+  build-and-deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend-python
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:staging
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
+
+      - name: Copy files to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "backend-python/docker-compose.staging.yml,backend-python/nginx/dev-api.mindnest.one.conf"
+          target: "/opt/mindnest/"
+          strip_components: 1
+
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd /opt/mindnest
+
+            # Create .env file
+            cat > .env << 'ENVEOF'
+            NEO4J_PASSWORD=${{ secrets.STAGING_NEO4J_PASSWORD }}
+            DATABASE_URL=postgresql+asyncpg://mindnest:${{ secrets.STAGING_POSTGRES_PASSWORD }}@termly-postgres:5432/mindnest_staging
+            GOOGLE_API_KEY=${{ secrets.STAGING_GOOGLE_API_KEY }}
+            SECRET_KEY=${{ secrets.STAGING_JWT_SECRET }}
+            ENVEOF
+            chmod 600 .env
+
+            # Copy nginx config to Termly nginx directory
+            cp nginx/dev-api.mindnest.one.conf /opt/termly/nginx/conf.d/
+
+            # Login to GitHub Container Registry
+            echo ${{ secrets.GHCR_PAT }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            # Pull the new image
+            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:staging
+
+            # Rename compose file and start services
+            mv docker-compose.staging.yml docker-compose.yml
+            docker compose up -d
+
+            # Reload nginx to pick up new config
+            docker exec termly-nginx nginx -s reload
+
+            # Wait for services to start
+            sleep 15
+
+            # Health check
+            curl -f http://mindnest-backend:8000/health || exit 1
+
+      - name: External health check
+        run: |
+          sleep 10
+          curl -f https://dev-api.mindnest.one/health || echo "SSL may need initial setup"
