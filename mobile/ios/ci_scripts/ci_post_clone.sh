@@ -26,7 +26,12 @@ dart run build_runner build --delete-conflicting-outputs
 cd ios
 xcodegen generate
 
+# Precache Flutter iOS artifacts (required before pod install)
+cd ..
+flutter precache --ios
+
 # Install CocoaPods dependencies
+cd ios
 pod install
 
 # Environment based on scheme
