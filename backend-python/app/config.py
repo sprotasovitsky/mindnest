@@ -52,10 +52,29 @@ class Settings(BaseSettings):
     # CORS - comma-separated list of allowed origins
     allowed_origins: str = "http://localhost:3000,http://localhost:8080,https://mindnest.one,https://*.mindnest.one"
 
-    # Rate limiting
+    # Rate limiting (production defaults)
     rate_limit_login: str = "5/minute"
     rate_limit_register: str = "3/minute"
     rate_limit_chat: str = "30/minute"
+
+    def get_rate_limit(self, limit_type: str) -> str:
+        """Get rate limit based on debug mode. Higher limits for local dev."""
+        if self.debug:
+            # Relaxed limits for local development/testing
+            debug_limits = {
+                "login": "100/minute",
+                "register": "100/minute",
+                "chat": "200/minute",
+            }
+            return debug_limits.get(limit_type, "100/minute")
+
+        # Production limits
+        limits = {
+            "login": self.rate_limit_login,
+            "register": self.rate_limit_register,
+            "chat": self.rate_limit_chat,
+        }
+        return limits.get(limit_type, "30/minute")
 
     @field_validator("secret_key")
     @classmethod

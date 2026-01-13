@@ -35,6 +35,11 @@ router = APIRouter(prefix="/api/chat", tags=["chat"])
 limiter = Limiter(key_func=get_remote_address)
 
 
+def _get_chat_limit() -> str:
+    """Get chat rate limit based on debug mode."""
+    return get_settings().get_rate_limit("chat")
+
+
 def _format_context(edges: list[dict], nodes: list[dict]) -> tuple[list[dict], list[dict]]:
     """Format search results for LLM prompts."""
     facts = [{"fact": e["fact"], **e} for e in edges]
@@ -428,7 +433,7 @@ async def _handle_question(
 
 
 @router.post("", response_model=ChatResponse)
-@limiter.limit("30/minute")
+@limiter.limit(_get_chat_limit)
 async def send_message(
     request: Request,
     chat_request: ChatRequest,

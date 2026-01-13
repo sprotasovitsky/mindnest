@@ -29,6 +29,16 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 limiter = Limiter(key_func=get_remote_address)
 
 
+def _get_register_limit() -> str:
+    """Get register rate limit based on debug mode."""
+    return get_settings().get_rate_limit("register")
+
+
+def _get_login_limit() -> str:
+    """Get login rate limit based on debug mode."""
+    return get_settings().get_rate_limit("login")
+
+
 def mask_email(email: str) -> str:
     """Mask email for logging (GDPR compliance)."""
     if "@" not in email:
@@ -184,7 +194,7 @@ async def get_user_by_id(db: AsyncSession, user_id: str) -> Optional[User]:
 
 
 @router.post("/register", response_model=AuthResponse)
-@limiter.limit("3/minute")
+@limiter.limit(_get_register_limit)
 async def register(
     request: Request,
     data: RegisterRequest,
@@ -228,7 +238,7 @@ async def register(
 
 
 @router.post("/login", response_model=AuthResponse)
-@limiter.limit("5/minute")
+@limiter.limit(_get_login_limit)
 async def login(
     request: Request,
     data: LoginRequest,
