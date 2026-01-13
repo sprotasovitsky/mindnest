@@ -803,6 +803,30 @@ embedding_dim = 3072                      # NOT 768
 - flash-lite had more refusals on valid update/correction requests
 - flash provides best balance: ~20% faster than pro with similar accuracy
 
+### ALWAYS use --dart-define when running Flutter manually
+
+When running `flutter run` directly (not via Makefile), you MUST pass `--dart-define` flags:
+
+```bash
+# Without --dart-define, app uses DEFAULT values:
+# - API_URL = http://10.0.2.2:8000/api (Android emulator localhost)
+# - ENVIRONMENT = dev
+# This will NOT work on real devices!
+
+# Correct way to run on real device:
+flutter run --flavor staging --release -d <device_id> \
+  --dart-define=ENVIRONMENT=staging \
+  --dart-define=API_URL=https://dev-api.mindnest.one/api
+
+# Or use Makefile which handles this automatically:
+make run-staging
+```
+
+**API URLs by environment:**
+- `dev`: `http://localhost:8000/api` (local backend)
+- `staging`: `https://dev-api.mindnest.one/api`
+- `prod`: `https://api.mindnest.one/api`
+
 ## Security
 
 ### Authentication
