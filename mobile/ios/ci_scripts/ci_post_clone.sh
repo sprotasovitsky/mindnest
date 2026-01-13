@@ -37,21 +37,30 @@ pod install
 # Environment based on scheme
 case "$CI_XCODE_SCHEME" in
     prod)
+        FLAVOR="prod"
         ENVIRONMENT="prod"
         API_URL="https://api.mindnest.one/api"
         ;;
+    dev)
+        FLAVOR="dev"
+        ENVIRONMENT="dev"
+        API_URL="http://localhost:8000/api"
+        ;;
     staging|*)
+        FLAVOR="staging"
         ENVIRONMENT="staging"
         API_URL="https://dev-api.mindnest.one/api"
         ;;
 esac
 
+echo "Flavor: $FLAVOR"
 echo "Environment: $ENVIRONMENT"
 echo "API URL: $API_URL"
 
 # Build Flutter bundle
 cd ..
 flutter build ios --no-codesign \
+    --flavor $FLAVOR \
     --dart-define=ENVIRONMENT=$ENVIRONMENT \
     --dart-define=API_URL=$API_URL
 
