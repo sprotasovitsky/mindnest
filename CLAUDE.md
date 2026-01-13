@@ -38,19 +38,24 @@ uvicorn app.main:app --reload --port 8000
 # Initial setup (after clone)
 make setup                   # flutter pub get + xcodegen + pod install
 
-# Run with different environments
-make run-dev                 # Local backend (bundle: .dev)
-make run-staging             # Staging backend (bundle: .staging)
-make run-prod                # Production backend (bundle: prod)
+# Run with different environments (uses flavors)
+make run-dev                 # Local backend (flavor: dev)
+make run-staging             # Staging backend (flavor: staging)
+make run-prod                # Production backend (flavor: prod)
 
-# Build iOS (via xcodebuild)
+# Build iOS
 make build-dev-ios
 make build-staging-ios
 make build-prod-ios
 
-# Build Android
-make build-staging-apk
-make build-prod-apk
+# Build Android APK
+make build-dev-apk           # Dev APK
+make build-staging-apk       # Staging APK
+make build-prod-apk          # Production APK (signed)
+
+# Build Android AAB (for Play Store)
+make build-staging-aab       # Staging bundle
+make build-prod-aab          # Production bundle (signed)
 
 # Utilities
 make regen                   # Regenerate Xcode project (xcodegen + pod install)
@@ -73,6 +78,34 @@ mobile/ios/
 ```
 
 **Note:** `.xcodeproj` and `Pods/` are gitignored. Run `make setup` after clone.
+
+### Android Project Structure
+```
+mobile/android/
+├── app/
+│   ├── build.gradle.kts     # App config with flavors and signing
+│   ├── proguard-rules.pro   # ProGuard/R8 rules for release builds
+│   └── src/main/
+│       └── AndroidManifest.xml
+├── build.gradle.kts         # Root Gradle config
+├── key.properties           # Signing credentials (gitignored)
+└── mindnest-release.jks     # Release keystore (gitignored)
+```
+
+**Product Flavors:**
+
+| Flavor | Application ID | App Name |
+|--------|----------------|----------|
+| dev | `com.mindnest.mindnest.dev` | MindNest Dev |
+| staging | `com.mindnest.mindnest.staging` | MindNest Staging |
+| prod | `com.mindnest.mindnest` | MindNest |
+
+**Release Signing:**
+- Keystore and credentials stored in `key.properties` (gitignored)
+- Release builds are signed automatically when `key.properties` exists
+- ProGuard/R8 minification enabled for release builds
+
+**Note:** `key.properties` and `*.jks` are gitignored. Store keystore securely outside repo.
 
 ### Docker (from `backend-python/` directory)
 ```bash
