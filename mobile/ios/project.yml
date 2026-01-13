@@ -1,4 +1,4 @@
-name: Runner
+name: MindNest
 options:
   bundleIdPrefix: com.mindnest
   deploymentTarget:
@@ -16,17 +16,17 @@ configFiles:
   Prod: Configurations/Prod.xcconfig
 
 targets:
-  Runner:
+  MindNest:
     type: application
     platform: iOS
     sources:
-      - path: Runner
+      - path: MindNest
         excludes:
           - "Info.plist"
       - path: Flutter/AppFrameworkInfo.plist
         buildPhase: none
     info:
-      path: Runner/Info.plist
+      path: MindNest/Info.plist
       properties:
         CFBundleDevelopmentRegion: $(DEVELOPMENT_LANGUAGE)
         CFBundleDisplayName: $(DISPLAY_NAME)
@@ -58,7 +58,7 @@ targets:
         CLANG_ENABLE_MODULES: YES
         SWIFT_VERSION: "5.0"
         ENABLE_BITCODE: NO
-        SWIFT_OBJC_BRIDGING_HEADER: Runner/Runner-Bridging-Header.h
+        SWIFT_OBJC_BRIDGING_HEADER: MindNest/MindNest-Bridging-Header.h
         ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES: $(inherited)
     preBuildScripts:
       - name: "Run Script"
@@ -73,23 +73,23 @@ targets:
         inputFiles:
           - $(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)
 
-  RunnerTests:
+  MindNestTests:
     type: bundle.unit-test
     platform: iOS
     sources:
-      - path: RunnerTests
+      - path: MindNestTests
     dependencies:
-      - target: Runner
+      - target: MindNest
     settings:
       base:
         BUNDLE_LOADER: $(TEST_HOST)
-        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Runner.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Runner
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/MindNest.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/MindNest
 
 schemes:
   dev:
     build:
       targets:
-        Runner: all
+        MindNest: all
     run:
       config: Dev
     test:
@@ -104,7 +104,7 @@ schemes:
   staging:
     build:
       targets:
-        Runner: all
+        MindNest: all
     run:
       config: Staging
     test:
@@ -119,7 +119,7 @@ schemes:
   prod:
     build:
       targets:
-        Runner: all
+        MindNest: all
     run:
       config: Prod
     test:

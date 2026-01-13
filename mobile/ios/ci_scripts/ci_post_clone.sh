@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Xcode Cloud post-clone script
+# Xcode Cloud post-clone script for MindNest
 
 set -e
 
@@ -22,6 +22,9 @@ dart run build_runner build --delete-conflicting-outputs
 cd ios
 xcodegen generate
 
+# Install CocoaPods dependencies
+pod install
+
 # Environment based on scheme
 case "$CI_XCODE_SCHEME" in
     prod)
@@ -39,7 +42,7 @@ echo "API URL: $API_URL"
 
 # Build Flutter bundle
 cd ..
-flutter build bundle \
+flutter build ios --no-codesign \
     --dart-define=ENVIRONMENT=$ENVIRONMENT \
     --dart-define=API_URL=$API_URL
 
