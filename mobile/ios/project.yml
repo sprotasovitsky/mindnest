@@ -5,15 +5,29 @@ options:
     iOS: "13.0"
   xcodeVersion: "15.0"
 
+# Flutter flavor configurations
+# Format: <BuildType>-<flavor>
 configs:
-  Dev: debug
-  Staging: release
-  Prod: release
+  Debug-dev: debug
+  Profile-dev: release
+  Release-dev: release
+  Debug-staging: debug
+  Profile-staging: release
+  Release-staging: release
+  Debug-prod: debug
+  Profile-prod: release
+  Release-prod: release
 
 configFiles:
-  Dev: Configurations/Dev.xcconfig
-  Staging: Configurations/Staging.xcconfig
-  Prod: Configurations/Prod.xcconfig
+  Debug-dev: Configurations/Dev.xcconfig
+  Profile-dev: Configurations/Dev.xcconfig
+  Release-dev: Configurations/Dev.xcconfig
+  Debug-staging: Configurations/Staging.xcconfig
+  Profile-staging: Configurations/Staging.xcconfig
+  Release-staging: Configurations/Staging.xcconfig
+  Debug-prod: Configurations/Prod.xcconfig
+  Profile-prod: Configurations/Prod.xcconfig
+  Release-prod: Configurations/Prod.xcconfig
 
 targets:
   MindNest:
@@ -91,42 +105,42 @@ schemes:
       targets:
         MindNest: all
     run:
-      config: Dev
+      config: Debug-dev
     test:
-      config: Dev
+      config: Debug-dev
     profile:
-      config: Dev
+      config: Profile-dev
     analyze:
-      config: Dev
+      config: Debug-dev
     archive:
-      config: Dev
+      config: Release-dev
 
   staging:
     build:
       targets:
         MindNest: all
     run:
-      config: Staging
+      config: Debug-staging
     test:
-      config: Staging
+      config: Debug-staging
     profile:
-      config: Staging
+      config: Profile-staging
     analyze:
-      config: Staging
+      config: Debug-staging
     archive:
-      config: Staging
+      config: Release-staging
 
   prod:
     build:
       targets:
         MindNest: all
     run:
-      config: Prod
+      config: Debug-prod
     test:
-      config: Prod
+      config: Debug-prod
     profile:
-      config: Prod
+      config: Profile-prod
     analyze:
-      config: Prod
+      config: Debug-prod
     archive:
-      config: Prod
+      config: Release-prod
