@@ -1,8 +1,9 @@
 """Application configuration."""
 
 from functools import lru_cache
+from typing import Optional
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -44,9 +45,40 @@ class Settings(BaseSettings):
     # Chat history
     chat_history_limit: int = 10  # Number of recent messages to include in LLM context
 
-    # App
-    secret_key: str = Field(default="change-me-in-production")
-    debug: bool = True
+    # Security
+    secret_key: str = Field(default="")
+    debug: bool = False
+
+    # CORS - comma-separated list of allowed origins
+    allowed_origins: str = "http://localhost:3000,http://localhost:8080,https://mindnest.one,https://*.mindnest.one"
+
+    # Rate limiting
+    rate_limit_login: str = "5/minute"
+    rate_limit_register: str = "3/minute"
+    rate_limit_chat: str = "30/minute"
+
+    @field_validator("secret_key")
+    @classmethod
+    def validate_secret_key(cls, v: str) -> str:
+        """Validate that secret_key is set in production."""
+        if not v or v == "change-me-in-production":
+            import os
+            if os.getenv("DEBUG", "").lower() not in ("true", "1", "yes"):
+                raise ValueError(
+                    "SECRET_KEY must be set in production. "
+                    "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+                )
+            # In debug mode, use a default key (not secure, but allows local dev)
+            return "dev-secret-key-not-for-production"
+        if len(v) < 32:
+            raise ValueError("SECRET_KEY must be at least 32 characters")
+        return v
+
+    def get_allowed_origins(self) -> list[str]:
+        """Parse allowed_origins into a list."""
+        if not self.allowed_origins:
+            return []
+        return [origin.strip() for origin in self.allowed_origins.split(",") if origin.strip()]
 
 
 @lru_cache

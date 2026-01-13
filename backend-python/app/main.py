@@ -7,8 +7,12 @@ powered by Graphiti for knowledge graph management.
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from .config import get_settings
 from .database import init_db, close_db
@@ -22,6 +26,9 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+# Rate limiter instance
+limiter = Limiter(key_func=get_remote_address)
 
 
 @asynccontextmanager
@@ -72,13 +79,26 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Configure CORS
+# Add rate limiter to app state
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Configure CORS with allowed origins from settings
+settings = get_settings()
+allowed_origins = settings.get_allowed_origins()
+
+# Log CORS configuration
+if allowed_origins:
+    logger.info(f"CORS allowed origins: {allowed_origins}")
+else:
+    logger.warning("No CORS origins configured - all origins will be blocked!")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure properly for production
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
 )
 
 # Include routers

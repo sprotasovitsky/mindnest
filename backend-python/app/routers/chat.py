@@ -11,22 +11,28 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Header, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Header, Query, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from ..classifier import classify_message, MessageType
 from ..config import get_settings
 from ..database import get_db
 from ..graphiti_client import get_knowledge_graph, KnowledgeGraph
 from ..llm import generate_text
-from ..models import ChatMessage, Project
+from ..models import ChatMessage, Project, User
 from ..pending_cache import get_pending_cache
 from ..prompts import format_response_prompt, format_onboarding_prompt
+from .auth import decode_token, get_user_by_id
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/chat", tags=["chat"])
+
+# Rate limiter
+limiter = Limiter(key_func=get_remote_address)
 
 
 def _format_context(edges: list[dict], nodes: list[dict]) -> tuple[list[dict], list[dict]]:
@@ -48,12 +54,34 @@ def _log_context(query: str, edges: list[dict], nodes: list[dict]) -> None:
         logger.info(f"  - {n['name']}: {n['summary'][:100] if n.get('summary') else 'no summary'}...")
 
 
-def get_current_user_optional(authorization: Optional[str] = Header(None)) -> Optional[dict]:
-    """Get current user from Authorization header (optional)."""
-    if not authorization or not authorization.startswith("Bearer "):
-        return None
-    from .auth import decode_token
-    return decode_token(authorization[7:])
+async def get_current_user(
+    authorization: str = Header(...),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """Get current user from Authorization header (required)."""
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authorization header",
+        )
+
+    token = authorization[7:]  # Remove "Bearer "
+    token_data = decode_token(token)
+
+    if not token_data or not token_data.get("id"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+        )
+
+    user = await get_user_by_id(db, token_data["id"])
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+        )
+
+    return user
 
 
 class ChatRequest(BaseModel):
@@ -61,8 +89,6 @@ class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=10000)
     projectId: Optional[str] = Field(None, min_length=1)
     project_id: Optional[str] = Field(None, min_length=1)
-    user_id: Optional[str] = None
-    user_name: Optional[str] = None
 
     def get_project_id(self) -> str:
         return self.projectId or self.project_id or ""
@@ -114,7 +140,7 @@ async def save_chat_message(
     return chat_msg
 
 
-async def get_chat_history(
+async def get_chat_history_from_db(
     db: AsyncSession,
     project_id: str,
     user_id: str,
@@ -233,14 +259,14 @@ async def process_message(
     request: ChatRequest,
     kg: KnowledgeGraph,
     background_tasks: BackgroundTasks,
-    user: Optional[dict] = None,
+    user: User,
     chat_history: str = "",
     project_description: Optional[str] = None,
 ) -> ChatResponse:
     """Process a chat message with classification-based flow."""
     project_id = request.get_project_id()
-    user_id = request.user_id or (user["id"] if user else "anonymous")
-    user_name = request.user_name or (user.get("name") if user else None)
+    user_id = user.id
+    user_name = user.name
 
     # Step 1: Classify message
     classification = await classify_message(request.message, user_name)
@@ -402,21 +428,23 @@ async def _handle_question(
 
 
 @router.post("", response_model=ChatResponse)
+@limiter.limit("30/minute")
 async def send_message(
+    http_request: Request,
     request: ChatRequest,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     kg: KnowledgeGraph = Depends(get_knowledge_graph),
-    user: Optional[dict] = Depends(get_current_user_optional),
+    user: User = Depends(get_current_user),
 ) -> ChatResponse:
-    """Process a chat message."""
+    """Process a chat message. Requires authentication."""
     project_id = request.get_project_id()
-    user_id = request.user_id or (user["id"] if user else "anonymous")
-    user_name = request.user_name or (user.get("name") if user else None)
+    user_id = user.id
+    user_name = user.name
 
     # Get chat history for context (user-specific)
     settings = get_settings()
-    history_messages = await get_chat_history(db, project_id, user_id, settings.chat_history_limit)
+    history_messages = await get_chat_history_from_db(db, project_id, user_id, settings.chat_history_limit)
     chat_history = format_history_for_prompt(history_messages)
 
     # Check if project needs onboarding (no description set)
@@ -490,8 +518,9 @@ class BuildCommunitiesRequest(BaseModel):
 async def build_communities(
     request: BuildCommunitiesRequest,
     kg: KnowledgeGraph = Depends(get_knowledge_graph),
+    user: User = Depends(get_current_user),  # Requires authentication
 ) -> dict:
-    """Build communities for a project."""
+    """Build communities for a project. Requires authentication."""
     result = await kg.build_communities(request.project_id)
     if not result["success"]:
         raise HTTPException(status_code=500, detail=result.get("error", "Build failed"))
@@ -503,11 +532,10 @@ async def get_history(
     project_id: str = Query(..., description="Project ID to get history for"),
     limit: int = Query(default=50, le=100, description="Max messages to return"),
     db: AsyncSession = Depends(get_db),
-    user: Optional[dict] = Depends(get_current_user_optional),
+    user: User = Depends(get_current_user),  # Requires authentication
 ) -> ChatHistoryResponse:
-    """Get chat history for a project (filtered by user)."""
-    user_id = user["id"] if user else "anonymous"
-    messages = await get_chat_history(db, project_id, user_id, limit)
+    """Get chat history for a project. Requires authentication."""
+    messages = await get_chat_history_from_db(db, project_id, user.id, limit)
     return ChatHistoryResponse(
         messages=[
             ChatHistoryItem(
@@ -527,7 +555,7 @@ async def get_history(
 async def health_check(
     kg: KnowledgeGraph = Depends(get_knowledge_graph),
 ) -> dict:
-    """Health check endpoint."""
+    """Health check endpoint (public)."""
     cache = get_pending_cache()
     return {
         "status": "healthy",

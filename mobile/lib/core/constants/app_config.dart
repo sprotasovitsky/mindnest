@@ -35,7 +35,14 @@ class AppConfig {
 
   /// Storage Keys
   static const String tokenKey = 'auth_token';
+  static const String refreshTokenKey = 'refresh_token';
+  static const String tokenExpiresAtKey = 'token_expires_at';
   static const String userIdKey = 'user_id';
   static const String userEmailKey = 'user_email';
   static const String userNameKey = 'user_name';
+
+  /// Password validation
+  static const int minPasswordLength = 8;
+  static const String passwordRequirements =
+      'Password must be at least 8 characters with letters and numbers';
 }

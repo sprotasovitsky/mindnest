@@ -14,18 +14,50 @@ class AuthService {
     return await _storage.read(key: AppConfig.tokenKey);
   }
 
+  Future<String?> getRefreshToken() async {
+    return await _storage.read(key: AppConfig.refreshTokenKey);
+  }
+
+  Future<DateTime?> getTokenExpiresAt() async {
+    final expiresAtStr = await _storage.read(key: AppConfig.tokenExpiresAtKey);
+    if (expiresAtStr == null) return null;
+    return DateTime.tryParse(expiresAtStr);
+  }
+
+  Future<bool> isTokenExpired() async {
+    final expiresAt = await getTokenExpiresAt();
+    if (expiresAt == null) return true;
+    // Consider token expired 1 minute before actual expiry for safety
+    return DateTime.now().isAfter(expiresAt.subtract(const Duration(minutes: 1)));
+  }
+
   Future<void> saveAuthData({
-    required String token,
+    required String accessToken,
+    required String refreshToken,
+    required int expiresIn,
     required String userId,
     required String email,
     String? name,
   }) async {
-    await _storage.write(key: AppConfig.tokenKey, value: token);
+    final expiresAt = DateTime.now().add(Duration(seconds: expiresIn));
+
+    await _storage.write(key: AppConfig.tokenKey, value: accessToken);
+    await _storage.write(key: AppConfig.refreshTokenKey, value: refreshToken);
+    await _storage.write(key: AppConfig.tokenExpiresAtKey, value: expiresAt.toIso8601String());
     await _storage.write(key: AppConfig.userIdKey, value: userId);
     await _storage.write(key: AppConfig.userEmailKey, value: email);
     if (name != null) {
       await _storage.write(key: AppConfig.userNameKey, value: name);
     }
+  }
+
+  Future<void> updateAccessToken({
+    required String accessToken,
+    required int expiresIn,
+  }) async {
+    final expiresAt = DateTime.now().add(Duration(seconds: expiresIn));
+    await _storage.write(key: AppConfig.tokenKey, value: accessToken);
+    await _storage.write(key: AppConfig.tokenExpiresAtKey, value: expiresAt.toIso8601String());
   }
 
   Future<Map<String, String?>> getUserData() async {
@@ -38,6 +70,8 @@ class AuthService {
 
   Future<void> clearAuth() async {
     await _storage.delete(key: AppConfig.tokenKey);
+    await _storage.delete(key: AppConfig.refreshTokenKey);
+    await _storage.delete(key: AppConfig.tokenExpiresAtKey);
     await _storage.delete(key: AppConfig.userIdKey);
     await _storage.delete(key: AppConfig.userEmailKey);
     await _storage.delete(key: AppConfig.userNameKey);
@@ -45,6 +79,22 @@ class AuthService {
 
   Future<bool> isLoggedIn() async {
     final token = await getToken();
-    return token != null && token.isNotEmpty;
+    final refreshToken = await getRefreshToken();
+    // User is logged in if they have a refresh token (access token can be refreshed)
+    return refreshToken != null && refreshToken.isNotEmpty;
+  }
+
+  /// Validate password strength
+  static String? validatePassword(String password) {
+    if (password.length < AppConfig.minPasswordLength) {
+      return 'Password must be at least ${AppConfig.minPasswordLength} characters';
+    }
+    if (!password.contains(RegExp(r'[0-9]'))) {
+      return 'Password must contain at least one digit';
+    }
+    if (!password.contains(RegExp(r'[a-zA-Z]'))) {
+      return 'Password must contain at least one letter';
+    }
+    return null; // Valid
   }
 }
