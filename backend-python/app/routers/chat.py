@@ -430,15 +430,15 @@ async def _handle_question(
 @router.post("", response_model=ChatResponse)
 @limiter.limit("30/minute")
 async def send_message(
-    http_request: Request,
-    request: ChatRequest,
+    request: Request,
+    chat_request: ChatRequest,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     kg: KnowledgeGraph = Depends(get_knowledge_graph),
     user: User = Depends(get_current_user),
 ) -> ChatResponse:
     """Process a chat message. Requires authentication."""
-    project_id = request.get_project_id()
+    project_id = chat_request.get_project_id()
     user_id = user.id
     user_name = user.name
 
@@ -456,7 +456,7 @@ async def send_message(
         logger.info(f"Onboarding mode for project {project_id}")
         try:
             reply = await process_onboarding(
-                message=request.message,
+                message=chat_request.message,
                 chat_history=chat_history,
                 user_name=user_name,
             )
@@ -490,7 +490,7 @@ async def send_message(
     else:
         # Normal flow - project has description
         response = await process_message(
-            request, kg, background_tasks, user, chat_history, project.description
+            chat_request, kg, background_tasks, user, chat_history, project.description
         )
 
     # Save message to history (don't block on save errors)
@@ -499,7 +499,7 @@ async def send_message(
             db=db,
             project_id=project_id,
             user_id=user_id,
-            user_message=request.message,
+            user_message=chat_request.message,
             assistant_reply=response.reply,
             message_type=response.message_type,
         )
