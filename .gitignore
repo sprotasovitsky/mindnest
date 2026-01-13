@@ -10,6 +10,7 @@ Thumbs.db
 # Secrets
 .env
 .env.local
+.prod
 *.pem
 *.key
 secrets/
