@@ -17,7 +17,10 @@ class User with _$User {
 @freezed
 class AuthResponse with _$AuthResponse {
   const factory AuthResponse({
-    required String token,
+    @JsonKey(name: 'access_token') required String accessToken,
+    @JsonKey(name: 'refresh_token') required String refreshToken,
+    @JsonKey(name: 'token_type') @Default('bearer') String tokenType,
+    @JsonKey(name: 'expires_in') required int expiresIn,
     @JsonKey(name: 'user_id') required String userId,
     required String email,
     String? name,
@@ -25,4 +28,16 @@ class AuthResponse with _$AuthResponse {
 
   factory AuthResponse.fromJson(Map<String, dynamic> json) =>
       _$AuthResponseFromJson(json);
+}
+
+@freezed
+class RefreshResponse with _$RefreshResponse {
+  const factory RefreshResponse({
+    @JsonKey(name: 'access_token') required String accessToken,
+    @JsonKey(name: 'token_type') @Default('bearer') String tokenType,
+    @JsonKey(name: 'expires_in') required int expiresIn,
+  }) = _RefreshResponse;
+
+  factory RefreshResponse.fromJson(Map<String, dynamic> json) =>
+      _$RefreshResponseFromJson(json);
 }

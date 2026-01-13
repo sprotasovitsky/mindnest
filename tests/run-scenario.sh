@@ -59,14 +59,19 @@ get_email() {
 register_user() {
     local name="$1"
     local email="$2"
-    local password="${3:-test123}"
+    # Default password meets security requirements: 8+ chars, letter + number
+    local password="${3:-testPass123}"
+    # Ensure password meets requirements even if scenario file has weak password
+    if [ ${#password} -lt 8 ]; then
+        password="testPass123"
+    fi
 
     echo "Registering user: $name ($email)"
     RESP=$(curl -s -X POST "$BASE_URL/api/auth/register" \
         -H "Content-Type: application/json" \
         -d "{\"email\":\"$email\",\"password\":\"$password\",\"name\":\"$name\"}")
 
-    TOKEN=$(echo "$RESP" | jq -r '.token')
+    TOKEN=$(echo "$RESP" | jq -r '.access_token')
     if [ "$TOKEN" != "null" ] && [ -n "$TOKEN" ]; then
         USER_DATA+=("$name:$email:$TOKEN")
         echo "  ✓ Registered successfully"
@@ -75,7 +80,7 @@ register_user() {
         RESP=$(curl -s -X POST "$BASE_URL/api/auth/login" \
             -H "Content-Type: application/json" \
             -d "{\"email\":\"$email\",\"password\":\"$password\"}")
-        TOKEN=$(echo "$RESP" | jq -r '.token')
+        TOKEN=$(echo "$RESP" | jq -r '.access_token')
         if [ "$TOKEN" != "null" ] && [ -n "$TOKEN" ]; then
             USER_DATA+=("$name:$email:$TOKEN")
             echo "  ✓ Logged in (already registered)"

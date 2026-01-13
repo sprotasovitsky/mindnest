@@ -11,6 +11,12 @@ final apiClientProvider = Provider<ApiClient>((ref) {
 class ApiClient {
   late final Dio _dio;
   String? _authToken;
+  String? _refreshToken;
+  bool _isRefreshing = false;
+
+  // Callback to update tokens in storage (set by repository)
+  Future<void> Function(String accessToken, int expiresIn)? onTokenRefreshed;
+  Future<void> Function()? onRefreshFailed;
 
   ApiClient() {
     _dio = Dio(
@@ -36,7 +42,23 @@ class ApiClient {
         }
         return handler.next(options);
       },
-      onError: (error, handler) {
+      onError: (error, handler) async {
+        // Handle 401 errors by refreshing token
+        if (error.response?.statusCode == 401 && _refreshToken != null && !_isRefreshing) {
+          try {
+            final refreshed = await _refreshAccessToken();
+            if (refreshed) {
+              // Retry the original request with new token
+              final opts = error.requestOptions;
+              opts.headers['Authorization'] = 'Bearer $_authToken';
+              final response = await _dio.fetch(opts);
+              return handler.resolve(response);
+            }
+          } catch (e) {
+            AppLogger.error('Token refresh failed', error: e, tag: 'ApiClient');
+          }
+        }
+
         AppLogger.error(
           'API Error: ${error.message}',
           error: error,
@@ -45,6 +67,42 @@ class ApiClient {
         return handler.next(error);
       },
     ));
+  }
+
+  Future<bool> _refreshAccessToken() async {
+    if (_refreshToken == null || _isRefreshing) return false;
+
+    _isRefreshing = true;
+    try {
+      final response = await _dio.post(
+        '/auth/refresh',
+        data: {'refresh_token': _refreshToken},
+        options: Options(
+          headers: {'Authorization': null}, // Don't send expired token
+        ),
+      );
+
+      final data = response.data as Map<String, dynamic>;
+      _authToken = data['access_token'] as String;
+      final expiresIn = data['expires_in'] as int;
+
+      // Notify repository to save new token
+      if (onTokenRefreshed != null) {
+        await onTokenRefreshed!(_authToken!, expiresIn);
+      }
+
+      AppLogger.debug('Token refreshed successfully', tag: 'ApiClient');
+      return true;
+    } catch (e) {
+      AppLogger.error('Failed to refresh token', error: e, tag: 'ApiClient');
+      // Notify about refresh failure (will trigger logout)
+      if (onRefreshFailed != null) {
+        await onRefreshFailed!();
+      }
+      return false;
+    } finally {
+      _isRefreshing = false;
+    }
   }
 
   Future<T> _retryRequest<T>(Future<T> Function() request) async {
@@ -73,8 +131,13 @@ class ApiClient {
     _authToken = token;
   }
 
+  void setRefreshToken(String token) {
+    _refreshToken = token;
+  }
+
   void clearAuthToken() {
     _authToken = null;
+    _refreshToken = null;
   }
 
   // Auth endpoints
@@ -98,6 +161,14 @@ class ApiClient {
         'password': password,
         if (name != null) 'name': name,
       },
+    );
+    return response.data as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> refreshToken(String refreshToken) async {
+    final response = await _dio.post(
+      '/auth/refresh',
+      data: {'refresh_token': refreshToken},
     );
     return response.data as Map<String, dynamic>;
   }

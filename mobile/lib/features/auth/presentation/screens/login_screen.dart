@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/auth/auth_service.dart';
 import '../../../../core/providers/auth_provider.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -150,8 +151,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         if (value == null || value.isEmpty) {
                           return 'Please enter your password';
                         }
-                        if (!_isLogin && value.length < 6) {
-                          return 'Password must be at least 6 characters';
+                        // Use consistent password validation for registration
+                        if (!_isLogin) {
+                          return AuthService.validatePassword(value);
                         }
                         return null;
                       },
