@@ -7,6 +7,10 @@ set -e
 echo "=== MindNest iOS CI ==="
 echo "Scheme: $CI_XCODE_SCHEME"
 
+# Install Homebrew dependencies
+echo "Installing XcodeGen..."
+brew install xcodegen
+
 cd "$CI_PRIMARY_REPOSITORY_PATH/mobile"
 
 # Install Flutter
