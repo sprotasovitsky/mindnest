@@ -51,7 +51,7 @@ build-prod-aab:
 
 clean:
 	flutter clean
-	cd ios && rm -rf Pods Podfile.lock Runner.xcodeproj Runner.xcworkspace
+	cd ios && rm -rf Pods Podfile.lock MindNest.xcodeproj MindNest.xcworkspace
 
 regen:
 	cd ios && xcodegen generate && pod install

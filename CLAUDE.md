@@ -69,15 +69,25 @@ mobile/ios/
 ├── project.yml              # XcodeGen config (generates .xcodeproj)
 ├── Podfile                  # CocoaPods dependencies
 ├── Configurations/
-│   ├── Dev.xcconfig         # → com.mindnest.mindnest.dev
-│   ├── Staging.xcconfig     # → com.mindnest.mindnest.staging
-│   └── Prod.xcconfig        # → com.mindnest.mindnest
-├── Runner/                  # App source files
+│   ├── Dev.xcconfig         # → com.mindnest.app.dev
+│   ├── Staging.xcconfig     # → com.mindnest.app.staging
+│   └── Prod.xcconfig        # → com.mindnest.app
+├── MindNest/                # App source files
+│   ├── AppDelegate.swift
+│   ├── Assets.xcassets/
+│   ├── Info.plist
+│   └── MindNest-Bridging-Header.h
+├── MindNestTests/           # Unit tests
 └── ci_scripts/
     └── ci_post_clone.sh     # Xcode Cloud script
 ```
 
-**Note:** `.xcodeproj` and `Pods/` are gitignored. Run `make setup` after clone.
+**Xcode Cloud Schemes:**
+- `dev` - Development build
+- `staging` - TestFlight builds
+- `prod` - App Store builds
+
+**Note:** `.xcodeproj`, `.xcworkspace`, and `Pods/` are gitignored. Run `make setup` after clone.
 
 ### Android Project Structure
 ```
@@ -96,9 +106,9 @@ mobile/android/
 
 | Flavor | Application ID | App Name |
 |--------|----------------|----------|
-| dev | `com.mindnest.mindnest.dev` | MindNest Dev |
-| staging | `com.mindnest.mindnest.staging` | MindNest Staging |
-| prod | `com.mindnest.mindnest` | MindNest |
+| dev | `com.mindnest.app.dev` | MindNest Dev |
+| staging | `com.mindnest.app.staging` | MindNest Staging |
+| prod | `com.mindnest.app` | MindNest |
 
 **Release Signing:**
 - Keystore and credentials stored in `key.properties` (gitignored)
@@ -531,17 +541,18 @@ Prompts are loaded via `prompts/__init__.py`:
 
 ## API Endpoints
 
-### Chat
-- `POST /api/chat` - Send message, process through knowledge graph
+### Auth
+- `POST /api/auth/register` - Register new user (rate limit: 3/min)
+- `POST /api/auth/login` - Login user (rate limit: 5/min)
+- `POST /api/auth/refresh` - Refresh access token using refresh token
+
+### Chat (all require authentication)
+- `POST /api/chat` - Send message, process through knowledge graph (rate limit: 30/min)
 - `GET /api/chat/history` - Get chat history for a project
 - `POST /api/chat/build-communities` - Build graph communities for a project
 - `GET /api/chat/health` - Health check with pending cache stats
 
-### Auth
-- `POST /api/auth/register` - Register new user
-- `POST /api/auth/login` - Login user
-
-### Projects
+### Projects (all require authentication)
 - `POST /api/projects` - Create project
 - `GET /api/projects` - List user's projects
 - `GET /api/projects/{id}` - Get project
@@ -550,15 +561,21 @@ Prompts are loaded via `prompts/__init__.py`:
 ### Request/Response Examples
 
 ```bash
-# Send message
+# Login (returns access_token + refresh_token)
+curl -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "user@example.com", "password": "SecurePass123"}'
+
+# Send message (requires Bearer token)
 curl -X POST http://localhost:8000/api/chat \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <access_token>" \
   -d '{"message": "Boris needs to buy wine", "projectId": "proj-123"}'
 
-# Search
-curl -X POST http://localhost:8000/api/chat/search \
+# Refresh token
+curl -X POST http://localhost:8000/api/auth/refresh \
   -H "Content-Type: application/json" \
-  -d '{"query": "what tasks does Boris have?", "project_id": "proj-123"}'
+  -d '{"refresh_token": "<refresh_token>"}'
 ```
 
 ## Development Notes
@@ -785,3 +802,51 @@ embedding_dim = 3072                      # NOT 768
 - gemini-3 models showed data loss (missing transactions in budget calculations)
 - flash-lite had more refusals on valid update/correction requests
 - flash provides best balance: ~20% faster than pro with similar accuracy
+
+## Security
+
+### Authentication
+
+- **Password hashing**: bcrypt with 12 rounds (not SHA-256)
+- **Tokens**: JWT with access token (15 min) + refresh token (7 days)
+- **Password requirements**: Min 8 characters, at least 1 letter and 1 digit
+
+### Rate Limiting
+
+Rate limits are enforced via slowapi and vary by environment:
+
+| Endpoint | Production | DEBUG mode |
+|----------|------------|------------|
+| Login | 5/minute | 100/minute |
+| Register | 3/minute | 100/minute |
+| Chat | 30/minute | 200/minute |
+
+To enable DEBUG mode locally:
+```bash
+DEBUG=true uvicorn app.main:app --port 8000
+```
+
+### CORS
+
+Allowed origins are configured via `ALLOWED_ORIGINS` env variable:
+- Default: `http://localhost:3000,http://localhost:8080,https://mindnest.one,https://*.mindnest.one`
+
+### Security Configuration
+
+```python
+# Required in production
+SECRET_KEY=<min 32 chars>      # For JWT signing
+
+# Optional
+ALLOWED_ORIGINS=<comma-separated list>
+DEBUG=false                     # Never true in production
+```
+
+### Mobile Token Handling
+
+The mobile app (`ApiClient`) automatically:
+1. Adds `Authorization: Bearer <token>` to all requests
+2. Intercepts 401 responses
+3. Calls `/api/auth/refresh` with the refresh token
+4. Retries the original request with the new access token
+5. Logs out the user if refresh fails

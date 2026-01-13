@@ -16,7 +16,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.mindnest.mindnest"
+    namespace = "com.mindnest.app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -39,7 +39,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.mindnest.mindnest"
+        applicationId = "com.mindnest.app"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
