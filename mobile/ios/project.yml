@@ -1,6 +1,6 @@
 name: MindNest
 options:
-  bundleIdPrefix: com.mindnest
+  bundleIdPrefix: com.mindnest.app
   deploymentTarget:
     iOS: "13.0"
   xcodeVersion: "15.0"

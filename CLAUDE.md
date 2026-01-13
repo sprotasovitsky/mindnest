@@ -69,9 +69,9 @@ mobile/ios/
 ├── project.yml              # XcodeGen config (generates .xcodeproj)
 ├── Podfile                  # CocoaPods dependencies
 ├── Configurations/
-│   ├── Dev.xcconfig         # → com.mindnest.mindnest.dev
-│   ├── Staging.xcconfig     # → com.mindnest.mindnest.staging
-│   └── Prod.xcconfig        # → com.mindnest.mindnest
+│   ├── Dev.xcconfig         # → com.mindnest.app.dev
+│   ├── Staging.xcconfig     # → com.mindnest.app.staging
+│   └── Prod.xcconfig        # → com.mindnest.app
 ├── MindNest/                # App source files
 │   ├── AppDelegate.swift
 │   ├── Assets.xcassets/
@@ -106,9 +106,9 @@ mobile/android/
 
 | Flavor | Application ID | App Name |
 |--------|----------------|----------|
-| dev | `com.mindnest.mindnest.dev` | MindNest Dev |
-| staging | `com.mindnest.mindnest.staging` | MindNest Staging |
-| prod | `com.mindnest.mindnest` | MindNest |
+| dev | `com.mindnest.app.dev` | MindNest Dev |
+| staging | `com.mindnest.app.staging` | MindNest Staging |
+| prod | `com.mindnest.app` | MindNest |
 
 **Release Signing:**
 - Keystore and credentials stored in `key.properties` (gitignored)

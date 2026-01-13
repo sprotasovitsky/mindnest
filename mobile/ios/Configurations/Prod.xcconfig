@@ -2,7 +2,7 @@
 #include "../Flutter/Generated.xcconfig"
 
 // App identity
-PRODUCT_BUNDLE_IDENTIFIER = com.mindnest.mindnest
+PRODUCT_BUNDLE_IDENTIFIER = com.mindnest.app
 PRODUCT_NAME = MindNest
 DISPLAY_NAME = MindNest
 
