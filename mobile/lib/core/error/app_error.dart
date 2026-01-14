@@ -38,7 +38,7 @@ class NetworkError extends AppError {
 
       if (statusCode == 401) {
         return NetworkError(
-          'Session expired. Please log in again.',
+          message ?? 'Session expired. Please log in again.',
           statusCode: statusCode,
         );
       }

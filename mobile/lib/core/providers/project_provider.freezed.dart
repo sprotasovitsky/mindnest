@@ -159,7 +159,7 @@ class __$$ProjectStateImplCopyWithImpl<$Res>
 
 class _$ProjectStateImpl implements _ProjectState {
   const _$ProjectStateImpl(
-      {this.isLoading = false,
+      {this.isLoading = true,
       final List<Project> projects = const [],
       this.currentProject,
       this.error})

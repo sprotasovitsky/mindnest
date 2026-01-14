@@ -11,7 +11,7 @@ part 'project_provider.g.dart';
 @freezed
 class ProjectState with _$ProjectState {
   const factory ProjectState({
-    @Default(false) bool isLoading,
+    @Default(true) bool isLoading,
     @Default([]) List<Project> projects,
     Project? currentProject,
     String? error,
@@ -22,11 +22,12 @@ class ProjectState with _$ProjectState {
 class Projects extends _$Projects {
   @override
   ProjectState build() {
+    _loadProjects();
     return const ProjectState();
   }
 
-  Future<void> loadProjects() async {
-    state = state.copyWith(isLoading: true, error: null);
+  /// Private method for internal loading (doesn't set isLoading since default is true)
+  Future<void> _loadProjects() async {
     try {
       final repository = ref.read(projectRepositoryProvider);
       final projects = await repository.getProjects();
@@ -53,6 +54,12 @@ class Projects extends _$Projects {
         error: e.toUserMessage(),
       );
     }
+  }
+
+  /// Public method for pull-to-refresh
+  Future<void> loadProjects() async {
+    state = state.copyWith(isLoading: true, error: null);
+    await _loadProjects();
   }
 
   void selectProject(Project project) {

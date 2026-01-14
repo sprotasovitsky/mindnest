@@ -4,6 +4,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../api/api_client.dart';
 import '../error/app_error.dart';
 import '../repositories/auth_repository.dart';
+import 'project_provider.dart';
 
 part 'auth_provider.freezed.dart';
 part 'auth_provider.g.dart';
@@ -24,6 +25,17 @@ class AuthState with _$AuthState {
 class Auth extends _$Auth {
   @override
   AuthState build() {
+    // Subscribe to auth invalidation callback
+    final apiClient = ref.read(apiClientProvider);
+    apiClient.onAuthInvalidated = () {
+      ref.invalidateSelf();
+    };
+
+    // Cleanup on dispose
+    ref.onDispose(() {
+      apiClient.onAuthInvalidated = null;
+    });
+
     _checkAuth();
     return const AuthState();
   }
@@ -104,6 +116,10 @@ class Auth extends _$Auth {
   Future<void> logout() async {
     final repository = ref.read(authRepositoryProvider);
     await repository.logout();
+
+    // Clear user data from other providers
+    ref.invalidate(projectsProvider);
+
     state = const AuthState(isLoading: false, isAuthenticated: false);
   }
 }

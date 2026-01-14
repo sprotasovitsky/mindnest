@@ -48,6 +48,8 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<void> _onRefreshFailed() async {
     // Clear auth data and notify app to redirect to login
     await logout();
+    // Notify auth provider that auth is invalidated
+    _apiClient.onAuthInvalidated?.call();
   }
 
   @override

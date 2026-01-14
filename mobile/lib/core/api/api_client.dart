@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../constants/app_config.dart';
@@ -17,6 +18,8 @@ class ApiClient {
   // Callback to update tokens in storage (set by repository)
   Future<void> Function(String accessToken, int expiresIn)? onTokenRefreshed;
   Future<void> Function()? onRefreshFailed;
+  // Callback to notify auth provider when auth is invalidated
+  VoidCallback? onAuthInvalidated;
 
   ApiClient() {
     _dio = Dio(
