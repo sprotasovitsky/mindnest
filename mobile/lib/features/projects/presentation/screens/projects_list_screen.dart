@@ -50,36 +50,59 @@ class ProjectsListScreen extends ConsumerWidget {
       ),
       body: projectState.isLoading
           ? const LoadingOverlay(message: 'Loading projects...')
-          : projectState.error != null
-              ? ErrorView(
-                  message: projectState.error!,
-                  onRetry: () => ref.read(projectsProvider.notifier).loadProjects(),
-                )
-              : projectState.projects.isEmpty
-                  ? EmptyState(
-                      message: 'No projects yet\nCreate your first project to get started',
-                      actionLabel: 'Create Project',
-                      onAction: () => _showCreateProjectModal(context, ref),
-                      icon: Icons.folder_open_outlined,
-                    )
-                  : _buildProjectList(context, ref, projectState.projects),
+          : RefreshIndicator(
+              onRefresh: () => ref.read(projectsProvider.notifier).loadProjects(),
+              child: projectState.error != null
+                  ? _buildScrollableError(context, ref, projectState.error!)
+                  : projectState.projects.isEmpty
+                      ? _buildScrollableEmpty(context, ref)
+                      : _buildProjectList(context, ref, projectState.projects),
+            ),
     );
   }
 
   Widget _buildProjectList(BuildContext context, WidgetRef ref, List<Project> projects) {
-    return RefreshIndicator(
-      onRefresh: () => ref.read(projectsProvider.notifier).loadProjects(),
-      child: ListView.builder(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        itemCount: projects.length,
-        itemBuilder: (_, index) {
-          final project = projects[index];
-          return _ProjectCard(
-            project: project,
-            onTap: () => _openProject(context, ref, project),
-          );
-        },
-      ),
+    return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      itemCount: projects.length,
+      itemBuilder: (_, index) {
+        final project = projects[index];
+        return _ProjectCard(
+          project: project,
+          onTap: () => _openProject(context, ref, project),
+        );
+      },
+    );
+  }
+
+  Widget _buildScrollableEmpty(BuildContext context, WidgetRef ref) {
+    return CustomScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      slivers: [
+        SliverFillRemaining(
+          child: EmptyState(
+            message: 'No projects yet\nCreate your first project or pull to refresh',
+            actionLabel: 'Create Project',
+            onAction: () => _showCreateProjectModal(context, ref),
+            icon: Icons.folder_open_outlined,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildScrollableError(BuildContext context, WidgetRef ref, String error) {
+    return CustomScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      slivers: [
+        SliverFillRemaining(
+          child: ErrorView(
+            message: error,
+            onRetry: () => ref.read(projectsProvider.notifier).loadProjects(),
+          ),
+        ),
+      ],
     );
   }
 }
