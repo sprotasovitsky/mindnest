@@ -71,9 +71,7 @@ class ProfileScreen extends ConsumerWidget {
 
                     if (confirmed == true) {
                       await ref.read(authProvider.notifier).logout();
-                      if (context.mounted) {
-                        context.go('/login');
-                      }
+                      // Router will automatically redirect to /login
                     }
                   },
                   icon: const Icon(Icons.logout),

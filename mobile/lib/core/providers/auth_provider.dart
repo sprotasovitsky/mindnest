@@ -1,10 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../api/api_client.dart';
 import '../error/app_error.dart';
 import '../repositories/auth_repository.dart';
-import 'project_provider.dart';
 
 part 'auth_provider.freezed.dart';
 part 'auth_provider.g.dart';
@@ -25,32 +25,31 @@ class AuthState with _$AuthState {
 class Auth extends _$Auth {
   @override
   AuthState build() {
-    // Subscribe to auth invalidation callback
+    // Set up callback for auth invalidation (e.g., when refresh token fails)
     final apiClient = ref.read(apiClientProvider);
     apiClient.onAuthInvalidated = () {
+      if (kDebugMode) debugPrint('Auth: Session invalidated, forcing re-check');
       ref.invalidateSelf();
     };
 
-    // Cleanup on dispose
     ref.onDispose(() {
       apiClient.onAuthInvalidated = null;
     });
 
+    // Check auth status on build
     _checkAuth();
     return const AuthState();
   }
 
   Future<void> _checkAuth() async {
     final repository = ref.read(authRepositoryProvider);
-    final apiClient = ref.read(apiClientProvider);
 
     try {
+      // Initialize API client with stored tokens
+      await repository.initializeFromStorage();
+
       final isLoggedIn = await repository.isLoggedIn();
       if (isLoggedIn) {
-        final token = await repository.getToken();
-        if (token != null) {
-          apiClient.setAuthToken(token);
-        }
         final userData = await repository.getUserData();
         state = AuthState(
           isLoading: false,
@@ -59,23 +58,25 @@ class Auth extends _$Auth {
           email: userData['email'],
           name: userData['name'],
         );
+        if (kDebugMode) debugPrint('Auth: User is logged in');
       } else {
         state = const AuthState(isLoading: false, isAuthenticated: false);
+        if (kDebugMode) debugPrint('Auth: User is not logged in');
       }
     } catch (e) {
+      if (kDebugMode) debugPrint('Auth: Error checking auth: $e');
       state = const AuthState(isLoading: false, isAuthenticated: false);
     }
   }
 
   Future<bool> login(String email, String password) async {
     state = state.copyWith(isLoading: true, error: null);
+
     try {
       final repository = ref.read(authRepositoryProvider);
       final response = await repository.login(email, password);
 
-      // Clear any stale project state (e.g., errors from unauthenticated requests)
-      ref.invalidate(projectsProvider);
-
+      // projectsProvider watches authProvider and will auto-reload
       state = AuthState(
         isLoading: false,
         isAuthenticated: true,
@@ -83,11 +84,14 @@ class Auth extends _$Auth {
         email: response.email,
         name: response.name,
       );
+
+      if (kDebugMode) debugPrint('Auth: Login successful');
       return true;
     } catch (e) {
+      if (kDebugMode) debugPrint('Auth: Login failed: $e');
       state = state.copyWith(
         isLoading: false,
-        error: e.toUserMessage(),
+        error: e is AppError ? e.message : 'Login failed. Please try again.',
       );
       return false;
     }
@@ -95,13 +99,12 @@ class Auth extends _$Auth {
 
   Future<bool> register(String email, String password, String? name) async {
     state = state.copyWith(isLoading: true, error: null);
+
     try {
       final repository = ref.read(authRepositoryProvider);
       final response = await repository.register(email, password, name);
 
-      // Clear any stale project state (e.g., errors from unauthenticated requests)
-      ref.invalidate(projectsProvider);
-
+      // projectsProvider watches authProvider and will auto-reload
       state = AuthState(
         isLoading: false,
         isAuthenticated: true,
@@ -109,23 +112,32 @@ class Auth extends _$Auth {
         email: response.email,
         name: response.name,
       );
+
+      if (kDebugMode) debugPrint('Auth: Registration successful');
       return true;
     } catch (e) {
+      if (kDebugMode) debugPrint('Auth: Registration failed: $e');
       state = state.copyWith(
         isLoading: false,
-        error: e.toUserMessage(),
+        error: e is AppError ? e.message : 'Registration failed. Please try again.',
       );
       return false;
     }
   }
 
   Future<void> logout() async {
-    final repository = ref.read(authRepositoryProvider);
-    await repository.logout();
+    if (kDebugMode) debugPrint('Auth: Logging out...');
 
-    // Clear user data from other providers
-    ref.invalidate(projectsProvider);
+    try {
+      final repository = ref.read(authRepositoryProvider);
+      await repository.logout();
+    } catch (e) {
+      if (kDebugMode) debugPrint('Auth: Error during logout: $e');
+    }
 
+    // Update state - projectsProvider watches authProvider and will auto-rebuild
     state = const AuthState(isLoading: false, isAuthenticated: false);
+
+    if (kDebugMode) debugPrint('Auth: Logout complete, isAuthenticated=${state.isAuthenticated}');
   }
 }

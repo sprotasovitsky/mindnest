@@ -33,13 +33,16 @@ class ApiClient {
       ),
     );
 
-    // Only log in debug mode, and never log request bodies (may contain passwords)
+    // Minimal logging in debug mode - only response status
     if (kDebugMode) {
       _dio.interceptors.add(LogInterceptor(
+        request: false, // Don't log request info
         requestBody: false, // Never log request body - may contain passwords
-        responseBody: true,
         requestHeader: false,
+        responseBody: false, // Don't log response body - may be large
         responseHeader: false,
+        error: true, // Only log errors
+        logPrint: (msg) => debugPrint('API: $msg'),
       ));
     }
 
@@ -63,13 +66,14 @@ class ApiClient {
               return handler.resolve(response);
             }
           } catch (e) {
-            AppLogger.error('Token refresh failed', error: e, tag: 'ApiClient');
+            // Don't log full error - may contain sensitive data
+            AppLogger.error('Token refresh failed: ${e.runtimeType}', tag: 'ApiClient');
           }
         }
 
+        // Log error without request data (may contain passwords)
         AppLogger.error(
-          'API Error: ${error.message}',
-          error: error,
+          'API Error: ${error.response?.statusCode ?? 'unknown'} ${error.message}',
           tag: 'ApiClient',
         );
         return handler.next(error);
