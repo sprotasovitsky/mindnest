@@ -33,10 +33,15 @@ class ApiClient {
       ),
     );
 
-    _dio.interceptors.add(LogInterceptor(
-      requestBody: true,
-      responseBody: true,
-    ));
+    // Only log in debug mode, and never log request bodies (may contain passwords)
+    if (kDebugMode) {
+      _dio.interceptors.add(LogInterceptor(
+        requestBody: false, // Never log request body - may contain passwords
+        responseBody: true,
+        requestHeader: false,
+        responseHeader: false,
+      ));
+    }
 
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) {
