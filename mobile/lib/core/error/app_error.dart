@@ -34,7 +34,10 @@ class NetworkError extends AppError {
     if (e.response != null) {
       final statusCode = e.response!.statusCode;
       final data = e.response!.data;
-      final message = data is Map ? data['message'] : data?.toString();
+      // FastAPI returns errors in 'detail', other APIs may use 'message'
+      final message = data is Map
+          ? (data['detail'] ?? data['message'])?.toString()
+          : data?.toString();
 
       if (statusCode == 401) {
         return NetworkError(
