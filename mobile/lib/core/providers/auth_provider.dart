@@ -73,6 +73,9 @@ class Auth extends _$Auth {
       final repository = ref.read(authRepositoryProvider);
       final response = await repository.login(email, password);
 
+      // Clear any stale project state (e.g., errors from unauthenticated requests)
+      ref.invalidate(projectsProvider);
+
       state = AuthState(
         isLoading: false,
         isAuthenticated: true,
@@ -95,6 +98,9 @@ class Auth extends _$Auth {
     try {
       final repository = ref.read(authRepositoryProvider);
       final response = await repository.register(email, password, name);
+
+      // Clear any stale project state (e.g., errors from unauthenticated requests)
+      ref.invalidate(projectsProvider);
 
       state = AuthState(
         isLoading: false,
