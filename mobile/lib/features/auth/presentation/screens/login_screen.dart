@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/auth/auth_service.dart';
 import '../../../../core/providers/auth_provider.dart';
+import '../widgets/social_login_buttons.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -170,6 +171,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     const SizedBox(height: 8),
 
+                    // Forgot password link (only in login mode)
+                    if (_isLogin)
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () => context.push('/forgot-password'),
+                          child: const Text('Forgot password?'),
+                        ),
+                      ),
+
                     if (authState.error != null)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 8),
@@ -196,6 +207,51 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               )
                             : Text(_isLogin ? 'Sign In' : 'Create Account'),
                       ),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // OR divider
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Divider(
+                            color: Theme.of(context).colorScheme.outlineVariant,
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Text(
+                            'OR',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Divider(
+                            color: Theme.of(context).colorScheme.outlineVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // Social login buttons
+                    SocialLoginButtons(
+                      onSuccess: () {
+                        if (mounted) {
+                          context.go('/projects');
+                        }
+                      },
+                      onError: (error) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(error)),
+                          );
+                        }
+                      },
                     ),
 
                     const SizedBox(height: 16),

@@ -3,11 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../providers/auth_provider.dart';
-import '../../features/chat/presentation/screens/chat_screen.dart';
+import '../../features/auth/presentation/screens/email_verified_screen.dart';
+import '../../features/auth/presentation/screens/forgot_password_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
-import '../../features/projects/presentation/screens/projects_list_screen.dart';
-import '../../features/profile/presentation/screens/profile_screen.dart';
+import '../../features/chat/presentation/screens/chat_screen.dart';
 import '../../features/members/presentation/screens/members_screen.dart';
+import '../../features/profile/presentation/screens/change_password_screen.dart';
+import '../../features/profile/presentation/screens/profile_screen.dart';
+import '../../features/projects/presentation/screens/projects_list_screen.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authNotifier = _AuthRefreshNotifier(ref);
@@ -43,6 +46,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const LoginScreen(),
       ),
       GoRoute(
+        path: '/forgot-password',
+        name: 'forgot-password',
+        builder: (context, state) => const ForgotPasswordScreen(),
+      ),
+      GoRoute(
         path: '/projects',
         name: 'projects',
         builder: (context, state) => const ProjectsListScreen(),
@@ -58,9 +66,21 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const ProfileScreen(),
       ),
       GoRoute(
+        path: '/change-password',
+        name: 'change-password',
+        builder: (context, state) => const ChangePasswordScreen(),
+      ),
+      GoRoute(
         path: '/members',
         name: 'members',
         builder: (context, state) => const MembersScreen(),
+      ),
+      // Deep link handler for email verification
+      // mindnest://verified -> /verified
+      GoRoute(
+        path: '/verified',
+        name: 'verified',
+        builder: (context, state) => const EmailVerifiedScreen(),
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

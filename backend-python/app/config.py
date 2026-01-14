@@ -56,6 +56,32 @@ class Settings(BaseSettings):
     rate_limit_login: str = "5/minute"
     rate_limit_register: str = "3/minute"
     rate_limit_chat: str = "30/minute"
+    rate_limit_verify_email: str = "10/minute"
+    rate_limit_resend_verification: str = "3/minute"
+    rate_limit_password_reset: str = "5/minute"
+    rate_limit_change_password: str = "5/minute"
+
+    # Email (Resend)
+    resend_api_key: str = ""
+    email_from: str = "MindNest <noreply@mindnest.one>"
+    frontend_url: str = "https://mindnest.one"
+
+    # Token limits for unverified users
+    unverified_token_limit: int = 1_000_000  # 1M tokens
+
+    # Social login - separate client IDs for each platform
+    google_ios_client_id: str = ""      # iOS client ID
+    google_android_client_id: str = ""  # Android client ID
+    apple_client_id: str = ""           # Bundle ID (com.mindnest.app.dev/staging/prod)
+
+    def get_google_client_ids(self) -> list[str]:
+        """Get all valid Google client IDs for token verification."""
+        ids = []
+        if self.google_ios_client_id:
+            ids.append(self.google_ios_client_id)
+        if self.google_android_client_id:
+            ids.append(self.google_android_client_id)
+        return ids
 
     def get_rate_limit(self, limit_type: str) -> str:
         """Get rate limit based on debug mode. Higher limits for local dev."""
@@ -65,6 +91,10 @@ class Settings(BaseSettings):
                 "login": "100/minute",
                 "register": "100/minute",
                 "chat": "200/minute",
+                "verify_email": "100/minute",
+                "resend_verification": "100/minute",
+                "password_reset": "100/minute",
+                "change_password": "100/minute",
             }
             return debug_limits.get(limit_type, "100/minute")
 
@@ -73,6 +103,10 @@ class Settings(BaseSettings):
             "login": self.rate_limit_login,
             "register": self.rate_limit_register,
             "chat": self.rate_limit_chat,
+            "verify_email": self.rate_limit_verify_email,
+            "resend_verification": self.rate_limit_resend_verification,
+            "password_reset": self.rate_limit_password_reset,
+            "change_password": self.rate_limit_change_password,
         }
         return limits.get(limit_type, "30/minute")
 

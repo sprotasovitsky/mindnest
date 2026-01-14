@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/providers/auth_provider.dart';
+import '../../../../shared/widgets/email_verification_banner.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -15,10 +16,16 @@ class ProfileScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Profile'),
       ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
+      body: Column(
+        children: [
+          // Show verification banner for unverified users
+          const EmailVerificationBanner(),
+          Expanded(
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
             children: [
               const SizedBox(height: 32),
               CircleAvatar(
@@ -46,6 +53,16 @@ class ProfileScreen extends ConsumerWidget {
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
               ),
+              const SizedBox(height: 32),
+
+              // Settings list
+              ListTile(
+                leading: const Icon(Icons.lock_outline),
+                title: const Text('Change Password'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/change-password'),
+              ),
+
               const Spacer(),
               SizedBox(
                 width: double.infinity,
@@ -82,9 +99,12 @@ class ProfileScreen extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 16),
-            ],
+                ],
+              ),
+            ),
           ),
         ),
+        ],
       ),
     );
   }

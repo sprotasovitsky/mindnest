@@ -26,7 +26,7 @@ class ProjectRepositoryImpl implements ProjectRepository {
       final response = await _apiClient.getProjects();
       return response.map((json) => Project.fromJson(json)).toList();
     } on DioException catch (e) {
-      throw NetworkError.fromDioException(e);
+      throw appErrorFromDioException(e);
     }
   }
 
@@ -36,7 +36,7 @@ class ProjectRepositoryImpl implements ProjectRepository {
       final response = await _apiClient.createProject(name, description);
       return Project.fromJson(response);
     } on DioException catch (e) {
-      throw NetworkError.fromDioException(e);
+      throw appErrorFromDioException(e);
     }
   }
 
@@ -48,7 +48,7 @@ class ProjectRepositoryImpl implements ProjectRepository {
           name: name, description: description);
       return Project.fromJson(response);
     } on DioException catch (e) {
-      throw NetworkError.fromDioException(e);
+      throw appErrorFromDioException(e);
     }
   }
 }

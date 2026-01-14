@@ -23,6 +23,12 @@ mixin _$User {
   String get id => throw _privateConstructorUsedError;
   String get email => throw _privateConstructorUsedError;
   String? get name => throw _privateConstructorUsedError;
+  @JsonKey(name: 'email_verified')
+  bool get emailVerified => throw _privateConstructorUsedError;
+  @JsonKey(name: 'tokens_used')
+  int get tokensUsed => throw _privateConstructorUsedError;
+  @JsonKey(name: 'token_limit')
+  int get tokenLimit => throw _privateConstructorUsedError;
 
   /// Serializes this User to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -38,7 +44,13 @@ abstract class $UserCopyWith<$Res> {
   factory $UserCopyWith(User value, $Res Function(User) then) =
       _$UserCopyWithImpl<$Res, User>;
   @useResult
-  $Res call({String id, String email, String? name});
+  $Res call(
+      {String id,
+      String email,
+      String? name,
+      @JsonKey(name: 'email_verified') bool emailVerified,
+      @JsonKey(name: 'tokens_used') int tokensUsed,
+      @JsonKey(name: 'token_limit') int tokenLimit});
 }
 
 /// @nodoc
@@ -59,6 +71,9 @@ class _$UserCopyWithImpl<$Res, $Val extends User>
     Object? id = null,
     Object? email = null,
     Object? name = freezed,
+    Object? emailVerified = null,
+    Object? tokensUsed = null,
+    Object? tokenLimit = null,
   }) {
     return _then(_value.copyWith(
       id: null == id
@@ -73,6 +88,18 @@ class _$UserCopyWithImpl<$Res, $Val extends User>
           ? _value.name
           : name // ignore: cast_nullable_to_non_nullable
               as String?,
+      emailVerified: null == emailVerified
+          ? _value.emailVerified
+          : emailVerified // ignore: cast_nullable_to_non_nullable
+              as bool,
+      tokensUsed: null == tokensUsed
+          ? _value.tokensUsed
+          : tokensUsed // ignore: cast_nullable_to_non_nullable
+              as int,
+      tokenLimit: null == tokenLimit
+          ? _value.tokenLimit
+          : tokenLimit // ignore: cast_nullable_to_non_nullable
+              as int,
     ) as $Val);
   }
 }
@@ -84,7 +111,13 @@ abstract class _$$UserImplCopyWith<$Res> implements $UserCopyWith<$Res> {
       __$$UserImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({String id, String email, String? name});
+  $Res call(
+      {String id,
+      String email,
+      String? name,
+      @JsonKey(name: 'email_verified') bool emailVerified,
+      @JsonKey(name: 'tokens_used') int tokensUsed,
+      @JsonKey(name: 'token_limit') int tokenLimit});
 }
 
 /// @nodoc
@@ -102,6 +135,9 @@ class __$$UserImplCopyWithImpl<$Res>
     Object? id = null,
     Object? email = null,
     Object? name = freezed,
+    Object? emailVerified = null,
+    Object? tokensUsed = null,
+    Object? tokenLimit = null,
   }) {
     return _then(_$UserImpl(
       id: null == id
@@ -116,6 +152,18 @@ class __$$UserImplCopyWithImpl<$Res>
           ? _value.name
           : name // ignore: cast_nullable_to_non_nullable
               as String?,
+      emailVerified: null == emailVerified
+          ? _value.emailVerified
+          : emailVerified // ignore: cast_nullable_to_non_nullable
+              as bool,
+      tokensUsed: null == tokensUsed
+          ? _value.tokensUsed
+          : tokensUsed // ignore: cast_nullable_to_non_nullable
+              as int,
+      tokenLimit: null == tokenLimit
+          ? _value.tokenLimit
+          : tokenLimit // ignore: cast_nullable_to_non_nullable
+              as int,
     ));
   }
 }
@@ -123,7 +171,13 @@ class __$$UserImplCopyWithImpl<$Res>
 /// @nodoc
 @JsonSerializable()
 class _$UserImpl implements _User {
-  const _$UserImpl({required this.id, required this.email, this.name});
+  const _$UserImpl(
+      {required this.id,
+      required this.email,
+      this.name,
+      @JsonKey(name: 'email_verified') this.emailVerified = false,
+      @JsonKey(name: 'tokens_used') this.tokensUsed = 0,
+      @JsonKey(name: 'token_limit') this.tokenLimit = 0});
 
   factory _$UserImpl.fromJson(Map<String, dynamic> json) =>
       _$$UserImplFromJson(json);
@@ -134,10 +188,19 @@ class _$UserImpl implements _User {
   final String email;
   @override
   final String? name;
+  @override
+  @JsonKey(name: 'email_verified')
+  final bool emailVerified;
+  @override
+  @JsonKey(name: 'tokens_used')
+  final int tokensUsed;
+  @override
+  @JsonKey(name: 'token_limit')
+  final int tokenLimit;
 
   @override
   String toString() {
-    return 'User(id: $id, email: $email, name: $name)';
+    return 'User(id: $id, email: $email, name: $name, emailVerified: $emailVerified, tokensUsed: $tokensUsed, tokenLimit: $tokenLimit)';
   }
 
   @override
@@ -147,12 +210,19 @@ class _$UserImpl implements _User {
             other is _$UserImpl &&
             (identical(other.id, id) || other.id == id) &&
             (identical(other.email, email) || other.email == email) &&
-            (identical(other.name, name) || other.name == name));
+            (identical(other.name, name) || other.name == name) &&
+            (identical(other.emailVerified, emailVerified) ||
+                other.emailVerified == emailVerified) &&
+            (identical(other.tokensUsed, tokensUsed) ||
+                other.tokensUsed == tokensUsed) &&
+            (identical(other.tokenLimit, tokenLimit) ||
+                other.tokenLimit == tokenLimit));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode => Object.hash(runtimeType, id, email, name);
+  int get hashCode => Object.hash(
+      runtimeType, id, email, name, emailVerified, tokensUsed, tokenLimit);
 
   /// Create a copy of User
   /// with the given fields replaced by the non-null parameter values.
@@ -174,7 +244,10 @@ abstract class _User implements User {
   const factory _User(
       {required final String id,
       required final String email,
-      final String? name}) = _$UserImpl;
+      final String? name,
+      @JsonKey(name: 'email_verified') final bool emailVerified,
+      @JsonKey(name: 'tokens_used') final int tokensUsed,
+      @JsonKey(name: 'token_limit') final int tokenLimit}) = _$UserImpl;
 
   factory _User.fromJson(Map<String, dynamic> json) = _$UserImpl.fromJson;
 
@@ -184,6 +257,15 @@ abstract class _User implements User {
   String get email;
   @override
   String? get name;
+  @override
+  @JsonKey(name: 'email_verified')
+  bool get emailVerified;
+  @override
+  @JsonKey(name: 'tokens_used')
+  int get tokensUsed;
+  @override
+  @JsonKey(name: 'token_limit')
+  int get tokenLimit;
 
   /// Create a copy of User
   /// with the given fields replaced by the non-null parameter values.
@@ -211,6 +293,8 @@ mixin _$AuthResponse {
   String get userId => throw _privateConstructorUsedError;
   String get email => throw _privateConstructorUsedError;
   String? get name => throw _privateConstructorUsedError;
+  @JsonKey(name: 'email_verified')
+  bool get emailVerified => throw _privateConstructorUsedError;
 
   /// Serializes this AuthResponse to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -235,7 +319,8 @@ abstract class $AuthResponseCopyWith<$Res> {
       @JsonKey(name: 'expires_in') int expiresIn,
       @JsonKey(name: 'user_id') String userId,
       String email,
-      String? name});
+      String? name,
+      @JsonKey(name: 'email_verified') bool emailVerified});
 }
 
 /// @nodoc
@@ -260,6 +345,7 @@ class _$AuthResponseCopyWithImpl<$Res, $Val extends AuthResponse>
     Object? userId = null,
     Object? email = null,
     Object? name = freezed,
+    Object? emailVerified = null,
   }) {
     return _then(_value.copyWith(
       accessToken: null == accessToken
@@ -290,6 +376,10 @@ class _$AuthResponseCopyWithImpl<$Res, $Val extends AuthResponse>
           ? _value.name
           : name // ignore: cast_nullable_to_non_nullable
               as String?,
+      emailVerified: null == emailVerified
+          ? _value.emailVerified
+          : emailVerified // ignore: cast_nullable_to_non_nullable
+              as bool,
     ) as $Val);
   }
 }
@@ -309,7 +399,8 @@ abstract class _$$AuthResponseImplCopyWith<$Res>
       @JsonKey(name: 'expires_in') int expiresIn,
       @JsonKey(name: 'user_id') String userId,
       String email,
-      String? name});
+      String? name,
+      @JsonKey(name: 'email_verified') bool emailVerified});
 }
 
 /// @nodoc
@@ -332,6 +423,7 @@ class __$$AuthResponseImplCopyWithImpl<$Res>
     Object? userId = null,
     Object? email = null,
     Object? name = freezed,
+    Object? emailVerified = null,
   }) {
     return _then(_$AuthResponseImpl(
       accessToken: null == accessToken
@@ -362,6 +454,10 @@ class __$$AuthResponseImplCopyWithImpl<$Res>
           ? _value.name
           : name // ignore: cast_nullable_to_non_nullable
               as String?,
+      emailVerified: null == emailVerified
+          ? _value.emailVerified
+          : emailVerified // ignore: cast_nullable_to_non_nullable
+              as bool,
     ));
   }
 }
@@ -376,7 +472,8 @@ class _$AuthResponseImpl implements _AuthResponse {
       @JsonKey(name: 'expires_in') required this.expiresIn,
       @JsonKey(name: 'user_id') required this.userId,
       required this.email,
-      this.name});
+      this.name,
+      @JsonKey(name: 'email_verified') this.emailVerified = false});
 
   factory _$AuthResponseImpl.fromJson(Map<String, dynamic> json) =>
       _$$AuthResponseImplFromJson(json);
@@ -400,10 +497,13 @@ class _$AuthResponseImpl implements _AuthResponse {
   final String email;
   @override
   final String? name;
+  @override
+  @JsonKey(name: 'email_verified')
+  final bool emailVerified;
 
   @override
   String toString() {
-    return 'AuthResponse(accessToken: $accessToken, refreshToken: $refreshToken, tokenType: $tokenType, expiresIn: $expiresIn, userId: $userId, email: $email, name: $name)';
+    return 'AuthResponse(accessToken: $accessToken, refreshToken: $refreshToken, tokenType: $tokenType, expiresIn: $expiresIn, userId: $userId, email: $email, name: $name, emailVerified: $emailVerified)';
   }
 
   @override
@@ -421,13 +521,15 @@ class _$AuthResponseImpl implements _AuthResponse {
                 other.expiresIn == expiresIn) &&
             (identical(other.userId, userId) || other.userId == userId) &&
             (identical(other.email, email) || other.email == email) &&
-            (identical(other.name, name) || other.name == name));
+            (identical(other.name, name) || other.name == name) &&
+            (identical(other.emailVerified, emailVerified) ||
+                other.emailVerified == emailVerified));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
   int get hashCode => Object.hash(runtimeType, accessToken, refreshToken,
-      tokenType, expiresIn, userId, email, name);
+      tokenType, expiresIn, userId, email, name, emailVerified);
 
   /// Create a copy of AuthResponse
   /// with the given fields replaced by the non-null parameter values.
@@ -447,13 +549,15 @@ class _$AuthResponseImpl implements _AuthResponse {
 
 abstract class _AuthResponse implements AuthResponse {
   const factory _AuthResponse(
-      {@JsonKey(name: 'access_token') required final String accessToken,
-      @JsonKey(name: 'refresh_token') required final String refreshToken,
-      @JsonKey(name: 'token_type') final String tokenType,
-      @JsonKey(name: 'expires_in') required final int expiresIn,
-      @JsonKey(name: 'user_id') required final String userId,
-      required final String email,
-      final String? name}) = _$AuthResponseImpl;
+          {@JsonKey(name: 'access_token') required final String accessToken,
+          @JsonKey(name: 'refresh_token') required final String refreshToken,
+          @JsonKey(name: 'token_type') final String tokenType,
+          @JsonKey(name: 'expires_in') required final int expiresIn,
+          @JsonKey(name: 'user_id') required final String userId,
+          required final String email,
+          final String? name,
+          @JsonKey(name: 'email_verified') final bool emailVerified}) =
+      _$AuthResponseImpl;
 
   factory _AuthResponse.fromJson(Map<String, dynamic> json) =
       _$AuthResponseImpl.fromJson;
@@ -477,6 +581,9 @@ abstract class _AuthResponse implements AuthResponse {
   String get email;
   @override
   String? get name;
+  @override
+  @JsonKey(name: 'email_verified')
+  bool get emailVerified;
 
   /// Create a copy of AuthResponse
   /// with the given fields replaced by the non-null parameter values.

@@ -1,12 +1,15 @@
 """Authentication API Router.
 
-Handles user registration, login, and token refresh.
+Handles user registration, login, token refresh, and email verification.
 Uses PostgreSQL for user storage and bcrypt for password hashing.
 """
 
+import hashlib
 import logging
+import random
 import re
-from datetime import datetime, timedelta
+import secrets
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import bcrypt
@@ -20,7 +23,8 @@ from slowapi.util import get_remote_address
 
 from ..config import get_settings
 from ..database import get_db
-from ..models import User
+from ..models import User, PasswordResetCode
+from ..email_service import EmailService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -37,6 +41,26 @@ def _get_register_limit() -> str:
 def _get_login_limit() -> str:
     """Get login rate limit based on debug mode."""
     return get_settings().get_rate_limit("login")
+
+
+def _get_verify_email_limit() -> str:
+    """Get verify email rate limit based on debug mode."""
+    return get_settings().get_rate_limit("verify_email")
+
+
+def _get_resend_verification_limit() -> str:
+    """Get resend verification rate limit based on debug mode."""
+    return get_settings().get_rate_limit("resend_verification")
+
+
+def _get_password_reset_limit() -> str:
+    """Get password reset rate limit based on debug mode."""
+    return get_settings().get_rate_limit("password_reset")
+
+
+def _get_change_password_limit() -> str:
+    """Get change password rate limit based on debug mode."""
+    return get_settings().get_rate_limit("change_password")
 
 
 def mask_email(email: str) -> str:
@@ -101,6 +125,7 @@ class AuthResponse(BaseModel):
     user_id: str
     email: str
     name: str
+    email_verified: bool = False
 
 
 class RefreshRequest(BaseModel):
@@ -120,6 +145,78 @@ class UserResponse(BaseModel):
     id: str
     email: str
     name: str
+
+
+class UserInfoResponse(BaseModel):
+    """User info with verification status and token usage."""
+    id: str
+    email: str
+    name: str
+    email_verified: bool
+    tokens_used: int
+    token_limit: int  # 0 if verified (unlimited)
+
+
+class VerifyEmailRequest(BaseModel):
+    """Email verification request."""
+    token: str = Field(..., min_length=32, max_length=64)
+
+
+class ResendVerificationRequest(BaseModel):
+    """Resend verification email request."""
+    email: EmailStr
+
+
+class PasswordResetRequest(BaseModel):
+    """Password reset request (step 1: request code)."""
+    email: EmailStr
+
+
+class VerifyResetCodeRequest(BaseModel):
+    """Verify reset code request (step 2: verify code)."""
+    email: EmailStr
+    code: str = Field(..., min_length=6, max_length=6)
+
+
+class VerifyResetCodeResponse(BaseModel):
+    """Verify reset code response."""
+    reset_token: str  # Temporary token for password reset
+
+
+class ResetPasswordRequest(BaseModel):
+    """Reset password request (step 3: set new password)."""
+    reset_token: str
+    new_password: str = Field(..., min_length=8)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, v: str) -> str:
+        """Validate password strength."""
+        is_valid, error = PasswordValidator.validate(v)
+        if not is_valid:
+            raise ValueError(error)
+        return v
+
+
+class ChangePasswordRequest(BaseModel):
+    """Change password request (for authenticated users)."""
+    current_password: str
+    new_password: str = Field(..., min_length=8)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, v: str) -> str:
+        """Validate password strength."""
+        is_valid, error = PasswordValidator.validate(v)
+        if not is_valid:
+            raise ValueError(error)
+        return v
+
+
+# Password reset configuration
+RESET_CODE_EXPIRE_MINUTES = 10
+RESET_CODE_MAX_ATTEMPTS = 5
+RESET_TOKEN_EXPIRE_MINUTES = 15
 
 
 # Token configuration
@@ -211,15 +308,24 @@ async def register(
             detail="Email already registered",
         )
 
+    # Generate verification token
+    verification_token = secrets.token_urlsafe(32)
+
     # Create user with bcrypt hash
     user = User(
         email=data.email.lower(),
         password_hash=hash_password(data.password),
         name=data.name,
+        email_verified=False,
+        email_verification_token=verification_token,
+        email_verification_sent_at=datetime.utcnow(),
     )
     db.add(user)
     await db.commit()
     await db.refresh(user)
+
+    # Send verification email (fire and forget, don't block registration)
+    await EmailService.send_verification_email(user.email, user.name, verification_token)
 
     # Create tokens
     access_token, expires_in = create_access_token(user.id, user.email, user.name)
@@ -234,6 +340,7 @@ async def register(
         user_id=user.id,
         email=user.email,
         name=user.name,
+        email_verified=user.email_verified,
     )
 
 
@@ -255,8 +362,8 @@ async def login(
             detail="Invalid email or password",
         )
 
-    # Verify password
-    if not verify_password(data.password, user.password_hash):
+    # Verify password (social-only users have no password)
+    if not user.password_hash or not verify_password(data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
@@ -275,6 +382,7 @@ async def login(
         user_id=user.id,
         email=user.email,
         name=user.name,
+        email_verified=user.email_verified,
     )
 
 
@@ -372,3 +480,338 @@ def decode_token(token: str) -> Optional[dict]:
     except Exception as e:
         logger.warning(f"Invalid token: {e}")
     return None
+
+
+@router.post("/verify-email")
+@limiter.limit(_get_verify_email_limit)
+async def verify_email(
+    request: Request,
+    data: VerifyEmailRequest,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Verify email with token."""
+    # Find user by verification token
+    result = await db.execute(
+        select(User).where(User.email_verification_token == data.token)
+    )
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired verification token",
+        )
+
+    # Check if already verified
+    if user.email_verified:
+        return {"message": "Email already verified"}
+
+    # Verify the email
+    user.email_verified = True
+    user.email_verification_token = None
+    await db.commit()
+
+    logger.info(f"Email verified for user: {user.id}")
+    return {"message": "Email verified successfully"}
+
+
+@router.post("/resend-verification")
+@limiter.limit(_get_resend_verification_limit)
+async def resend_verification(
+    request: Request,
+    data: ResendVerificationRequest,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Resend verification email."""
+    user = await get_user_by_email(db, data.email)
+
+    # Always return success to prevent email enumeration
+    if not user or user.email_verified:
+        return {"message": "If the email exists, a verification link will be sent"}
+
+    # Rate limit: don't send if sent recently (< 1 minute)
+    if user.email_verification_sent_at:
+        elapsed = (datetime.utcnow() - user.email_verification_sent_at).total_seconds()
+        if elapsed < 60:
+            return {"message": "If the email exists, a verification link will be sent"}
+
+    # Generate new token
+    token = secrets.token_urlsafe(32)
+    user.email_verification_token = token
+    user.email_verification_sent_at = datetime.utcnow()
+    await db.commit()
+
+    # Send email
+    await EmailService.send_verification_email(user.email, user.name, token)
+
+    return {"message": "If the email exists, a verification link will be sent"}
+
+
+@router.get("/me", response_model=UserInfoResponse)
+async def get_current_user_info(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> UserInfoResponse:
+    """Get current user info including verification status."""
+    # Extract token from Authorization header
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+
+    token = auth_header.split(" ", 1)[1]
+    user = await get_user_from_token_db(db, token)
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+        )
+
+    settings = get_settings()
+    return UserInfoResponse(
+        id=user.id,
+        email=user.email,
+        name=user.name,
+        email_verified=user.email_verified,
+        tokens_used=user.tokens_used,
+        token_limit=0 if user.email_verified else settings.unverified_token_limit,
+    )
+
+
+def generate_reset_code() -> str:
+    """Generate a 6-digit numeric code."""
+    return f"{random.randint(0, 999999):06d}"
+
+
+def hash_code(code: str) -> str:
+    """Hash code with SHA-256."""
+    return hashlib.sha256(code.encode()).hexdigest()
+
+
+def create_reset_token(user_id: str) -> str:
+    """Create a short-lived token for password reset."""
+    settings = get_settings()
+    expire = datetime.utcnow() + timedelta(minutes=RESET_TOKEN_EXPIRE_MINUTES)
+    payload = {
+        "sub": user_id,
+        "exp": expire,
+        "type": "password_reset",
+    }
+    return jwt.encode(payload, settings.secret_key, algorithm="HS256")
+
+
+def verify_reset_token(token: str) -> Optional[str]:
+    """Verify reset token and return user_id if valid."""
+    try:
+        settings = get_settings()
+        payload = jwt.decode(token, settings.secret_key, algorithms=["HS256"])
+        if payload.get("type") != "password_reset":
+            return None
+        return payload.get("sub")
+    except jwt.ExpiredSignatureError:
+        return None
+    except jwt.JWTError:
+        return None
+
+
+@router.post("/request-password-reset")
+@limiter.limit(_get_password_reset_limit)
+async def request_password_reset(
+    request: Request,
+    data: PasswordResetRequest,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Request password reset code (step 1)."""
+    logger.info(f"Password reset requested for: {mask_email(data.email)}")
+
+    # Always return success to prevent email enumeration
+    user = await get_user_by_email(db, data.email)
+    if not user:
+        return {"message": "If the email exists, a reset code will be sent"}
+
+    # Check if user has a password (social-only users can't reset)
+    if not user.password_hash:
+        logger.info(f"Password reset requested for social-only user: {user.id}")
+        return {"message": "If the email exists, a reset code will be sent"}
+
+    # Rate limit: max 3 codes per hour per email
+    one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
+    recent_codes = await db.execute(
+        select(PasswordResetCode).where(
+            PasswordResetCode.user_id == user.id,
+            PasswordResetCode.created_at > one_hour_ago,
+        )
+    )
+    if len(recent_codes.scalars().all()) >= 3:
+        logger.warning(f"Too many password reset requests for user: {user.id}")
+        return {"message": "If the email exists, a reset code will be sent"}
+
+    # Generate and hash code
+    code = generate_reset_code()
+    code_hash = hash_code(code)
+
+    # Create reset code record
+    reset_code = PasswordResetCode(
+        user_id=user.id,
+        code_hash=code_hash,
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=RESET_CODE_EXPIRE_MINUTES),
+    )
+    db.add(reset_code)
+    await db.commit()
+
+    # Send email with code
+    await EmailService.send_password_reset_code(user.email, user.name, code)
+
+    logger.info(f"Password reset code sent to user: {user.id}")
+    return {"message": "If the email exists, a reset code will be sent"}
+
+
+@router.post("/verify-reset-code", response_model=VerifyResetCodeResponse)
+@limiter.limit(_get_password_reset_limit)
+async def verify_reset_code(
+    request: Request,
+    data: VerifyResetCodeRequest,
+    db: AsyncSession = Depends(get_db),
+) -> VerifyResetCodeResponse:
+    """Verify reset code (step 2)."""
+    logger.info(f"Verifying reset code for: {mask_email(data.email)}")
+
+    # Get user
+    user = await get_user_by_email(db, data.email)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid email or code",
+        )
+
+    # Find valid reset code for this user
+    now = datetime.now(timezone.utc)
+    result = await db.execute(
+        select(PasswordResetCode).where(
+            PasswordResetCode.user_id == user.id,
+            PasswordResetCode.expires_at > now,
+            PasswordResetCode.used_at.is_(None),
+        ).order_by(PasswordResetCode.created_at.desc())
+    )
+    reset_codes = result.scalars().all()
+
+    # Check code against all valid codes
+    code_hash = hash_code(data.code)
+    valid_code = None
+    for rc in reset_codes:
+        # Increment attempts
+        rc.attempts += 1
+
+        if rc.attempts > RESET_CODE_MAX_ATTEMPTS:
+            continue  # Too many attempts on this code
+
+        if rc.code_hash == code_hash:
+            valid_code = rc
+            break
+
+    await db.commit()
+
+    if not valid_code:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired code",
+        )
+
+    # Mark code as used
+    valid_code.used_at = now
+    await db.commit()
+
+    # Create reset token
+    reset_token = create_reset_token(user.id)
+
+    logger.info(f"Reset code verified for user: {user.id}")
+    return VerifyResetCodeResponse(reset_token=reset_token)
+
+
+@router.post("/reset-password")
+@limiter.limit(_get_password_reset_limit)
+async def reset_password(
+    request: Request,
+    data: ResetPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Reset password with token (step 3)."""
+    # Verify reset token
+    user_id = verify_reset_token(data.reset_token)
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset token",
+        )
+
+    # Get user
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset token",
+        )
+
+    # Update password
+    user.password_hash = hash_password(data.new_password)
+    await db.commit()
+
+    logger.info(f"Password reset for user: {user.id}")
+    return {"message": "Password reset successfully"}
+
+
+@router.post("/change-password")
+@limiter.limit(_get_change_password_limit)
+async def change_password(
+    request: Request,
+    data: ChangePasswordRequest,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Change password for authenticated user."""
+    # Extract token from Authorization header
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+
+    token = auth_header.split(" ", 1)[1]
+    user = await get_user_from_token_db(db, token)
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+        )
+
+    # Check if user has a password (social-only users can't change password)
+    if not user.password_hash:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot change password for social login accounts",
+        )
+
+    # Verify current password
+    if not verify_password(data.current_password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect",
+        )
+
+    # Check new password is different
+    if data.current_password == data.new_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be different from current password",
+        )
+
+    # Update password
+    user.password_hash = hash_password(data.new_password)
+    await db.commit()
+
+    logger.info(f"Password changed for user: {user.id}")
+    return {"message": "Password changed successfully"}

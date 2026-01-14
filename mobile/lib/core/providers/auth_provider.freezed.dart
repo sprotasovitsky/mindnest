@@ -21,6 +21,9 @@ mixin _$AuthState {
   String? get userId => throw _privateConstructorUsedError;
   String? get email => throw _privateConstructorUsedError;
   String? get name => throw _privateConstructorUsedError;
+  bool get emailVerified => throw _privateConstructorUsedError;
+  int get tokensUsed => throw _privateConstructorUsedError;
+  int get tokenLimit => throw _privateConstructorUsedError;
   String? get error => throw _privateConstructorUsedError;
 
   /// Create a copy of AuthState
@@ -41,6 +44,9 @@ abstract class $AuthStateCopyWith<$Res> {
       String? userId,
       String? email,
       String? name,
+      bool emailVerified,
+      int tokensUsed,
+      int tokenLimit,
       String? error});
 }
 
@@ -64,6 +70,9 @@ class _$AuthStateCopyWithImpl<$Res, $Val extends AuthState>
     Object? userId = freezed,
     Object? email = freezed,
     Object? name = freezed,
+    Object? emailVerified = null,
+    Object? tokensUsed = null,
+    Object? tokenLimit = null,
     Object? error = freezed,
   }) {
     return _then(_value.copyWith(
@@ -87,6 +96,18 @@ class _$AuthStateCopyWithImpl<$Res, $Val extends AuthState>
           ? _value.name
           : name // ignore: cast_nullable_to_non_nullable
               as String?,
+      emailVerified: null == emailVerified
+          ? _value.emailVerified
+          : emailVerified // ignore: cast_nullable_to_non_nullable
+              as bool,
+      tokensUsed: null == tokensUsed
+          ? _value.tokensUsed
+          : tokensUsed // ignore: cast_nullable_to_non_nullable
+              as int,
+      tokenLimit: null == tokenLimit
+          ? _value.tokenLimit
+          : tokenLimit // ignore: cast_nullable_to_non_nullable
+              as int,
       error: freezed == error
           ? _value.error
           : error // ignore: cast_nullable_to_non_nullable
@@ -109,6 +130,9 @@ abstract class _$$AuthStateImplCopyWith<$Res>
       String? userId,
       String? email,
       String? name,
+      bool emailVerified,
+      int tokensUsed,
+      int tokenLimit,
       String? error});
 }
 
@@ -130,6 +154,9 @@ class __$$AuthStateImplCopyWithImpl<$Res>
     Object? userId = freezed,
     Object? email = freezed,
     Object? name = freezed,
+    Object? emailVerified = null,
+    Object? tokensUsed = null,
+    Object? tokenLimit = null,
     Object? error = freezed,
   }) {
     return _then(_$AuthStateImpl(
@@ -153,6 +180,18 @@ class __$$AuthStateImplCopyWithImpl<$Res>
           ? _value.name
           : name // ignore: cast_nullable_to_non_nullable
               as String?,
+      emailVerified: null == emailVerified
+          ? _value.emailVerified
+          : emailVerified // ignore: cast_nullable_to_non_nullable
+              as bool,
+      tokensUsed: null == tokensUsed
+          ? _value.tokensUsed
+          : tokensUsed // ignore: cast_nullable_to_non_nullable
+              as int,
+      tokenLimit: null == tokenLimit
+          ? _value.tokenLimit
+          : tokenLimit // ignore: cast_nullable_to_non_nullable
+              as int,
       error: freezed == error
           ? _value.error
           : error // ignore: cast_nullable_to_non_nullable
@@ -170,6 +209,9 @@ class _$AuthStateImpl with DiagnosticableTreeMixin implements _AuthState {
       this.userId,
       this.email,
       this.name,
+      this.emailVerified = false,
+      this.tokensUsed = 0,
+      this.tokenLimit = 0,
       this.error});
 
   @override
@@ -185,11 +227,20 @@ class _$AuthStateImpl with DiagnosticableTreeMixin implements _AuthState {
   @override
   final String? name;
   @override
+  @JsonKey()
+  final bool emailVerified;
+  @override
+  @JsonKey()
+  final int tokensUsed;
+  @override
+  @JsonKey()
+  final int tokenLimit;
+  @override
   final String? error;
 
   @override
   String toString({DiagnosticLevel minLevel = DiagnosticLevel.info}) {
-    return 'AuthState(isLoading: $isLoading, isAuthenticated: $isAuthenticated, userId: $userId, email: $email, name: $name, error: $error)';
+    return 'AuthState(isLoading: $isLoading, isAuthenticated: $isAuthenticated, userId: $userId, email: $email, name: $name, emailVerified: $emailVerified, tokensUsed: $tokensUsed, tokenLimit: $tokenLimit, error: $error)';
   }
 
   @override
@@ -202,6 +253,9 @@ class _$AuthStateImpl with DiagnosticableTreeMixin implements _AuthState {
       ..add(DiagnosticsProperty('userId', userId))
       ..add(DiagnosticsProperty('email', email))
       ..add(DiagnosticsProperty('name', name))
+      ..add(DiagnosticsProperty('emailVerified', emailVerified))
+      ..add(DiagnosticsProperty('tokensUsed', tokensUsed))
+      ..add(DiagnosticsProperty('tokenLimit', tokenLimit))
       ..add(DiagnosticsProperty('error', error));
   }
 
@@ -217,12 +271,18 @@ class _$AuthStateImpl with DiagnosticableTreeMixin implements _AuthState {
             (identical(other.userId, userId) || other.userId == userId) &&
             (identical(other.email, email) || other.email == email) &&
             (identical(other.name, name) || other.name == name) &&
+            (identical(other.emailVerified, emailVerified) ||
+                other.emailVerified == emailVerified) &&
+            (identical(other.tokensUsed, tokensUsed) ||
+                other.tokensUsed == tokensUsed) &&
+            (identical(other.tokenLimit, tokenLimit) ||
+                other.tokenLimit == tokenLimit) &&
             (identical(other.error, error) || other.error == error));
   }
 
   @override
-  int get hashCode => Object.hash(
-      runtimeType, isLoading, isAuthenticated, userId, email, name, error);
+  int get hashCode => Object.hash(runtimeType, isLoading, isAuthenticated,
+      userId, email, name, emailVerified, tokensUsed, tokenLimit, error);
 
   /// Create a copy of AuthState
   /// with the given fields replaced by the non-null parameter values.
@@ -240,6 +300,9 @@ abstract class _AuthState implements AuthState {
       final String? userId,
       final String? email,
       final String? name,
+      final bool emailVerified,
+      final int tokensUsed,
+      final int tokenLimit,
       final String? error}) = _$AuthStateImpl;
 
   @override
@@ -252,6 +315,12 @@ abstract class _AuthState implements AuthState {
   String? get email;
   @override
   String? get name;
+  @override
+  bool get emailVerified;
+  @override
+  int get tokensUsed;
+  @override
+  int get tokenLimit;
   @override
   String? get error;
 

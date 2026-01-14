@@ -10,6 +10,9 @@ final authServiceProvider = Provider<AuthService>((ref) {
 class AuthService {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
+  // Storage key for email verification status
+  static const String _emailVerifiedKey = 'email_verified';
+
   Future<String?> getToken() async {
     return await _storage.read(key: AppConfig.tokenKey);
   }
@@ -38,6 +41,7 @@ class AuthService {
     required String userId,
     required String email,
     String? name,
+    bool emailVerified = false,
   }) async {
     final expiresAt = DateTime.now().add(Duration(seconds: expiresIn));
 
@@ -46,6 +50,7 @@ class AuthService {
     await _storage.write(key: AppConfig.tokenExpiresAtKey, value: expiresAt.toIso8601String());
     await _storage.write(key: AppConfig.userIdKey, value: userId);
     await _storage.write(key: AppConfig.userEmailKey, value: email);
+    await _storage.write(key: _emailVerifiedKey, value: emailVerified.toString());
     if (name != null) {
       await _storage.write(key: AppConfig.userNameKey, value: name);
     }
@@ -68,6 +73,15 @@ class AuthService {
     };
   }
 
+  Future<bool> isEmailVerified() async {
+    final value = await _storage.read(key: _emailVerifiedKey);
+    return value == 'true';
+  }
+
+  Future<void> setEmailVerified(bool verified) async {
+    await _storage.write(key: _emailVerifiedKey, value: verified.toString());
+  }
+
   Future<void> clearAuth() async {
     await _storage.delete(key: AppConfig.tokenKey);
     await _storage.delete(key: AppConfig.refreshTokenKey);
@@ -75,6 +89,7 @@ class AuthService {
     await _storage.delete(key: AppConfig.userIdKey);
     await _storage.delete(key: AppConfig.userEmailKey);
     await _storage.delete(key: AppConfig.userNameKey);
+    await _storage.delete(key: _emailVerifiedKey);
   }
 
   Future<bool> isLoggedIn() async {

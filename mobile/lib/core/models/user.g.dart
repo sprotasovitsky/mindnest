@@ -10,6 +10,9 @@ _$UserImpl _$$UserImplFromJson(Map<String, dynamic> json) => _$UserImpl(
       id: json['id'] as String,
       email: json['email'] as String,
       name: json['name'] as String?,
+      emailVerified: json['email_verified'] as bool? ?? false,
+      tokensUsed: (json['tokens_used'] as num?)?.toInt() ?? 0,
+      tokenLimit: (json['token_limit'] as num?)?.toInt() ?? 0,
     );
 
 Map<String, dynamic> _$$UserImplToJson(_$UserImpl instance) =>
@@ -17,6 +20,9 @@ Map<String, dynamic> _$$UserImplToJson(_$UserImpl instance) =>
       'id': instance.id,
       'email': instance.email,
       'name': instance.name,
+      'email_verified': instance.emailVerified,
+      'tokens_used': instance.tokensUsed,
+      'token_limit': instance.tokenLimit,
     };
 
 _$AuthResponseImpl _$$AuthResponseImplFromJson(Map<String, dynamic> json) =>
@@ -28,6 +34,7 @@ _$AuthResponseImpl _$$AuthResponseImplFromJson(Map<String, dynamic> json) =>
       userId: json['user_id'] as String,
       email: json['email'] as String,
       name: json['name'] as String?,
+      emailVerified: json['email_verified'] as bool? ?? false,
     );
 
 Map<String, dynamic> _$$AuthResponseImplToJson(_$AuthResponseImpl instance) =>
@@ -39,6 +46,7 @@ Map<String, dynamic> _$$AuthResponseImplToJson(_$AuthResponseImpl instance) =>
       'user_id': instance.userId,
       'email': instance.email,
       'name': instance.name,
+      'email_verified': instance.emailVerified,
     };
 
 _$RefreshResponseImpl _$$RefreshResponseImplFromJson(

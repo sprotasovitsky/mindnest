@@ -31,6 +31,40 @@ from .auth import decode_token, get_user_by_id
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
+
+async def check_token_limit(user: User, db: AsyncSession) -> None:
+    """Check if unverified user has exceeded token limit.
+
+    Raises HTTPException 403 if limit exceeded.
+    """
+    if user.email_verified:
+        return  # No limit for verified users
+
+    settings = get_settings()
+    if user.tokens_used >= settings.unverified_token_limit:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": "token_limit_exceeded",
+                "message": "Please verify your email to continue using MindNest",
+                "tokens_used": user.tokens_used,
+                "limit": settings.unverified_token_limit,
+            },
+        )
+
+
+async def update_token_usage(user: User, tokens: int, db: AsyncSession) -> None:
+    """Update token usage for user.
+
+    Only tracks usage for unverified users.
+    """
+    if user.email_verified:
+        return  # Don't track for verified users
+
+    user.tokens_used += tokens
+    await db.commit()
+    logger.debug(f"Updated token usage for {user.id}: +{tokens} = {user.tokens_used}")
+
 # Rate limiter
 limiter = Limiter(key_func=get_remote_address)
 
@@ -443,6 +477,9 @@ async def send_message(
     user: User = Depends(get_current_user),
 ) -> ChatResponse:
     """Process a chat message. Requires authentication."""
+    # Check token limit for unverified users
+    await check_token_limit(user, db)
+
     project_id = chat_request.get_project_id()
     user_id = user.id
     user_name = user.name
@@ -510,6 +547,11 @@ async def send_message(
         )
     except Exception as e:
         logger.error(f"Failed to save chat message: {e}")
+
+    # Update token usage for unverified users
+    # Rough estimate: 4 characters per token
+    estimated_tokens = (len(chat_request.message) + len(response.reply)) // 4
+    await update_token_usage(user, estimated_tokens, db)
 
     return response
 

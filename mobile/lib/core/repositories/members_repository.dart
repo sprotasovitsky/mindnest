@@ -26,7 +26,7 @@ class MembersRepositoryImpl implements MembersRepository {
           .map((json) => Member.fromJson(json as Map<String, dynamic>))
           .toList();
     } on DioException catch (e) {
-      throw NetworkError.fromDioException(e);
+      throw appErrorFromDioException(e);
     }
   }
 
@@ -36,7 +36,7 @@ class MembersRepositoryImpl implements MembersRepository {
       final response = await _apiClient.addProjectMember(projectId, email);
       return Member.fromJson(response);
     } on DioException catch (e) {
-      throw NetworkError.fromDioException(e);
+      throw appErrorFromDioException(e);
     }
   }
 }

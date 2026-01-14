@@ -15,10 +15,29 @@ abstract class AuthRepository {
   Future<AuthResponse> register(String email, String password, String? name);
   Future<void> logout();
   Future<bool> isLoggedIn();
+  Future<bool> isEmailVerified();
   Future<String?> getToken();
   Future<String?> getRefreshToken();
   Future<Map<String, String?>> getUserData();
   Future<void> initializeFromStorage();
+  Future<void> verifyEmail(String token);
+  Future<void> resendVerification(String email);
+  Future<User> getCurrentUser();
+
+  // Password reset
+  Future<void> requestPasswordReset(String email);
+  Future<String> verifyResetCode(String email, String code);
+  Future<void> resetPassword(String resetToken, String newPassword);
+
+  // Password change
+  Future<void> changePassword(String currentPassword, String newPassword);
+
+  // Social login
+  Future<AuthResponse> socialLogin({
+    required String provider,
+    required String idToken,
+    String? name,
+  });
 }
 
 class AuthRepositoryImpl implements AuthRepository {
@@ -61,7 +80,7 @@ class AuthRepositoryImpl implements AuthRepository {
       final response = await _apiClient.login(email, password);
       return await _processAuthResponse(response);
     } on DioException catch (e) {
-      throw NetworkError.fromDioException(e);
+      throw appErrorFromDioException(e);
     }
   }
 
@@ -77,7 +96,7 @@ class AuthRepositoryImpl implements AuthRepository {
       final response = await _apiClient.register(email, password, name);
       return await _processAuthResponse(response);
     } on DioException catch (e) {
-      throw NetworkError.fromDioException(e);
+      throw appErrorFromDioException(e);
     }
   }
 
@@ -104,6 +123,7 @@ class AuthRepositoryImpl implements AuthRepository {
         userId: authResponse.userId,
         email: authResponse.email,
         name: authResponse.name,
+        emailVerified: authResponse.emailVerified,
       );
     } catch (e) {
       if (kDebugMode) {
@@ -129,6 +149,9 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<bool> isLoggedIn() => _authService.isLoggedIn();
 
   @override
+  Future<bool> isEmailVerified() => _authService.isEmailVerified();
+
+  @override
   Future<String?> getToken() => _authService.getToken();
 
   @override
@@ -136,6 +159,94 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<Map<String, String?>> getUserData() => _authService.getUserData();
+
+  @override
+  Future<void> verifyEmail(String token) async {
+    try {
+      await _apiClient.verifyEmail(token);
+      await _authService.setEmailVerified(true);
+    } on DioException catch (e) {
+      throw appErrorFromDioException(e);
+    }
+  }
+
+  @override
+  Future<void> resendVerification(String email) async {
+    try {
+      await _apiClient.resendVerification(email);
+    } on DioException catch (e) {
+      throw appErrorFromDioException(e);
+    }
+  }
+
+  @override
+  Future<User> getCurrentUser() async {
+    try {
+      final response = await _apiClient.getCurrentUser();
+      final user = User.fromJson(response);
+      // Update local email verified status
+      await _authService.setEmailVerified(user.emailVerified);
+      return user;
+    } on DioException catch (e) {
+      throw appErrorFromDioException(e);
+    }
+  }
+
+  @override
+  Future<void> requestPasswordReset(String email) async {
+    try {
+      await _apiClient.requestPasswordReset(email);
+    } on DioException catch (e) {
+      throw appErrorFromDioException(e);
+    }
+  }
+
+  @override
+  Future<String> verifyResetCode(String email, String code) async {
+    try {
+      final response = await _apiClient.verifyResetCode(email, code);
+      return response['reset_token'] as String;
+    } on DioException catch (e) {
+      throw appErrorFromDioException(e);
+    }
+  }
+
+  @override
+  Future<void> resetPassword(String resetToken, String newPassword) async {
+    try {
+      await _apiClient.resetPassword(resetToken, newPassword);
+    } on DioException catch (e) {
+      throw appErrorFromDioException(e);
+    }
+  }
+
+  @override
+  Future<void> changePassword(
+      String currentPassword, String newPassword) async {
+    try {
+      await _apiClient.changePassword(currentPassword, newPassword);
+    } on DioException catch (e) {
+      throw appErrorFromDioException(e);
+    }
+  }
+
+  @override
+  Future<AuthResponse> socialLogin({
+    required String provider,
+    required String idToken,
+    String? name,
+  }) async {
+    try {
+      final response = await _apiClient.socialLogin(
+        provider: provider,
+        idToken: idToken,
+        name: name,
+      );
+      return await _processAuthResponse(response);
+    } on DioException catch (e) {
+      throw appErrorFromDioException(e);
+    }
+  }
 }
 
 @riverpod

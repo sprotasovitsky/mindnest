@@ -26,7 +26,7 @@ class ChatRepositoryImpl implements ChatRepository {
       final response = await _apiClient.chat(message, projectId: projectId);
       return ChatResponse.fromJson(response);
     } on DioException catch (e) {
-      throw NetworkError.fromDioException(e);
+      throw appErrorFromDioException(e);
     }
   }
 
@@ -60,7 +60,7 @@ class ChatRepositoryImpl implements ChatRepository {
       }
       return chatMessages;
     } on DioException catch (e) {
-      throw NetworkError.fromDioException(e);
+      throw appErrorFromDioException(e);
     }
   }
 }

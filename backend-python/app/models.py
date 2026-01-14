@@ -3,7 +3,7 @@
 from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import String, Text, ForeignKey, UniqueConstraint
+from sqlalchemy import String, Text, ForeignKey, UniqueConstraint, Integer, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -16,8 +16,17 @@ class User(Base):
 
     id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4()))
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
-    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)  # Nullable for social-only users
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    # Email verification
+    email_verified: Mapped[bool] = mapped_column(default=False)
+    email_verification_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    email_verification_sent_at: Mapped[datetime | None] = mapped_column(nullable=True)
+
+    # Token usage tracking (for unverified user limits)
+    tokens_used: Mapped[int] = mapped_column(default=0)
+
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -76,3 +85,38 @@ class ChatMessage(Base):
     # Relationships
     project: Mapped["Project"] = relationship()
     user: Mapped["User"] = relationship()
+
+
+class PasswordResetCode(Base):
+    """Password reset code model (6-digit codes with SHA-256 hash)."""
+    __tablename__ = "password_reset_codes"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    code_hash: Mapped[str] = mapped_column(String(64), nullable=False)  # SHA-256 hash of 6-digit code
+    attempts: Mapped[int] = mapped_column(Integer, default=0)  # Max 5 attempts
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Relationships
+    user: Mapped["User"] = relationship()
+
+
+class SocialAuthProvider(Base):
+    """Social auth provider model (Google, Apple Sign-In)."""
+    __tablename__ = "social_auth_providers"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    provider: Mapped[str] = mapped_column(String(20), nullable=False)  # 'google', 'apple'
+    provider_user_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)  # May be relay email for Apple
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+
+    # Relationships
+    user: Mapped["User"] = relationship()
+
+    __table_args__ = (
+        UniqueConstraint("provider", "provider_user_id", name="uq_social_provider_user"),
+    )

@@ -22,6 +22,9 @@ mixin _$ChatState {
   String? get lastProjectId => throw _privateConstructorUsedError;
   String? get error => throw _privateConstructorUsedError;
 
+  /// Token limit error (for unverified users who exceeded their limit)
+  TokenLimitError? get tokenLimitError => throw _privateConstructorUsedError;
+
   /// Create a copy of ChatState
   /// with the given fields replaced by the non-null parameter values.
   @JsonKey(includeFromJson: false, includeToJson: false)
@@ -39,7 +42,8 @@ abstract class $ChatStateCopyWith<$Res> {
       bool isLoading,
       bool isLoadingHistory,
       String? lastProjectId,
-      String? error});
+      String? error,
+      TokenLimitError? tokenLimitError});
 }
 
 /// @nodoc
@@ -62,6 +66,7 @@ class _$ChatStateCopyWithImpl<$Res, $Val extends ChatState>
     Object? isLoadingHistory = null,
     Object? lastProjectId = freezed,
     Object? error = freezed,
+    Object? tokenLimitError = freezed,
   }) {
     return _then(_value.copyWith(
       messages: null == messages
@@ -84,6 +89,10 @@ class _$ChatStateCopyWithImpl<$Res, $Val extends ChatState>
           ? _value.error
           : error // ignore: cast_nullable_to_non_nullable
               as String?,
+      tokenLimitError: freezed == tokenLimitError
+          ? _value.tokenLimitError
+          : tokenLimitError // ignore: cast_nullable_to_non_nullable
+              as TokenLimitError?,
     ) as $Val);
   }
 }
@@ -101,7 +110,8 @@ abstract class _$$ChatStateImplCopyWith<$Res>
       bool isLoading,
       bool isLoadingHistory,
       String? lastProjectId,
-      String? error});
+      String? error,
+      TokenLimitError? tokenLimitError});
 }
 
 /// @nodoc
@@ -122,6 +132,7 @@ class __$$ChatStateImplCopyWithImpl<$Res>
     Object? isLoadingHistory = null,
     Object? lastProjectId = freezed,
     Object? error = freezed,
+    Object? tokenLimitError = freezed,
   }) {
     return _then(_$ChatStateImpl(
       messages: null == messages
@@ -144,6 +155,10 @@ class __$$ChatStateImplCopyWithImpl<$Res>
           ? _value.error
           : error // ignore: cast_nullable_to_non_nullable
               as String?,
+      tokenLimitError: freezed == tokenLimitError
+          ? _value.tokenLimitError
+          : tokenLimitError // ignore: cast_nullable_to_non_nullable
+              as TokenLimitError?,
     ));
   }
 }
@@ -156,7 +171,8 @@ class _$ChatStateImpl implements _ChatState {
       this.isLoading = false,
       this.isLoadingHistory = false,
       this.lastProjectId,
-      this.error})
+      this.error,
+      this.tokenLimitError})
       : _messages = messages;
 
   final List<ChatMessage> _messages;
@@ -179,9 +195,13 @@ class _$ChatStateImpl implements _ChatState {
   @override
   final String? error;
 
+  /// Token limit error (for unverified users who exceeded their limit)
+  @override
+  final TokenLimitError? tokenLimitError;
+
   @override
   String toString() {
-    return 'ChatState(messages: $messages, isLoading: $isLoading, isLoadingHistory: $isLoadingHistory, lastProjectId: $lastProjectId, error: $error)';
+    return 'ChatState(messages: $messages, isLoading: $isLoading, isLoadingHistory: $isLoadingHistory, lastProjectId: $lastProjectId, error: $error, tokenLimitError: $tokenLimitError)';
   }
 
   @override
@@ -196,7 +216,9 @@ class _$ChatStateImpl implements _ChatState {
                 other.isLoadingHistory == isLoadingHistory) &&
             (identical(other.lastProjectId, lastProjectId) ||
                 other.lastProjectId == lastProjectId) &&
-            (identical(other.error, error) || other.error == error));
+            (identical(other.error, error) || other.error == error) &&
+            (identical(other.tokenLimitError, tokenLimitError) ||
+                other.tokenLimitError == tokenLimitError));
   }
 
   @override
@@ -206,7 +228,8 @@ class _$ChatStateImpl implements _ChatState {
       isLoading,
       isLoadingHistory,
       lastProjectId,
-      error);
+      error,
+      tokenLimitError);
 
   /// Create a copy of ChatState
   /// with the given fields replaced by the non-null parameter values.
@@ -223,7 +246,8 @@ abstract class _ChatState implements ChatState {
       final bool isLoading,
       final bool isLoadingHistory,
       final String? lastProjectId,
-      final String? error}) = _$ChatStateImpl;
+      final String? error,
+      final TokenLimitError? tokenLimitError}) = _$ChatStateImpl;
 
   @override
   List<ChatMessage> get messages;
@@ -235,6 +259,10 @@ abstract class _ChatState implements ChatState {
   String? get lastProjectId;
   @override
   String? get error;
+
+  /// Token limit error (for unverified users who exceeded their limit)
+  @override
+  TokenLimitError? get tokenLimitError;
 
   /// Create a copy of ChatState
   /// with the given fields replaced by the non-null parameter values.

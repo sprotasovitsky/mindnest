@@ -9,6 +9,9 @@ class User with _$User {
     required String id,
     required String email,
     String? name,
+    @JsonKey(name: 'email_verified') @Default(false) bool emailVerified,
+    @JsonKey(name: 'tokens_used') @Default(0) int tokensUsed,
+    @JsonKey(name: 'token_limit') @Default(0) int tokenLimit, // 0 = unlimited
   }) = _User;
 
   factory User.fromJson(Map<String, dynamic> json) => _$UserFromJson(json);
@@ -24,6 +27,7 @@ class AuthResponse with _$AuthResponse {
     @JsonKey(name: 'user_id') required String userId,
     required String email,
     String? name,
+    @JsonKey(name: 'email_verified') @Default(false) bool emailVerified,
   }) = _AuthResponse;
 
   factory AuthResponse.fromJson(Map<String, dynamic> json) =>

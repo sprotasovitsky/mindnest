@@ -19,7 +19,7 @@ from .config import get_settings
 from .database import init_db, close_db
 from .graphiti_client import get_knowledge_graph, close_knowledge_graph
 from .llm import close_client as close_llm_client
-from .routers import chat, auth, projects
+from .routers import chat, auth, projects, social_auth
 
 # Configure logging
 logging.basicConfig(
@@ -125,6 +125,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(auth.router)
+app.include_router(social_auth.router)
 app.include_router(projects.router)
 app.include_router(chat.router)
 

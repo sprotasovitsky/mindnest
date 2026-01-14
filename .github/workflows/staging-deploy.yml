@@ -68,7 +68,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          source: "backend-python/docker-compose.staging.yml,backend-python/nginx/dev-api.mindnest.one.conf"
+          source: "backend-python/docker-compose.staging.yml,backend-python/nginx/dev-api.mindnest.one.conf,backend-python/nginx/dev.mindnest.one.conf,backend-python/static/*"
           target: "/opt/mindnest/"
           strip_components: 1
 
@@ -84,12 +84,26 @@ jobs:
 
             # Create .env file
             cat > .env << 'ENVEOF'
+            # Database
             NEO4J_PASSWORD=${{ secrets.STAGING_NEO4J_PASSWORD }}
             DATABASE_URL=postgresql+asyncpg://mindnest:${{ secrets.STAGING_POSTGRES_PASSWORD }}@termly-postgres:5432/mindnest_staging
+
+            # Vertex AI (LLM)
             VERTEX_AI_PROJECT_ID=${{ secrets.STAGING_GCP_PROJECT_ID }}
             GCP_SERVICE_ACCOUNT_EMAIL=${{ secrets.STAGING_GCP_SERVICE_ACCOUNT_EMAIL }}
             GCP_PRIVATE_KEY=${{ secrets.STAGING_GCP_PRIVATE_KEY }}
+
+            # Security
             SECRET_KEY=${{ secrets.STAGING_JWT_SECRET }}
+
+            # Email (Resend)
+            RESEND_API_KEY=${{ secrets.RESEND_API_KEY }}
+            FRONTEND_URL=https://dev.mindnest.one
+
+            # Social Login (staging)
+            GOOGLE_IOS_CLIENT_ID=${{ secrets.STAGING_GOOGLE_IOS_CLIENT_ID }}
+            GOOGLE_ANDROID_CLIENT_ID=${{ secrets.STAGING_GOOGLE_ANDROID_CLIENT_ID }}
+            APPLE_CLIENT_ID=com.mindnest.app.staging
             ENVEOF
             chmod 600 .env
 
@@ -118,8 +132,14 @@ jobs:
               sleep 5
             done
 
-            # Copy nginx config and reload AFTER backend is up
+            # Copy nginx configs and reload AFTER backend is up
             cp nginx/dev-api.mindnest.one.conf /opt/termly/nginx/conf.d/
+            cp nginx/dev.mindnest.one.conf /opt/termly/nginx/conf.d/
+
+            # Copy static files for web pages
+            mkdir -p /var/www/mindnest
+            cp -r static/* /var/www/mindnest/
+
             docker exec termly-nginx nginx -s reload
 
             # Final health check

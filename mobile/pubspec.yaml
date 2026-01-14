@@ -33,6 +33,10 @@ dependencies:
   freezed_annotation: ^2.4.1
   json_annotation: ^4.8.1
 
+  # Social login
+  google_sign_in: ^6.2.1
+  sign_in_with_apple: ^6.1.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
