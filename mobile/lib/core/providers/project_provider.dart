@@ -4,6 +4,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../error/app_error.dart';
 import '../models/project.dart';
 import '../repositories/project_repository.dart';
+import 'auth_provider.dart';
 
 part 'project_provider.freezed.dart';
 part 'project_provider.g.dart';
@@ -22,6 +23,14 @@ class ProjectState with _$ProjectState {
 class Projects extends _$Projects {
   @override
   ProjectState build() {
+    // Watch auth state - rebuilds when auth changes
+    final authState = ref.watch(authProvider);
+
+    // Don't load if auth is still loading or user is not authenticated
+    if (authState.isLoading || !authState.isAuthenticated) {
+      return const ProjectState(); // loading state, no API call, no error
+    }
+
     _loadProjects();
     return const ProjectState();
   }
