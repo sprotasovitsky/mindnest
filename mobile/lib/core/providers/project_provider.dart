@@ -4,6 +4,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../error/app_error.dart';
 import '../models/project.dart';
 import '../repositories/project_repository.dart';
+import 'auth_provider.dart';
 
 part 'project_provider.freezed.dart';
 part 'project_provider.g.dart';
@@ -11,7 +12,7 @@ part 'project_provider.g.dart';
 @freezed
 class ProjectState with _$ProjectState {
   const factory ProjectState({
-    @Default(false) bool isLoading,
+    @Default(true) bool isLoading,
     @Default([]) List<Project> projects,
     Project? currentProject,
     String? error,
@@ -22,11 +23,20 @@ class ProjectState with _$ProjectState {
 class Projects extends _$Projects {
   @override
   ProjectState build() {
+    // Watch auth state - rebuilds when auth changes
+    final authState = ref.watch(authProvider);
+
+    // Don't load if auth is still loading or user is not authenticated
+    if (authState.isLoading || !authState.isAuthenticated) {
+      return const ProjectState(); // loading state, no API call, no error
+    }
+
+    _loadProjects();
     return const ProjectState();
   }
 
-  Future<void> loadProjects() async {
-    state = state.copyWith(isLoading: true, error: null);
+  /// Private method for internal loading (doesn't set isLoading since default is true)
+  Future<void> _loadProjects() async {
     try {
       final repository = ref.read(projectRepositoryProvider);
       final projects = await repository.getProjects();
@@ -53,6 +63,12 @@ class Projects extends _$Projects {
         error: e.toUserMessage(),
       );
     }
+  }
+
+  /// Public method for pull-to-refresh
+  Future<void> loadProjects() async {
+    state = state.copyWith(isLoading: true, error: null);
+    await _loadProjects();
   }
 
   void selectProject(Project project) {

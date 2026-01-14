@@ -97,11 +97,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         key: const Key('register_name_field'),
                         controller: _nameController,
                         decoration: const InputDecoration(
-                          labelText: 'Name (optional)',
+                          labelText: 'Name',
                           prefixIcon: Icon(Icons.person_outline),
                           border: OutlineInputBorder(),
                         ),
                         textInputAction: TextInputAction.next,
+                        textCapitalization: TextCapitalization.words,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Please enter your name';
+                          }
+                          if (value.trim().length < 2) {
+                            return 'Name must be at least 2 characters';
+                          }
+                          return null;
+                        },
                       ),
                       const SizedBox(height: 16),
                     ],

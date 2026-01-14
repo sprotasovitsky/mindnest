@@ -10,12 +10,13 @@ import '../../features/profile/presentation/screens/profile_screen.dart';
 import '../../features/members/presentation/screens/members_screen.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authProvider);
+  final authNotifier = _AuthRefreshNotifier(ref);
 
   return GoRouter(
     initialLocation: '/projects',
-    refreshListenable: _AuthRefreshListenable(ref),
+    refreshListenable: authNotifier,
     redirect: (context, state) {
+      final authState = authNotifier.authState;
       final isLoading = authState.isLoading;
       final isAuthenticated = authState.isAuthenticated;
       final isOnLoginPage = state.matchedLocation == '/login';
@@ -70,10 +71,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   );
 });
 
-class _AuthRefreshListenable extends ChangeNotifier {
-  _AuthRefreshListenable(this._ref) {
-    _ref.listen(authProvider, (_, __) => notifyListeners());
+class _AuthRefreshNotifier extends ChangeNotifier {
+  _AuthRefreshNotifier(Ref ref) {
+    // Initialize with current state
+    _authState = ref.read(authProvider);
+    // Listen for changes
+    ref.listen(authProvider, (_, newState) {
+      _authState = newState;
+      notifyListeners();
+    });
   }
 
-  final Ref _ref;
+  late AuthState _authState;
+  AuthState get authState => _authState;
 }

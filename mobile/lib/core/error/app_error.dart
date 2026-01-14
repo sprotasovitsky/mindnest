@@ -1,5 +1,30 @@
 import 'package:dio/dio.dart';
 
+/// Extract user-friendly error message from API response
+String? _extractErrorMessage(dynamic data) {
+  if (data == null) return null;
+  if (data is! Map) return data.toString();
+
+  final detail = data['detail'];
+
+  // FastAPI validation errors: {"detail": [{"loc": [...], "msg": "...", "type": "..."}]}
+  if (detail is List && detail.isNotEmpty) {
+    final errors = detail
+        .map((e) => e is Map ? e['msg'] as String? : null)
+        .where((msg) => msg != null)
+        .toList();
+    if (errors.isNotEmpty) {
+      return errors.join('. ');
+    }
+  }
+
+  // Simple error: {"detail": "Error message"} or {"message": "Error message"}
+  if (detail is String) return detail;
+  if (data['message'] is String) return data['message'] as String;
+
+  return null;
+}
+
 /// Base class for all application errors
 sealed class AppError implements Exception {
   final String message;
@@ -34,16 +59,23 @@ class NetworkError extends AppError {
     if (e.response != null) {
       final statusCode = e.response!.statusCode;
       final data = e.response!.data;
-      final message = data is Map ? data['message'] : data?.toString();
+      final message = _extractErrorMessage(data);
 
       if (statusCode == 401) {
         return NetworkError(
-          'Session expired. Please log in again.',
+          message ?? 'Session expired. Please log in again.',
           statusCode: statusCode,
         );
       }
       if (statusCode == 403) {
         return NetworkError('Access denied.', statusCode: statusCode);
+      }
+      if (statusCode == 422) {
+        // Validation error
+        return NetworkError(
+          message ?? 'Invalid input. Please check your data.',
+          statusCode: statusCode,
+        );
       }
       return NetworkError(
         message ?? 'Server error occurred.',

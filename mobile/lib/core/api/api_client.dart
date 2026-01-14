@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../constants/app_config.dart';
@@ -17,6 +18,8 @@ class ApiClient {
   // Callback to update tokens in storage (set by repository)
   Future<void> Function(String accessToken, int expiresIn)? onTokenRefreshed;
   Future<void> Function()? onRefreshFailed;
+  // Callback to notify auth provider when auth is invalidated
+  VoidCallback? onAuthInvalidated;
 
   ApiClient() {
     _dio = Dio(
@@ -30,10 +33,18 @@ class ApiClient {
       ),
     );
 
-    _dio.interceptors.add(LogInterceptor(
-      requestBody: true,
-      responseBody: true,
-    ));
+    // Minimal logging in debug mode - only response status
+    if (kDebugMode) {
+      _dio.interceptors.add(LogInterceptor(
+        request: false, // Don't log request info
+        requestBody: false, // Never log request body - may contain passwords
+        requestHeader: false,
+        responseBody: false, // Don't log response body - may be large
+        responseHeader: false,
+        error: true, // Only log errors
+        logPrint: (msg) => debugPrint('API: $msg'),
+      ));
+    }
 
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) {
@@ -55,13 +66,14 @@ class ApiClient {
               return handler.resolve(response);
             }
           } catch (e) {
-            AppLogger.error('Token refresh failed', error: e, tag: 'ApiClient');
+            // Don't log full error - may contain sensitive data
+            AppLogger.error('Token refresh failed: ${e.runtimeType}', tag: 'ApiClient');
           }
         }
 
+        // Log error without request data (may contain passwords)
         AppLogger.error(
-          'API Error: ${error.message}',
-          error: error,
+          'API Error: ${error.response?.statusCode ?? 'unknown'} ${error.message}',
           tag: 'ApiClient',
         );
         return handler.next(error);
