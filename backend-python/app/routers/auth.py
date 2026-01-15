@@ -213,21 +213,10 @@ class ChangePasswordRequest(BaseModel):
         return v
 
 
-# Password reset configuration
-RESET_CODE_EXPIRE_MINUTES = 10
-RESET_CODE_MAX_ATTEMPTS = 5
-RESET_TOKEN_EXPIRE_MINUTES = 15
-
-
-# Token configuration
-ACCESS_TOKEN_EXPIRE_MINUTES = 15
-REFRESH_TOKEN_EXPIRE_DAYS = 7
-
-
 def create_access_token(user_id: str, email: str, name: str) -> tuple[str, int]:
     """Create JWT access token. Returns (token, expires_in_seconds)."""
     settings = get_settings()
-    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = datetime.utcnow() + timedelta(minutes=settings.access_token_expire_minutes)
     payload = {
         "sub": user_id,
         "email": email,
@@ -236,13 +225,13 @@ def create_access_token(user_id: str, email: str, name: str) -> tuple[str, int]:
         "type": "access",
     }
     token = jwt.encode(payload, settings.secret_key, algorithm="HS256")
-    return token, ACCESS_TOKEN_EXPIRE_MINUTES * 60
+    return token, settings.access_token_expire_minutes * 60
 
 
 def create_refresh_token(user_id: str) -> str:
     """Create JWT refresh token."""
     settings = get_settings()
-    expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    expire = datetime.utcnow() + timedelta(days=settings.refresh_token_expire_days)
     payload = {
         "sub": user_id,
         "exp": expire,
@@ -529,10 +518,11 @@ async def resend_verification(
     if not user or user.email_verified:
         return {"message": "If the email exists, a verification link will be sent"}
 
-    # Rate limit: don't send if sent recently (< 1 minute)
+    # Rate limit: don't send if sent recently
+    settings = get_settings()
     if user.email_verification_sent_at:
         elapsed = (datetime.utcnow() - user.email_verification_sent_at).total_seconds()
-        if elapsed < 60:
+        if elapsed < settings.resend_email_cooldown_seconds:
             return {"message": "If the email exists, a verification link will be sent"}
 
     # Generate new token
@@ -594,7 +584,7 @@ def hash_code(code: str) -> str:
 def create_reset_token(user_id: str) -> str:
     """Create a short-lived token for password reset."""
     settings = get_settings()
-    expire = datetime.utcnow() + timedelta(minutes=RESET_TOKEN_EXPIRE_MINUTES)
+    expire = datetime.utcnow() + timedelta(minutes=settings.reset_token_expire_minutes)
     payload = {
         "sub": user_id,
         "exp": expire,
@@ -654,10 +644,11 @@ async def request_password_reset(
     code_hash = hash_code(code)
 
     # Create reset code record
+    settings = get_settings()
     reset_code = PasswordResetCode(
         user_id=user.id,
         code_hash=code_hash,
-        expires_at=datetime.now(timezone.utc) + timedelta(minutes=RESET_CODE_EXPIRE_MINUTES),
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=settings.reset_code_expire_minutes),
     )
     db.add(reset_code)
     await db.commit()
@@ -699,13 +690,14 @@ async def verify_reset_code(
     reset_codes = result.scalars().all()
 
     # Check code against all valid codes
+    settings = get_settings()
     code_hash = hash_code(data.code)
     valid_code = None
     for rc in reset_codes:
         # Increment attempts
         rc.attempts += 1
 
-        if rc.attempts > RESET_CODE_MAX_ATTEMPTS:
+        if rc.attempts > settings.reset_code_max_attempts:
             continue  # Too many attempts on this code
 
         if rc.code_hash == code_hash:
@@ -871,24 +863,11 @@ async def delete_account(
                 detail="Invalid password",
             )
 
-    # Delete associated data
+    # Delete associated data in a single transaction
     user_id = user.id
 
-    # 1. Delete social auth providers
-    from .social_auth import SocialAuthProvider
-
-    await db.execute(
-        delete(SocialAuthProvider).where(SocialAuthProvider.user_id == user_id)
-    )
-
-    # 2. Delete chat messages
-    await db.execute(delete(ChatMessage).where(ChatMessage.user_id == user_id))
-
-    # 3. Delete project memberships (but not projects - they may have other members)
-    await db.execute(delete(ProjectMember).where(ProjectMember.user_id == user_id))
-
-    # 4. Delete projects where user is the only owner
-    # First, find projects where user is owner
+    # 1. Find projects where user is the only member (to be deleted)
+    # Must do this BEFORE deleting memberships
     result = await db.execute(
         select(ProjectMember.project_id).where(
             ProjectMember.user_id == user_id, ProjectMember.role == "owner"
@@ -896,7 +875,8 @@ async def delete_account(
     )
     owned_project_ids = [row[0] for row in result.fetchall()]
 
-    # For each owned project, check if there are other members
+    # Find projects with no other members (only current user)
+    projects_to_delete = []
     for project_id in owned_project_ids:
         result = await db.execute(
             select(ProjectMember).where(
@@ -905,14 +885,29 @@ async def delete_account(
             )
         )
         other_members = result.scalars().all()
-
         if not other_members:
-            # No other members, delete the project
-            await db.execute(delete(Project).where(Project.id == project_id))
+            projects_to_delete.append(project_id)
 
-    # 5. Finally, delete the user
+    # 2. Delete social auth providers
+    from .social_auth import SocialAuthProvider
+    await db.execute(
+        delete(SocialAuthProvider).where(SocialAuthProvider.user_id == user_id)
+    )
+
+    # 3. Delete chat messages
+    await db.execute(delete(ChatMessage).where(ChatMessage.user_id == user_id))
+
+    # 4. Delete project memberships
+    await db.execute(delete(ProjectMember).where(ProjectMember.user_id == user_id))
+
+    # 5. Delete orphaned projects (only had this user as member)
+    if projects_to_delete:
+        await db.execute(delete(Project).where(Project.id.in_(projects_to_delete)))
+
+    # 6. Finally, delete the user
     await db.execute(delete(User).where(User.id == user_id))
 
+    # Commit all changes atomically
     await db.commit()
 
     logger.info(f"Account deleted: {user_id}")

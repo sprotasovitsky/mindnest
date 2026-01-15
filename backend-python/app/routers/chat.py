@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Header, Query, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,12 +21,12 @@ from slowapi.util import get_remote_address
 from ..classifier import classify_message, MessageType
 from ..config import get_settings
 from ..database import get_db
+from ..dependencies import get_current_user
 from ..graphiti_client import get_knowledge_graph, KnowledgeGraph
 from ..llm import generate_text
 from ..models import ChatMessage, Project, User
 from ..pending_cache import get_pending_cache
 from ..prompts import format_response_prompt, format_onboarding_prompt
-from .auth import decode_token, get_user_by_id
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -91,36 +91,6 @@ def _log_context(query: str, edges: list[dict], nodes: list[dict]) -> None:
     logger.info(f"Nodes ({len(nodes)}):")
     for n in nodes[:10]:
         logger.info(f"  - {n['name']}: {n['summary'][:100] if n.get('summary') else 'no summary'}...")
-
-
-async def get_current_user(
-    authorization: str = Header(...),
-    db: AsyncSession = Depends(get_db),
-) -> User:
-    """Get current user from Authorization header (required)."""
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authorization header",
-        )
-
-    token = authorization[7:]  # Remove "Bearer "
-    token_data = decode_token(token)
-
-    if not token_data or not token_data.get("id"):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-        )
-
-    user = await get_user_by_id(db, token_data["id"])
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
-        )
-
-    return user
 
 
 class ChatRequest(BaseModel):

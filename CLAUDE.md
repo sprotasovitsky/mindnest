@@ -545,6 +545,18 @@ Prompts are loaded via `prompts/__init__.py`:
 - `POST /api/auth/register` - Register new user (rate limit: 3/min)
 - `POST /api/auth/login` - Login user (rate limit: 5/min)
 - `POST /api/auth/refresh` - Refresh access token using refresh token
+- `GET /api/auth/me` - Get current user info (requires auth)
+- `POST /api/auth/verify-email` - Verify email with token
+- `POST /api/auth/resend-verification` - Resend verification email (rate limit: 3/min)
+- `POST /api/auth/request-password-reset` - Request password reset code (rate limit: 5/min)
+- `POST /api/auth/verify-reset-code` - Verify reset code, get reset token
+- `POST /api/auth/reset-password` - Reset password with reset token
+- `POST /api/auth/change-password` - Change password (requires auth, rate limit: 5/min)
+- `DELETE /api/auth/account` - Delete user account (requires auth)
+
+### Social Auth
+- `POST /api/auth/social/google` - Login/register with Google
+- `POST /api/auth/social/apple` - Login/register with Apple
 
 ### Chat (all require authentication)
 - `POST /api/chat` - Send message, process through knowledge graph (rate limit: 30/min)

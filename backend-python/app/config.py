@@ -66,6 +66,14 @@ class Settings(BaseSettings):
     email_from: str = "MindNest <hello@mindnest.one>"
     frontend_url: str = "https://mindnest.one"
 
+    # Token expiration settings
+    access_token_expire_minutes: int = 15
+    refresh_token_expire_days: int = 7
+    reset_token_expire_minutes: int = 15
+    reset_code_expire_minutes: int = 10
+    reset_code_max_attempts: int = 5
+    resend_email_cooldown_seconds: int = 60
+
     # Token limits for unverified users
     unverified_token_limit: int = 1_000_000  # 1M tokens
 
@@ -81,6 +89,13 @@ class Settings(BaseSettings):
             ids.append(self.google_ios_client_id)
         if self.google_android_client_id:
             ids.append(self.google_android_client_id)
+        return ids
+
+    def get_apple_client_ids(self) -> list[str]:
+        """Get all valid Apple client IDs (bundle IDs) for token verification."""
+        ids = []
+        if self.apple_client_id:
+            ids.append(self.apple_client_id)
         return ids
 
     def get_rate_limit(self, limit_type: str) -> str:
