@@ -10,8 +10,9 @@ final authServiceProvider = Provider<AuthService>((ref) {
 class AuthService {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
-  // Storage key for email verification status
+  // Storage keys
   static const String _emailVerifiedKey = 'email_verified';
+  static const String _loginMethodKey = 'login_method';
 
   Future<String?> getToken() async {
     return await _storage.read(key: AppConfig.tokenKey);
@@ -82,6 +83,16 @@ class AuthService {
     await _storage.write(key: _emailVerifiedKey, value: verified.toString());
   }
 
+  /// Get the method used to log in (google, apple, password)
+  Future<String?> getLoginMethod() async {
+    return await _storage.read(key: _loginMethodKey);
+  }
+
+  /// Save the login method used for current session
+  Future<void> setLoginMethod(String method) async {
+    await _storage.write(key: _loginMethodKey, value: method);
+  }
+
   Future<void> clearAuth() async {
     await _storage.delete(key: AppConfig.tokenKey);
     await _storage.delete(key: AppConfig.refreshTokenKey);
@@ -90,6 +101,7 @@ class AuthService {
     await _storage.delete(key: AppConfig.userEmailKey);
     await _storage.delete(key: AppConfig.userNameKey);
     await _storage.delete(key: _emailVerifiedKey);
+    await _storage.delete(key: _loginMethodKey);
   }
 
   Future<bool> isLoggedIn() async {

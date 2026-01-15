@@ -15,7 +15,7 @@ from typing import Optional
 import bcrypt
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr, Field, field_validator
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from jose import jwt
 from slowapi import Limiter
@@ -815,3 +815,105 @@ async def change_password(
 
     logger.info(f"Password changed for user: {user.id}")
     return {"message": "Password changed successfully"}
+
+
+# ============================================================================
+# Account Deletion
+# ============================================================================
+
+
+class DeleteAccountRequest(BaseModel):
+    """Request schema for account deletion."""
+
+    password: str | None = None  # Required only for users with password
+
+
+@router.delete("/account")
+@limiter.limit(_get_change_password_limit)
+async def delete_account(
+    request: Request,
+    data: DeleteAccountRequest | None = None,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Delete user account and all associated data.
+
+    - For users with password: requires password confirmation
+    - For social-only users: no password required
+    - Deletes: User, SocialAuthProvider, ChatMessages, ProjectMembers
+    """
+    # Extract token from Authorization header
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+
+    token = auth_header.split(" ", 1)[1]
+    user = await get_user_from_token_db(db, token)
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+        )
+
+    # If user has password, require password confirmation
+    if user.password_hash:
+        if not data or not data.password:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Password required to delete account",
+            )
+        if not verify_password(data.password, user.password_hash):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid password",
+            )
+
+    # Delete associated data
+    user_id = user.id
+
+    # 1. Delete social auth providers
+    from .social_auth import SocialAuthProvider
+
+    await db.execute(
+        delete(SocialAuthProvider).where(SocialAuthProvider.user_id == user_id)
+    )
+
+    # 2. Delete chat messages
+    await db.execute(delete(ChatMessage).where(ChatMessage.user_id == user_id))
+
+    # 3. Delete project memberships (but not projects - they may have other members)
+    await db.execute(delete(ProjectMember).where(ProjectMember.user_id == user_id))
+
+    # 4. Delete projects where user is the only owner
+    # First, find projects where user is owner
+    result = await db.execute(
+        select(ProjectMember.project_id).where(
+            ProjectMember.user_id == user_id, ProjectMember.role == "owner"
+        )
+    )
+    owned_project_ids = [row[0] for row in result.fetchall()]
+
+    # For each owned project, check if there are other members
+    for project_id in owned_project_ids:
+        result = await db.execute(
+            select(ProjectMember).where(
+                ProjectMember.project_id == project_id,
+                ProjectMember.user_id != user_id,
+            )
+        )
+        other_members = result.scalars().all()
+
+        if not other_members:
+            # No other members, delete the project
+            await db.execute(delete(Project).where(Project.id == project_id))
+
+    # 5. Finally, delete the user
+    await db.execute(delete(User).where(User.id == user_id))
+
+    await db.commit()
+
+    logger.info(f"Account deleted: {user_id}")
+    return {"message": "Account deleted successfully"}

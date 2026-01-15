@@ -3,6 +3,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../api/api_client.dart';
+import '../auth/auth_service.dart';
 import '../error/app_error.dart';
 import '../repositories/auth_repository.dart';
 
@@ -21,6 +22,7 @@ class AuthState with _$AuthState {
     @Default(0) int tokensUsed,
     @Default(0) int tokenLimit,
     String? error,
+    String? loginMethod, // 'password', 'google', or 'apple'
   }) = _AuthState;
 }
 
@@ -46,6 +48,7 @@ class Auth extends _$Auth {
 
   Future<void> _checkAuth() async {
     final repository = ref.read(authRepositoryProvider);
+    final authService = ref.read(authServiceProvider);
 
     try {
       // Initialize API client with stored tokens
@@ -55,6 +58,7 @@ class Auth extends _$Auth {
       if (isLoggedIn) {
         final userData = await repository.getUserData();
         final emailVerified = await repository.isEmailVerified();
+        final loginMethod = await authService.getLoginMethod();
         state = AuthState(
           isLoading: false,
           isAuthenticated: true,
@@ -62,8 +66,9 @@ class Auth extends _$Auth {
           email: userData['email'],
           name: userData['name'],
           emailVerified: emailVerified,
+          loginMethod: loginMethod,
         );
-        if (kDebugMode) debugPrint('Auth: User is logged in, emailVerified=$emailVerified');
+        if (kDebugMode) debugPrint('Auth: User is logged in, emailVerified=$emailVerified, loginMethod=$loginMethod');
       } else {
         state = const AuthState(isLoading: false, isAuthenticated: false);
         if (kDebugMode) debugPrint('Auth: User is not logged in');
@@ -79,7 +84,11 @@ class Auth extends _$Auth {
 
     try {
       final repository = ref.read(authRepositoryProvider);
+      final authService = ref.read(authServiceProvider);
       final response = await repository.login(email, password);
+
+      // Save login method
+      await authService.setLoginMethod('password');
 
       // projectsProvider watches authProvider and will auto-reload
       state = AuthState(
@@ -89,6 +98,7 @@ class Auth extends _$Auth {
         email: response.email,
         name: response.name,
         emailVerified: response.emailVerified,
+        loginMethod: 'password',
       );
 
       if (kDebugMode) debugPrint('Auth: Login successful, emailVerified=${response.emailVerified}');
@@ -108,7 +118,11 @@ class Auth extends _$Auth {
 
     try {
       final repository = ref.read(authRepositoryProvider);
+      final authService = ref.read(authServiceProvider);
       final response = await repository.register(email, password, name);
+
+      // Save login method
+      await authService.setLoginMethod('password');
 
       // projectsProvider watches authProvider and will auto-reload
       state = AuthState(
@@ -118,6 +132,7 @@ class Auth extends _$Auth {
         email: response.email,
         name: response.name,
         emailVerified: response.emailVerified,
+        loginMethod: 'password',
       );
 
       if (kDebugMode) debugPrint('Auth: Registration successful, emailVerified=${response.emailVerified}');
@@ -206,11 +221,15 @@ class Auth extends _$Auth {
 
     try {
       final repository = ref.read(authRepositoryProvider);
+      final authService = ref.read(authServiceProvider);
       final response = await repository.socialLogin(
         provider: provider,
         idToken: idToken,
         name: name,
       );
+
+      // Save login method (google or apple)
+      await authService.setLoginMethod(provider);
 
       state = AuthState(
         isLoading: false,
@@ -219,6 +238,7 @@ class Auth extends _$Auth {
         email: response.email,
         name: response.name,
         emailVerified: response.emailVerified,  // Always true for social login
+        loginMethod: provider,
       );
 
       if (kDebugMode) debugPrint('Auth: Social login successful via $provider');
@@ -228,6 +248,29 @@ class Auth extends _$Auth {
       state = state.copyWith(
         isLoading: false,
         error: e is AppError ? e.message : 'Social login failed. Please try again.',
+      );
+      return false;
+    }
+  }
+
+  /// Delete user account
+  Future<bool> deleteAccount({String? password}) async {
+    state = state.copyWith(isLoading: true, error: null);
+
+    try {
+      final repository = ref.read(authRepositoryProvider);
+      await repository.deleteAccount(password: password);
+
+      // Clear state
+      state = const AuthState(isLoading: false, isAuthenticated: false);
+
+      if (kDebugMode) debugPrint('Auth: Account deleted successfully');
+      return true;
+    } catch (e) {
+      if (kDebugMode) debugPrint('Auth: Failed to delete account: $e');
+      state = state.copyWith(
+        isLoading: false,
+        error: e is AppError ? e.message : 'Failed to delete account. Please try again.',
       );
       return false;
     }

@@ -63,7 +63,7 @@ class Settings(BaseSettings):
 
     # Email (Resend)
     resend_api_key: str = ""
-    email_from: str = "MindNest <noreply@mindnest.one>"
+    email_from: str = "MindNest <hello@mindnest.one>"
     frontend_url: str = "https://mindnest.one"
 
     # Token limits for unverified users

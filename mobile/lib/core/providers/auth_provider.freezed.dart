@@ -25,6 +25,7 @@ mixin _$AuthState {
   int get tokensUsed => throw _privateConstructorUsedError;
   int get tokenLimit => throw _privateConstructorUsedError;
   String? get error => throw _privateConstructorUsedError;
+  String? get loginMethod => throw _privateConstructorUsedError;
 
   /// Create a copy of AuthState
   /// with the given fields replaced by the non-null parameter values.
@@ -47,7 +48,8 @@ abstract class $AuthStateCopyWith<$Res> {
       bool emailVerified,
       int tokensUsed,
       int tokenLimit,
-      String? error});
+      String? error,
+      String? loginMethod});
 }
 
 /// @nodoc
@@ -74,6 +76,7 @@ class _$AuthStateCopyWithImpl<$Res, $Val extends AuthState>
     Object? tokensUsed = null,
     Object? tokenLimit = null,
     Object? error = freezed,
+    Object? loginMethod = freezed,
   }) {
     return _then(_value.copyWith(
       isLoading: null == isLoading
@@ -112,6 +115,10 @@ class _$AuthStateCopyWithImpl<$Res, $Val extends AuthState>
           ? _value.error
           : error // ignore: cast_nullable_to_non_nullable
               as String?,
+      loginMethod: freezed == loginMethod
+          ? _value.loginMethod
+          : loginMethod // ignore: cast_nullable_to_non_nullable
+              as String?,
     ) as $Val);
   }
 }
@@ -133,7 +140,8 @@ abstract class _$$AuthStateImplCopyWith<$Res>
       bool emailVerified,
       int tokensUsed,
       int tokenLimit,
-      String? error});
+      String? error,
+      String? loginMethod});
 }
 
 /// @nodoc
@@ -158,6 +166,7 @@ class __$$AuthStateImplCopyWithImpl<$Res>
     Object? tokensUsed = null,
     Object? tokenLimit = null,
     Object? error = freezed,
+    Object? loginMethod = freezed,
   }) {
     return _then(_$AuthStateImpl(
       isLoading: null == isLoading
@@ -196,6 +205,10 @@ class __$$AuthStateImplCopyWithImpl<$Res>
           ? _value.error
           : error // ignore: cast_nullable_to_non_nullable
               as String?,
+      loginMethod: freezed == loginMethod
+          ? _value.loginMethod
+          : loginMethod // ignore: cast_nullable_to_non_nullable
+              as String?,
     ));
   }
 }
@@ -212,7 +225,8 @@ class _$AuthStateImpl with DiagnosticableTreeMixin implements _AuthState {
       this.emailVerified = false,
       this.tokensUsed = 0,
       this.tokenLimit = 0,
-      this.error});
+      this.error,
+      this.loginMethod});
 
   @override
   @JsonKey()
@@ -237,10 +251,12 @@ class _$AuthStateImpl with DiagnosticableTreeMixin implements _AuthState {
   final int tokenLimit;
   @override
   final String? error;
+  @override
+  final String? loginMethod;
 
   @override
   String toString({DiagnosticLevel minLevel = DiagnosticLevel.info}) {
-    return 'AuthState(isLoading: $isLoading, isAuthenticated: $isAuthenticated, userId: $userId, email: $email, name: $name, emailVerified: $emailVerified, tokensUsed: $tokensUsed, tokenLimit: $tokenLimit, error: $error)';
+    return 'AuthState(isLoading: $isLoading, isAuthenticated: $isAuthenticated, userId: $userId, email: $email, name: $name, emailVerified: $emailVerified, tokensUsed: $tokensUsed, tokenLimit: $tokenLimit, error: $error, loginMethod: $loginMethod)';
   }
 
   @override
@@ -256,7 +272,8 @@ class _$AuthStateImpl with DiagnosticableTreeMixin implements _AuthState {
       ..add(DiagnosticsProperty('emailVerified', emailVerified))
       ..add(DiagnosticsProperty('tokensUsed', tokensUsed))
       ..add(DiagnosticsProperty('tokenLimit', tokenLimit))
-      ..add(DiagnosticsProperty('error', error));
+      ..add(DiagnosticsProperty('error', error))
+      ..add(DiagnosticsProperty('loginMethod', loginMethod));
   }
 
   @override
@@ -277,12 +294,24 @@ class _$AuthStateImpl with DiagnosticableTreeMixin implements _AuthState {
                 other.tokensUsed == tokensUsed) &&
             (identical(other.tokenLimit, tokenLimit) ||
                 other.tokenLimit == tokenLimit) &&
-            (identical(other.error, error) || other.error == error));
+            (identical(other.error, error) || other.error == error) &&
+            (identical(other.loginMethod, loginMethod) ||
+                other.loginMethod == loginMethod));
   }
 
   @override
-  int get hashCode => Object.hash(runtimeType, isLoading, isAuthenticated,
-      userId, email, name, emailVerified, tokensUsed, tokenLimit, error);
+  int get hashCode => Object.hash(
+      runtimeType,
+      isLoading,
+      isAuthenticated,
+      userId,
+      email,
+      name,
+      emailVerified,
+      tokensUsed,
+      tokenLimit,
+      error,
+      loginMethod);
 
   /// Create a copy of AuthState
   /// with the given fields replaced by the non-null parameter values.
@@ -303,7 +332,8 @@ abstract class _AuthState implements AuthState {
       final bool emailVerified,
       final int tokensUsed,
       final int tokenLimit,
-      final String? error}) = _$AuthStateImpl;
+      final String? error,
+      final String? loginMethod}) = _$AuthStateImpl;
 
   @override
   bool get isLoading;
@@ -323,6 +353,8 @@ abstract class _AuthState implements AuthState {
   int get tokenLimit;
   @override
   String? get error;
+  @override
+  String? get loginMethod;
 
   /// Create a copy of AuthState
   /// with the given fields replaced by the non-null parameter values.

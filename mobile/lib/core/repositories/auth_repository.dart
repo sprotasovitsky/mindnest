@@ -38,6 +38,9 @@ abstract class AuthRepository {
     required String idToken,
     String? name,
   });
+
+  // Account deletion
+  Future<void> deleteAccount({String? password});
 }
 
 class AuthRepositoryImpl implements AuthRepository {
@@ -243,6 +246,16 @@ class AuthRepositoryImpl implements AuthRepository {
         name: name,
       );
       return await _processAuthResponse(response);
+    } on DioException catch (e) {
+      throw appErrorFromDioException(e);
+    }
+  }
+
+  @override
+  Future<void> deleteAccount({String? password}) async {
+    try {
+      await _apiClient.deleteAccount(password: password);
+      await _authService.clearAuth();
     } on DioException catch (e) {
       throw appErrorFromDioException(e);
     }

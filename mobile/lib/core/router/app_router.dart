@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,6 +8,7 @@ import '../../features/auth/presentation/screens/email_verified_screen.dart';
 import '../../features/auth/presentation/screens/forgot_password_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/chat/presentation/screens/chat_screen.dart';
+import '../../features/landing/presentation/screens/landing_screen.dart';
 import '../../features/members/presentation/screens/members_screen.dart';
 import '../../features/profile/presentation/screens/change_password_screen.dart';
 import '../../features/profile/presentation/screens/profile_screen.dart';
@@ -22,13 +24,21 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final authState = authNotifier.authState;
       final isLoading = authState.isLoading;
       final isAuthenticated = authState.isAuthenticated;
-      final isOnLoginPage = state.matchedLocation == '/login';
+      final location = state.matchedLocation;
+      final isOnLoginPage = location == '/login';
+
+      // Public routes that don't require authentication
+      final isPublicRoute = location == '/' ||
+          location == '/login' ||
+          location == '/forgot-password' ||
+          location == '/verify-email' ||
+          location == '/reset-password';
 
       // Still loading auth state
       if (isLoading) return null;
 
-      // Not authenticated and not on login page -> redirect to login
-      if (!isAuthenticated && !isOnLoginPage) {
+      // Not authenticated and not on public route -> redirect to login
+      if (!isAuthenticated && !isPublicRoute) {
         return '/login';
       }
 
@@ -40,6 +50,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
+      // Landing page (web only - mobile goes directly to login/projects)
+      GoRoute(
+        path: '/',
+        name: 'landing',
+        builder: (context, state) => const LandingScreen(),
+      ),
       GoRoute(
         path: '/login',
         name: 'login',
@@ -76,11 +92,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const MembersScreen(),
       ),
       // Deep link handler for email verification
-      // mindnest://verified -> /verified
+      // Universal Link: https://mindnest.one/verify-email?token=XXX
       GoRoute(
-        path: '/verified',
-        name: 'verified',
-        builder: (context, state) => const EmailVerifiedScreen(),
+        path: '/verify-email',
+        name: 'verify-email',
+        builder: (context, state) {
+          final token = state.uri.queryParameters['token'];
+          return EmailVerifiedScreen(token: token);
+        },
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

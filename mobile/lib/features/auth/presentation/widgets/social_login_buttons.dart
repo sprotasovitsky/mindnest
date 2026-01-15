@@ -29,19 +29,25 @@ class _SocialLoginButtonsState extends ConsumerState<SocialLoginButtons> {
   Future<void> _handleGoogleSignIn() async {
     if (_isLoading) return;
 
+    debugPrint('=== GOOGLE SIGN-IN START ===');
+
     setState(() {
       _isLoading = true;
       _loadingProvider = 'google';
     });
 
     try {
+      debugPrint('Google: Creating GoogleSignIn instance...');
       final googleSignIn = GoogleSignIn(
         scopes: ['email', 'profile'],
       );
 
+      debugPrint('Google: Calling signIn()...');
       final account = await googleSignIn.signIn();
+      debugPrint('Google: signIn() returned, account: ${account?.email}');
+
       if (account == null) {
-        // User cancelled
+        debugPrint('Google: User cancelled sign-in');
         setState(() {
           _isLoading = false;
           _loadingProvider = null;
@@ -49,10 +55,13 @@ class _SocialLoginButtonsState extends ConsumerState<SocialLoginButtons> {
         return;
       }
 
+      debugPrint('Google: Getting authentication...');
       final auth = await account.authentication;
       final idToken = auth.idToken;
+      debugPrint('Google: Got idToken: ${idToken != null ? "yes (${idToken.length} chars)" : "null"}');
 
       if (idToken == null) {
+        debugPrint('Google: ERROR - idToken is null');
         widget.onError?.call('Failed to get Google ID token');
         setState(() {
           _isLoading = false;
@@ -61,22 +70,28 @@ class _SocialLoginButtonsState extends ConsumerState<SocialLoginButtons> {
         return;
       }
 
+      debugPrint('Google: Calling backend socialLogin...');
       final success = await ref.read(authProvider.notifier).socialLogin(
             provider: 'google',
             idToken: idToken,
             name: account.displayName,
           );
+      debugPrint('Google: Backend returned success=$success');
 
       if (success) {
+        debugPrint('Google: SUCCESS - calling onSuccess');
         widget.onSuccess?.call();
       } else {
         final error = ref.read(authProvider).error;
+        debugPrint('Google: FAILED - error: $error');
         widget.onError?.call(error ?? 'Google sign-in failed');
       }
-    } catch (e) {
-      if (kDebugMode) debugPrint('Google sign-in error: $e');
+    } catch (e, stackTrace) {
+      debugPrint('Google: EXCEPTION - $e');
+      debugPrint('Google: Stack trace: $stackTrace');
       widget.onError?.call('Google sign-in failed. Please try again.');
     } finally {
+      debugPrint('=== GOOGLE SIGN-IN END ===');
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -89,21 +104,28 @@ class _SocialLoginButtonsState extends ConsumerState<SocialLoginButtons> {
   Future<void> _handleAppleSignIn() async {
     if (_isLoading) return;
 
+    debugPrint('=== APPLE SIGN-IN START ===');
+
     setState(() {
       _isLoading = true;
       _loadingProvider = 'apple';
     });
 
     try {
+      debugPrint('Apple: Calling getAppleIDCredential...');
       final credential = await SignInWithApple.getAppleIDCredential(
         scopes: [
           AppleIDAuthorizationScopes.email,
           AppleIDAuthorizationScopes.fullName,
         ],
       );
+      debugPrint('Apple: Got credential, userIdentifier: ${credential.userIdentifier}');
 
       final idToken = credential.identityToken;
+      debugPrint('Apple: idToken: ${idToken != null ? "yes (${idToken.length} chars)" : "null"}');
+
       if (idToken == null) {
+        debugPrint('Apple: ERROR - idToken is null');
         widget.onError?.call('Failed to get Apple ID token');
         setState(() {
           _isLoading = false;
@@ -122,30 +144,37 @@ class _SocialLoginButtonsState extends ConsumerState<SocialLoginButtons> {
           name = parts.join(' ');
         }
       }
+      debugPrint('Apple: name=$name, email=${credential.email}');
 
+      debugPrint('Apple: Calling backend socialLogin...');
       final success = await ref.read(authProvider.notifier).socialLogin(
             provider: 'apple',
             idToken: idToken,
             name: name,
           );
+      debugPrint('Apple: Backend returned success=$success');
 
       if (success) {
+        debugPrint('Apple: SUCCESS - calling onSuccess');
         widget.onSuccess?.call();
       } else {
         final error = ref.read(authProvider).error;
+        debugPrint('Apple: FAILED - error: $error');
         widget.onError?.call(error ?? 'Apple sign-in failed');
       }
     } on SignInWithAppleAuthorizationException catch (e) {
+      debugPrint('Apple: SignInWithAppleAuthorizationException - code: ${e.code}, message: ${e.message}');
       if (e.code == AuthorizationErrorCode.canceled) {
-        // User cancelled - do nothing
+        debugPrint('Apple: User cancelled');
       } else {
-        if (kDebugMode) debugPrint('Apple sign-in error: $e');
         widget.onError?.call('Apple sign-in failed. Please try again.');
       }
-    } catch (e) {
-      if (kDebugMode) debugPrint('Apple sign-in error: $e');
+    } catch (e, stackTrace) {
+      debugPrint('Apple: EXCEPTION - $e');
+      debugPrint('Apple: Stack trace: $stackTrace');
       widget.onError?.call('Apple sign-in failed. Please try again.');
     } finally {
+      debugPrint('=== APPLE SIGN-IN END ===');
       if (mounted) {
         setState(() {
           _isLoading = false;

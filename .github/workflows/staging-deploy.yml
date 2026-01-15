@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'backend-python/**'
+      - 'mobile/**'
       - '.github/workflows/staging-deploy.yml'
   workflow_dispatch:
 
@@ -27,8 +28,37 @@ jobs:
       - name: Install dependencies
         run: pip install -r backend-python/requirements.txt
 
+  build-flutter-web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.27.4'
+          channel: 'stable'
+          cache: true
+
+      - name: Get Flutter dependencies
+        working-directory: mobile
+        run: flutter pub get
+
+      - name: Build Flutter web
+        working-directory: mobile
+        run: |
+          flutter build web --release \
+            --dart-define=ENVIRONMENT=staging \
+            --dart-define=API_URL=https://dev-api.mindnest.one/api
+
+      - name: Upload web build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-web-build
+          path: mobile/build/web
+          retention-days: 1
+
   build-and-deploy:
-    needs: test
+    needs: [test, build-flutter-web]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -62,13 +92,19 @@ jobs:
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
 
+      - name: Download Flutter web build
+        uses: actions/download-artifact@v4
+        with:
+          name: flutter-web-build
+          path: flutter-web-build
+
       - name: Copy files to server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          source: "backend-python/docker-compose.staging.yml,backend-python/nginx/dev-api.mindnest.one.conf,backend-python/nginx/dev.mindnest.one.conf,backend-python/static/*"
+          source: "backend-python/docker-compose.staging.yml,backend-python/nginx/dev-api.mindnest.one.conf,backend-python/nginx/dev.mindnest.one.conf,flutter-web-build/*"
           target: "/opt/mindnest/"
           strip_components: 1
 
@@ -136,9 +172,10 @@ jobs:
             cp nginx/dev-api.mindnest.one.conf /opt/termly/nginx/conf.d/
             cp nginx/dev.mindnest.one.conf /opt/termly/nginx/conf.d/
 
-            # Copy static files for web pages
+            # Deploy Flutter web app
             mkdir -p /var/www/mindnest
-            cp -r static/* /var/www/mindnest/
+            rm -rf /var/www/mindnest/*
+            cp -r flutter-web-build/* /var/www/mindnest/
 
             docker exec termly-nginx nginx -s reload
 

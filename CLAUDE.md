@@ -874,3 +874,97 @@ The mobile app (`ApiClient`) automatically:
 3. Calls `/api/auth/refresh` with the refresh token
 4. Retries the original request with the new access token
 5. Logs out the user if refresh fails
+
+## Deployment & Infrastructure
+
+### URL Map
+
+| Environment | Backend API | Web (Flutter) | Email From |
+|-------------|-------------|---------------|------------|
+| Local | `localhost:8000/api` | `localhost:5000` | `hello@mindnest.one` (if RESEND_API_KEY set) |
+| Staging | `dev-api.mindnest.one/api` | `dev.mindnest.one` | `hello@mindnest.one` |
+| Production | `api.mindnest.one/api` | `mindnest.one` | `hello@mindnest.one` |
+
+### Flutter Web Routes
+
+- `/` - Landing page (marketing, App Store/Play Store buttons)
+- `/login` - Login screen
+- `/verify-email?token=XXX` - Email verification
+- `/forgot-password` - Password reset request
+- `/projects`, `/chat`, `/profile` - App screens (require auth)
+
+### CI/CD Pipeline (`.github/workflows/staging-deploy.yml`)
+
+The staging deployment runs on push to `main` branch:
+
+1. **test** - Python backend tests
+2. **build-flutter-web** - Build Flutter web with staging config
+3. **build-and-deploy** - Docker image + deploy to EC2
+
+Flutter web is deployed to `/var/www/mindnest/` on the EC2 server.
+
+### Deep Links
+
+#### iOS Universal Links
+
+**File:** `mobile/web/.well-known/apple-app-site-association`
+
+```json
+{
+  "applinks": {
+    "apps": [],
+    "details": [{
+      "appIDs": [
+        "493Z7C2V3J.com.mindnest.app",
+        "493Z7C2V3J.com.mindnest.app.staging",
+        "493Z7C2V3J.com.mindnest.app.dev"
+      ],
+      "paths": ["/verify-email", "/verify-email?*"]
+    }]
+  }
+}
+```
+
+**Apple Team ID:** `493Z7C2V3J`
+
+**Requirements:**
+- Associated Domains capability enabled in Apple Developer Portal
+- Entitlements in `project.yml` with `applinks:mindnest.one` and `applinks:dev.mindnest.one`
+
+#### Android App Links
+
+**File:** `mobile/web/.well-known/assetlinks.json`
+
+Contains SHA256 fingerprints for all app flavors (debug + release).
+
+**AndroidManifest.xml** has HTTPS intent-filter for `/verify-email` path.
+
+**SHA256 Fingerprints:**
+- Release: `D4:97:32:11:78:12:69:5F:9A:2E:9B:5D:2B:82:FC:A1:92:59:E8:1A:7F:43:DC:49:27:DD:96:AA:73:B4:8D:19`
+- Debug: `C2:9D:28:3A:0B:59:29:9D:33:38:A8:7E:AB:1E:D4:B3:C7:08:16:19:F1:2D:3A:7F:5A:71:8D:A9:C1:A1:95:9D`
+
+### Email Verification Flow
+
+```
+User registers → Backend sends email (from hello@mindnest.one)
+Email link: https://mindnest.one/verify-email?token=XXX
+
+User clicks link:
+├── Desktop Browser → Flutter Web → EmailVerifiedScreen
+├── iOS (app installed) → Universal Links → Native App
+├── iOS (no app) → Safari → Flutter Web
+├── Android (app installed) → App Links → Native App
+└── Android (no app) → Chrome → Flutter Web
+```
+
+All paths use the same Flutter code (`EmailVerifiedScreen`) which calls `POST /api/auth/verify-email`.
+
+### Testing Deep Links
+
+```bash
+# iOS Simulator
+xcrun simctl openurl booted "https://dev.mindnest.one/verify-email?token=test"
+
+# Android Emulator
+adb shell am start -a android.intent.action.VIEW -d "https://dev.mindnest.one/verify-email?token=test"
+```

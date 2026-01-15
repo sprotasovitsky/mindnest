@@ -264,6 +264,16 @@ class ApiClient {
     return response.data as Map<String, dynamic>;
   }
 
+  // Delete account
+  Future<void> deleteAccount({String? password}) async {
+    await _dio.delete(
+      '/auth/account',
+      data: {
+        if (password != null) 'password': password,
+      },
+    );
+  }
+
   // Chat endpoints
   Future<Map<String, dynamic>> chat(String message, {String? projectId}) async {
     return _retryRequest(() async {
