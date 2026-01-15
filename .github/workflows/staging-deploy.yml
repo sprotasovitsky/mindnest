@@ -140,7 +140,7 @@ jobs:
             # Social Login (staging)
             GOOGLE_IOS_CLIENT_ID=${{ secrets.STAGING_GOOGLE_IOS_CLIENT_ID }}
             GOOGLE_ANDROID_CLIENT_ID=${{ secrets.STAGING_GOOGLE_ANDROID_CLIENT_ID }}
-            APPLE_CLIENT_ID=com.mindnest.app.staging
+            APPLE_CLIENT_ID=${{ secrets.STAGING_APPLE_CLIENT_ID }}
             ENVEOF
             chmod 600 .env
 
