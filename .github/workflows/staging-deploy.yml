@@ -134,6 +134,7 @@ jobs:
 
             # Email (Resend)
             RESEND_API_KEY=${{ secrets.RESEND_API_KEY }}
+            EMAIL_FROM=MindNest <hello@mindnest.one>
             FRONTEND_URL=https://dev.mindnest.one
 
             # Social Login (staging)

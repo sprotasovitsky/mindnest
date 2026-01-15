@@ -27,9 +27,9 @@ class LandingScreen extends StatelessWidget {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              colorScheme.primaryContainer.withOpacity(0.3),
+              colorScheme.primaryContainer.withValues(alpha: 0.3),
               colorScheme.surface,
-              colorScheme.secondaryContainer.withOpacity(0.2),
+              colorScheme.secondaryContainer.withValues(alpha: 0.2),
             ],
           ),
         ),
@@ -54,7 +54,7 @@ class LandingScreen extends StatelessWidget {
                         borderRadius: BorderRadius.circular(24),
                         boxShadow: [
                           BoxShadow(
-                            color: colorScheme.primary.withOpacity(0.2),
+                            color: colorScheme.primary.withValues(alpha: 0.2),
                             blurRadius: 20,
                             offset: const Offset(0, 10),
                           ),
@@ -145,7 +145,7 @@ class LandingScreen extends StatelessWidget {
                     Text(
                       '© 2024 MindNest',
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant.withOpacity(0.6),
+                        color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
                       ),
                     ),
                   ],

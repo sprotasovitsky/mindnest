@@ -19,10 +19,10 @@ class Settings(BaseSettings):
     # Neo4j
     neo4j_uri: str = "bolt://localhost:7687"
     neo4j_user: str = "neo4j"
-    neo4j_password: str = "mindnest123"
+    neo4j_password: str = Field(default="")  # Required in production
 
     # PostgreSQL
-    database_url: str = "postgresql+asyncpg://mindnest:mindnest@localhost:5432/mindnest"
+    database_url: str = Field(default="")  # Required in production
 
     # Vertex AI credentials
     vertex_ai_project_id: str = ""
@@ -140,6 +140,30 @@ class Settings(BaseSettings):
             return "dev-secret-key-not-for-production"
         if len(v) < 32:
             raise ValueError("SECRET_KEY must be at least 32 characters")
+        return v
+
+    @field_validator("neo4j_password")
+    @classmethod
+    def validate_neo4j_password(cls, v: str) -> str:
+        """Validate that neo4j_password is set."""
+        if not v:
+            import os
+            if os.getenv("DEBUG", "").lower() not in ("true", "1", "yes"):
+                raise ValueError("NEO4J_PASSWORD must be set in production")
+            # In debug mode, use a default (for local docker-compose)
+            return "mindnest123"
+        return v
+
+    @field_validator("database_url")
+    @classmethod
+    def validate_database_url(cls, v: str) -> str:
+        """Validate that database_url is set."""
+        if not v:
+            import os
+            if os.getenv("DEBUG", "").lower() not in ("true", "1", "yes"):
+                raise ValueError("DATABASE_URL must be set in production")
+            # In debug mode, use a default (for local docker-compose)
+            return "postgresql+asyncpg://mindnest:mindnest@localhost:5432/mindnest"
         return v
 
     def get_allowed_origins(self) -> list[str]:

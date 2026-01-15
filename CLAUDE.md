@@ -915,6 +915,46 @@ The staging deployment runs on push to `main` branch:
 
 Flutter web is deployed to `/var/www/mindnest/` on the EC2 server.
 
+### Shared Infrastructure with Termly
+
+MindNest staging shares EC2 server infrastructure with the [Termly](https://github.com/sprotasovitsky/termly-be) project.
+
+**Termly owns:**
+- `termly-postgres` - PostgreSQL 15 (shared database server)
+- `termly-nginx` - Nginx reverse proxy (port 80/443)
+- `termly-network` - Docker network connecting all services
+- SSL certificates via certbot
+
+**MindNest uses:**
+- `termly-postgres` → creates database `mindnest_staging` (separate from `termly_staging`)
+- `termly-nginx` → routes for `dev-api.mindnest.one` and `dev.mindnest.one`
+- `termly-network` → external network for container communication
+
+**MindNest owns:**
+- `mindnest-backend` - Python FastAPI (port 8000 internal)
+- `mindnest-neo4j` - Neo4j knowledge graph (port 7687 internal)
+
+**Docker Compose structure:**
+```yaml
+# backend-python/docker-compose.staging.yml
+networks:
+  default:
+    name: termly-network
+    external: true  # Uses Termly's network
+```
+
+**Nginx configs location on EC2:**
+- `/opt/termly/nginx/conf.d/dev-api.mindnest.one.conf`
+- `/opt/termly/nginx/conf.d/dev.mindnest.one.conf`
+
+**Why "termly" references in MindNest deployment:**
+- `termly-postgres` - shared PostgreSQL container name
+- `termly-nginx` - shared Nginx container name
+- `/opt/termly/` - shared deployment directory on EC2
+- `termly-network` - shared Docker network
+
+This is intentional infrastructure sharing, not a naming error.
+
 ### Deep Links
 
 #### iOS Universal Links

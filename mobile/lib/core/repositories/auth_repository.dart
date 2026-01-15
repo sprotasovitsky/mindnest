@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../api/api_client.dart';
@@ -263,7 +264,7 @@ class AuthRepositoryImpl implements AuthRepository {
 }
 
 @riverpod
-AuthRepository authRepository(AuthRepositoryRef ref) {
+AuthRepository authRepository(Ref ref) {
   final apiClient = ref.watch(apiClientProvider);
   final authService = ref.watch(authServiceProvider);
   return AuthRepositoryImpl(apiClient, authService);

@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../api/api_client.dart';
@@ -54,7 +55,7 @@ class ProjectRepositoryImpl implements ProjectRepository {
 }
 
 @riverpod
-ProjectRepository projectRepository(ProjectRepositoryRef ref) {
+ProjectRepository projectRepository(Ref ref) {
   final apiClient = ref.watch(apiClientProvider);
   return ProjectRepositoryImpl(apiClient);
 }

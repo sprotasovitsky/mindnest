@@ -576,9 +576,16 @@ def generate_reset_code() -> str:
     return f"{random.randint(0, 999999):06d}"
 
 
-def hash_code(code: str) -> str:
-    """Hash code with SHA-256."""
-    return hashlib.sha256(code.encode()).hexdigest()
+def hash_code(code: str, user_id: str) -> str:
+    """Hash code with SHA-256 using user_id and secret_key as salt.
+
+    This prevents rainbow table attacks and ensures the same code
+    produces different hashes for different users.
+    """
+    settings = get_settings()
+    # Combine code with user-specific salt and app secret
+    salted = f"{settings.secret_key}:{user_id}:{code}"
+    return hashlib.sha256(salted.encode()).hexdigest()
 
 
 def create_reset_token(user_id: str) -> str:
@@ -639,9 +646,9 @@ async def request_password_reset(
         logger.warning(f"Too many password reset requests for user: {user.id}")
         return {"message": "If the email exists, a reset code will be sent"}
 
-    # Generate and hash code
+    # Generate and hash code (using user_id as salt)
     code = generate_reset_code()
-    code_hash = hash_code(code)
+    code_hash = hash_code(code, user.id)
 
     # Create reset code record
     settings = get_settings()
@@ -689,9 +696,9 @@ async def verify_reset_code(
     )
     reset_codes = result.scalars().all()
 
-    # Check code against all valid codes
+    # Check code against all valid codes (hash with user_id as salt)
     settings = get_settings()
-    code_hash = hash_code(data.code)
+    code_hash = hash_code(data.code, user.id)
     valid_code = None
     for rc in reset_codes:
         # Increment attempts

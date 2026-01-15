@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../api/api_client.dart';
@@ -66,7 +67,7 @@ class ChatRepositoryImpl implements ChatRepository {
 }
 
 @riverpod
-ChatRepository chatRepository(ChatRepositoryRef ref) {
+ChatRepository chatRepository(Ref ref) {
   final apiClient = ref.watch(apiClientProvider);
   return ChatRepositoryImpl(apiClient);
 }
