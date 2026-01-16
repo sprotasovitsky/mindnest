@@ -252,6 +252,7 @@ class ApiClient {
     required String provider,
     required String idToken,
     String? name,
+    bool isAccessToken = false,
   }) async {
     final response = await _dio.post(
       '/auth/social',
@@ -259,6 +260,7 @@ class ApiClient {
         'provider': provider,
         'id_token': idToken,
         if (name != null) 'name': name,
+        if (isAccessToken) 'is_access_token': true,
       },
     );
     return response.data as Map<String, dynamic>;

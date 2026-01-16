@@ -45,6 +45,7 @@ class SocialLoginRequest(BaseModel):
     provider: str = Field(..., pattern="^(google|apple)$")
     id_token: str
     name: Optional[str] = None  # Name from social provider
+    is_access_token: bool = False  # True if token is access_token (web)
 
 
 class SocialLoginResponse(AuthResponse):
@@ -92,6 +93,36 @@ async def verify_google_token(id_token: str) -> Optional[dict]:
             }
     except Exception as e:
         logger.error(f"Google token verification error: {e}")
+        return None
+
+
+async def verify_google_access_token(access_token: str) -> Optional[dict]:
+    """Verify Google access token using userinfo endpoint (for web).
+
+    Web clients may only get access_token, not id_token.
+    Returns dict with: sub (user_id), email, name, email_verified
+    """
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                "https://www.googleapis.com/oauth2/v3/userinfo",
+                headers={"Authorization": f"Bearer {access_token}"}
+            )
+
+            if response.status_code != 200:
+                logger.warning(f"Google access token verification failed: {response.text}")
+                return None
+
+            data = response.json()
+
+            return {
+                "sub": data.get("sub"),
+                "email": data.get("email"),
+                "name": data.get("name"),
+                "email_verified": data.get("email_verified", False),
+            }
+    except Exception as e:
+        logger.error(f"Google access token verification error: {e}")
         return None
 
 
@@ -221,11 +252,15 @@ async def social_login(
     - Creates a new user or links to existing user
     - Social login users are automatically email_verified=true
     """
-    logger.info(f"Social login attempt: {data.provider}")
+    logger.info(f"Social login attempt: {data.provider}, is_access_token={data.is_access_token}")
 
     # Verify token with provider
     if data.provider == "google":
-        user_info = await verify_google_token(data.id_token)
+        if data.is_access_token:
+            # Web clients may only have access_token
+            user_info = await verify_google_access_token(data.id_token)
+        else:
+            user_info = await verify_google_token(data.id_token)
     elif data.provider == "apple":
         user_info = await verify_apple_token(data.id_token)
     else:

@@ -216,6 +216,7 @@ class Auth extends _$Auth {
     required String provider,
     required String idToken,
     String? name,
+    bool isAccessToken = false,
   }) async {
     state = state.copyWith(isLoading: true, error: null);
 
@@ -226,6 +227,7 @@ class Auth extends _$Auth {
         provider: provider,
         idToken: idToken,
         name: name,
+        isAccessToken: isAccessToken,
       );
 
       // Save login method (google or apple)

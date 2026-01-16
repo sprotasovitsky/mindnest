@@ -38,6 +38,7 @@ abstract class AuthRepository {
     required String provider,
     required String idToken,
     String? name,
+    bool isAccessToken = false,
   });
 
   // Account deletion
@@ -242,12 +243,14 @@ class AuthRepositoryImpl implements AuthRepository {
     required String provider,
     required String idToken,
     String? name,
+    bool isAccessToken = false,
   }) async {
     try {
       final response = await _apiClient.socialLogin(
         provider: provider,
         idToken: idToken,
         name: name,
+        isAccessToken: isAccessToken,
       );
       return await _processAuthResponse(response);
     } on DioException catch (e) {

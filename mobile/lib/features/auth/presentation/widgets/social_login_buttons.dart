@@ -63,11 +63,15 @@ class _SocialLoginButtonsState extends ConsumerState<SocialLoginButtons> {
       debugPrint('Google: Getting authentication...');
       final auth = await account.authentication;
       final idToken = auth.idToken;
+      final accessToken = auth.accessToken;
       debugPrint('Google: Got idToken: ${idToken != null ? "yes (${idToken.length} chars)" : "null"}');
+      debugPrint('Google: Got accessToken: ${accessToken != null ? "yes (${accessToken.length} chars)" : "null"}');
 
-      if (idToken == null) {
-        debugPrint('Google: ERROR - idToken is null');
-        widget.onError?.call('Failed to get Google ID token');
+      // On web, idToken may be null - use accessToken instead
+      final token = idToken ?? accessToken;
+      if (token == null) {
+        debugPrint('Google: ERROR - both idToken and accessToken are null');
+        widget.onError?.call('Failed to get Google token');
         setState(() {
           _isLoading = false;
           _loadingProvider = null;
@@ -75,11 +79,12 @@ class _SocialLoginButtonsState extends ConsumerState<SocialLoginButtons> {
         return;
       }
 
-      debugPrint('Google: Calling backend socialLogin...');
+      debugPrint('Google: Calling backend socialLogin with ${idToken != null ? "idToken" : "accessToken"}...');
       final success = await ref.read(authProvider.notifier).socialLogin(
             provider: 'google',
-            idToken: idToken,
+            idToken: token,
             name: account.displayName,
+            isAccessToken: idToken == null,
           );
       debugPrint('Google: Backend returned success=$success');
 
