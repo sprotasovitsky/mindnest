@@ -18,17 +18,53 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
+from sqlalchemy.orm import selectinload
+
 from ..classifier import classify_message, MessageType
 from ..config import get_settings
 from ..database import get_db
 from ..dependencies import get_current_user
 from ..graphiti_client import get_knowledge_graph, KnowledgeGraph
 from ..llm import generate_text
-from ..models import ChatMessage, Project, User
+from ..models import ChatMessage, Project, ProjectMember, User
 from ..pending_cache import get_pending_cache
 from ..prompts import format_response_prompt, format_onboarding_prompt
 
 logger = logging.getLogger(__name__)
+
+
+async def verify_project_membership(
+    db: AsyncSession, user: User, project_id: str
+) -> Project:
+    """Verify user is a member of the project.
+
+    Returns the project if user is a member.
+    Raises HTTPException 404 if project not found.
+    Raises HTTPException 403 if user is not a member.
+    """
+    result = await db.execute(
+        select(Project)
+        .options(selectinload(Project.members))
+        .where(Project.id == project_id)
+    )
+    project = result.scalar_one_or_none()
+
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found",
+        )
+
+    is_member = any(m.user_id == user.id for m in project.members)
+    if not is_member:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not a member of this project",
+        )
+
+    return project
+
+
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 
@@ -451,6 +487,15 @@ async def send_message(
     await check_token_limit(user, db)
 
     project_id = chat_request.get_project_id()
+    if not project_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Project ID is required",
+        )
+
+    # Verify user has access to this project
+    project = await verify_project_membership(db, user, project_id)
+
     user_id = user.id
     user_name = user.name
 
@@ -460,8 +505,7 @@ async def send_message(
     chat_history = format_history_for_prompt(history_messages)
 
     # Check if project needs onboarding (no description set)
-    project = await get_project(db, project_id)
-    needs_onboarding = project is None or not project.description
+    needs_onboarding = not project.description
 
     if needs_onboarding:
         # Onboarding flow
@@ -534,10 +578,14 @@ class BuildCommunitiesRequest(BaseModel):
 @router.post("/build-communities")
 async def build_communities(
     request: BuildCommunitiesRequest,
+    db: AsyncSession = Depends(get_db),
     kg: KnowledgeGraph = Depends(get_knowledge_graph),
-    user: User = Depends(get_current_user),  # Requires authentication
+    user: User = Depends(get_current_user),
 ) -> dict:
-    """Build communities for a project. Requires authentication."""
+    """Build communities for a project. Requires authentication and membership."""
+    # Verify user has access to this project
+    await verify_project_membership(db, user, request.project_id)
+
     result = await kg.build_communities(request.project_id)
     if not result["success"]:
         raise HTTPException(status_code=500, detail=result.get("error", "Build failed"))
@@ -549,9 +597,12 @@ async def get_history(
     project_id: str = Query(..., description="Project ID to get history for"),
     limit: int = Query(default=50, le=100, description="Max messages to return"),
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),  # Requires authentication
+    user: User = Depends(get_current_user),
 ) -> ChatHistoryResponse:
-    """Get chat history for a project. Requires authentication."""
+    """Get chat history for a project. Requires authentication and membership."""
+    # Verify user has access to this project
+    await verify_project_membership(db, user, project_id)
+
     messages = await get_chat_history_from_db(db, project_id, user.id, limit)
     return ChatHistoryResponse(
         messages=[

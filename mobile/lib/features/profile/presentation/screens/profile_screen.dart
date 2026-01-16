@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -52,12 +53,40 @@ class ProfileScreen extends ConsumerWidget {
                       ),
                       const SizedBox(height: 4),
                     ],
-                    Text(
-                      authState.email ?? 'No email',
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    GestureDetector(
+                      onTap: () {
+                        final email = authState.email;
+                        if (email != null) {
+                          Clipboard.setData(ClipboardData(text: email));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Email copied to clipboard'),
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        }
+                      },
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            authState.email ?? 'No email',
+                            style:
+                                Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
+                                    ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.copy,
+                            size: 16,
                             color:
                                 Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 8),
 

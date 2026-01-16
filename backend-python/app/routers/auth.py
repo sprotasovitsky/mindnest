@@ -23,7 +23,7 @@ from slowapi.util import get_remote_address
 
 from ..config import get_settings
 from ..database import get_db
-from ..models import User, PasswordResetCode
+from ..models import User, PasswordResetCode, Project, ProjectMember, ChatMessage
 from ..email_service import EmailService
 
 logger = logging.getLogger(__name__)
@@ -635,7 +635,7 @@ async def request_password_reset(
         return {"message": "If the email exists, a reset code will be sent"}
 
     # Rate limit: max 3 codes per hour per email
-    one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
+    one_hour_ago = datetime.utcnow() - timedelta(hours=1)
     recent_codes = await db.execute(
         select(PasswordResetCode).where(
             PasswordResetCode.user_id == user.id,
@@ -655,7 +655,7 @@ async def request_password_reset(
     reset_code = PasswordResetCode(
         user_id=user.id,
         code_hash=code_hash,
-        expires_at=datetime.now(timezone.utc) + timedelta(minutes=settings.reset_code_expire_minutes),
+        expires_at=datetime.utcnow() + timedelta(minutes=settings.reset_code_expire_minutes),
     )
     db.add(reset_code)
     await db.commit()
@@ -686,7 +686,7 @@ async def verify_reset_code(
         )
 
     # Find valid reset code for this user
-    now = datetime.now(timezone.utc)
+    now = datetime.utcnow()
     result = await db.execute(
         select(PasswordResetCode).where(
             PasswordResetCode.user_id == user.id,
