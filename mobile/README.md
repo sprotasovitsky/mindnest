@@ -114,6 +114,12 @@ make run-prod       # Production server
 
 Configuration is in `lib/core/constants/app_config.dart`.
 
+## Web-Specific Notes
+
+- **URL Strategy**: Uses path-based routing (`/path`) instead of hash-based (`/#/path`) via `usePathUrlStrategy()`
+- **Deep Links**: Email verification links work on web via `/verify-email?token=...` route
+- **Local Development**: Run on `localhost` — `FlutterSecureStorage` requires secure context (HTTPS or localhost)
+
 ## Features
 
 - User authentication (login/register)

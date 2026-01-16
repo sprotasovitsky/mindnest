@@ -171,6 +171,9 @@ class AuthRepositoryImpl implements AuthRepository {
       await _authService.setEmailVerified(true);
     } on DioException catch (e) {
       throw appErrorFromDioException(e);
+    } catch (e) {
+      // Storage or other non-network errors
+      throw NetworkError('Verification failed: ${e.toString()}');
     }
   }
 
