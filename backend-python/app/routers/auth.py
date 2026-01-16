@@ -216,7 +216,7 @@ class ChangePasswordRequest(BaseModel):
 def create_access_token(user_id: str, email: str, name: str) -> tuple[str, int]:
     """Create JWT access token. Returns (token, expires_in_seconds)."""
     settings = get_settings()
-    expire = datetime.utcnow() + timedelta(minutes=settings.access_token_expire_minutes)
+    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
     payload = {
         "sub": user_id,
         "email": email,
@@ -231,7 +231,7 @@ def create_access_token(user_id: str, email: str, name: str) -> tuple[str, int]:
 def create_refresh_token(user_id: str) -> str:
     """Create JWT refresh token."""
     settings = get_settings()
-    expire = datetime.utcnow() + timedelta(days=settings.refresh_token_expire_days)
+    expire = datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_expire_days)
     payload = {
         "sub": user_id,
         "exp": expire,
@@ -307,7 +307,7 @@ async def register(
         name=data.name,
         email_verified=False,
         email_verification_token=verification_token,
-        email_verification_sent_at=datetime.utcnow(),
+        email_verification_sent_at=datetime.now(timezone.utc),
     )
     db.add(user)
     await db.commit()
@@ -521,14 +521,18 @@ async def resend_verification(
     # Rate limit: don't send if sent recently
     settings = get_settings()
     if user.email_verification_sent_at:
-        elapsed = (datetime.utcnow() - user.email_verification_sent_at).total_seconds()
+        sent_at = user.email_verification_sent_at
+        # Ensure timezone-aware for comparison
+        if sent_at.tzinfo is None:
+            sent_at = sent_at.replace(tzinfo=timezone.utc)
+        elapsed = (datetime.now(timezone.utc) - sent_at).total_seconds()
         if elapsed < settings.resend_email_cooldown_seconds:
             return {"message": "If the email exists, a verification link will be sent"}
 
     # Generate new token
     token = secrets.token_urlsafe(32)
     user.email_verification_token = token
-    user.email_verification_sent_at = datetime.utcnow()
+    user.email_verification_sent_at = datetime.now(timezone.utc)
     await db.commit()
 
     # Send email
@@ -591,7 +595,7 @@ def hash_code(code: str, user_id: str) -> str:
 def create_reset_token(user_id: str) -> str:
     """Create a short-lived token for password reset."""
     settings = get_settings()
-    expire = datetime.utcnow() + timedelta(minutes=settings.reset_token_expire_minutes)
+    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.reset_token_expire_minutes)
     payload = {
         "sub": user_id,
         "exp": expire,
@@ -635,7 +639,7 @@ async def request_password_reset(
         return {"message": "If the email exists, a reset code will be sent"}
 
     # Rate limit: max 3 codes per hour per email
-    one_hour_ago = datetime.utcnow() - timedelta(hours=1)
+    one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
     recent_codes = await db.execute(
         select(PasswordResetCode).where(
             PasswordResetCode.user_id == user.id,
@@ -655,7 +659,7 @@ async def request_password_reset(
     reset_code = PasswordResetCode(
         user_id=user.id,
         code_hash=code_hash,
-        expires_at=datetime.utcnow() + timedelta(minutes=settings.reset_code_expire_minutes),
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=settings.reset_code_expire_minutes),
     )
     db.add(reset_code)
     await db.commit()
@@ -686,7 +690,7 @@ async def verify_reset_code(
         )
 
     # Find valid reset code for this user
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     result = await db.execute(
         select(PasswordResetCode).where(
             PasswordResetCode.user_id == user.id,
