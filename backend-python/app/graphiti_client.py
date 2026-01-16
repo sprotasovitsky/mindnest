@@ -233,6 +233,44 @@ class KnowledgeGraph:
             logger.error(f"Failed to build communities: {e}")
             return {"success": False, "error": str(e)}
 
+    async def delete_project_data(self, project_id: str) -> dict:
+        """Delete all data for a project from Neo4j.
+
+        Removes all entities, episodes, edges, and communities
+        associated with the given project_id (group_id).
+        """
+        logger.info(f"Deleting all data for project: {project_id}")
+
+        try:
+            driver = self.client.driver
+
+            async with driver.session() as session:
+                # Delete all relationships and nodes with this group_id
+                # Order matters: delete relationships first, then nodes
+                queries = [
+                    # Delete RELATES_TO edges
+                    "MATCH ()-[r:RELATES_TO {group_id: $group_id}]->() DELETE r",
+                    # Delete MENTIONS edges
+                    "MATCH ()-[r:MENTIONS {group_id: $group_id}]->() DELETE r",
+                    # Delete HAS_MEMBER edges for communities
+                    "MATCH (c:Community {group_id: $group_id})-[r:HAS_MEMBER]->() DELETE r",
+                    # Delete Entity nodes
+                    "MATCH (n:Entity {group_id: $group_id}) DETACH DELETE n",
+                    # Delete Episodic nodes
+                    "MATCH (n:Episodic {group_id: $group_id}) DETACH DELETE n",
+                    # Delete Community nodes
+                    "MATCH (n:Community {group_id: $group_id}) DETACH DELETE n",
+                ]
+
+                for query in queries:
+                    await session.run(query, group_id=project_id)
+
+            logger.info(f"Successfully deleted all data for project: {project_id}")
+            return {"success": True}
+        except Exception as e:
+            logger.error(f"Failed to delete project data: {e}")
+            return {"success": False, "error": str(e)}
+
 
 # Global instance
 _knowledge_graph: Optional[KnowledgeGraph] = None

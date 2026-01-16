@@ -909,6 +909,16 @@ async def delete_account(
 
     # 5. Delete orphaned projects (only had this user as member)
     if projects_to_delete:
+        # 5a. Delete project data from Neo4j (Graphiti)
+        from ..graphiti_client import get_knowledge_graph
+        try:
+            kg = await get_knowledge_graph()
+            for project_id in projects_to_delete:
+                await kg.delete_project_data(project_id)
+        except Exception as e:
+            logger.warning(f"Failed to delete Neo4j data for projects: {e}")
+
+        # 5b. Delete projects from PostgreSQL
         await db.execute(delete(Project).where(Project.id.in_(projects_to_delete)))
 
     # 6. Finally, delete the user
