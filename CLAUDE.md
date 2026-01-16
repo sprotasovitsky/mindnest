@@ -28,9 +28,6 @@ pip install -r requirements.txt
 # Run the backend
 source venv/bin/activate
 uvicorn app.main:app --reload --port 8000
-
-# Or with environment variables
-uvicorn app.main:app --reload --port 8000
 ```
 
 ### Mobile (from `mobile/` directory)
@@ -351,14 +348,7 @@ After onboarding completes, the project description is passed to all subsequent 
 
 ## Graphiti Knowledge Graph
 
-Graphiti replaces the previous custom implementation:
-- **Neo4j KnowledgeItem/KnowledgeRelation** → Graphiti entities/edges
-- **Qdrant vector storage** → Graphiti embeddings (stored in Neo4j)
-- **VectorSearchService** → Graphiti hybrid search
-- **GraphService** → Graphiti graph traversal
-- **IntentDetectionEngine** → Graphiti entity extraction
-
-### Key Graphiti Features
+### Key Features
 
 1. **Automatic Entity Extraction**: Graphiti LLM extracts entities from text
 2. **Emergent Schema**: Edge types are created and normalized automatically
@@ -633,18 +623,9 @@ Since Graphiti handles entity extraction and graph management, most new features
 tests/
 ├── run-scenario.sh        # Test runner (macOS compatible)
 ├── compare-models.sh      # Model comparison across scenarios
-├── scenarios/             # Test scenario files
-│   ├── 001-new-year-party.md      # Multi-user shopping/tasks
-│   ├── 002-personal-budget.md     # Budget tracking with corrections
-│   ├── 003-recipe-shopping.md     # Recipe management
-│   ├── ...
-│   ├── 013-edge-cases.md          # Edge cases (long text, unicode)
-│   └── 014-enterprise-sprint.md   # High volume stress test
+├── scenarios/             # Test scenario files (.md)
 ├── prompts/               # Saved prompts (for version tracking)
-│   └── prompt-vN.md       # Prompts snapshot for version N
 └── results/               # Test results
-    ├── model-comparison-*/        # Model comparison results
-    └── NNN-vN-description.md
 ```
 
 ### Running Tests
@@ -900,7 +881,7 @@ The mobile app (`ApiClient`) automatically:
 
 | Environment | Backend API | Web (Flutter) | Email From |
 |-------------|-------------|---------------|------------|
-| Local | `localhost:8000/api` | `localhost:5000` | `hello@mindnest.one` (if RESEND_API_KEY set) |
+| Local | `localhost:8000/api` | `localhost:8080` | `hello@mindnest.one` (if RESEND_API_KEY set) |
 | Staging | `dev-api.mindnest.one/api` | `dev.mindnest.one` | `hello@mindnest.one` |
 | Production | `api.mindnest.one/api` | `mindnest.one` | `hello@mindnest.one` |
 
