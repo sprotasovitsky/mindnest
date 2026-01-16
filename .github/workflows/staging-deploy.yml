@@ -43,6 +43,11 @@ jobs:
         working-directory: mobile
         run: flutter pub get
 
+      - name: Configure Google Sign-In for Web
+        working-directory: mobile
+        run: |
+          sed -i 's/GOOGLE_WEB_CLIENT_ID_PLACEHOLDER/${{ secrets.STAGING_GOOGLE_WEB_CLIENT_ID }}/g' web/index.html
+
       - name: Build Flutter web
         working-directory: mobile
         run: |
@@ -149,6 +154,7 @@ jobs:
             # Social Login (staging)
             GOOGLE_IOS_CLIENT_ID=${{ secrets.STAGING_GOOGLE_IOS_CLIENT_ID }}
             GOOGLE_ANDROID_CLIENT_ID=${{ secrets.STAGING_GOOGLE_ANDROID_CLIENT_ID }}
+            GOOGLE_WEB_CLIENT_ID=${{ secrets.STAGING_GOOGLE_WEB_CLIENT_ID }}
             APPLE_CLIENT_ID=${{ secrets.STAGING_APPLE_CLIENT_ID }}
             ENVEOF
             chmod 600 .env

@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +5,13 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../../../../core/providers/auth_provider.dart';
+
+// Platform check helper that works on web
+bool get _isIOSPlatform {
+  if (kIsWeb) return false;
+  // Use defaultTargetPlatform instead of dart:io Platform
+  return defaultTargetPlatform == TargetPlatform.iOS;
+}
 
 class SocialLoginButtons extends ConsumerStatefulWidget {
   final VoidCallback? onSuccess;
@@ -187,7 +192,6 @@ class _SocialLoginButtonsState extends ConsumerState<SocialLoginButtons> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isIOS = !kIsWeb && Platform.isIOS;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -229,7 +233,7 @@ class _SocialLoginButtonsState extends ConsumerState<SocialLoginButtons> {
         ),
 
         // Apple Sign-In button (iOS only - App Store requirement)
-        if (isIOS) ...[
+        if (_isIOSPlatform) ...[
           const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
