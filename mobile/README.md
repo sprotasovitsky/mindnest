@@ -45,7 +45,7 @@ lib/
 ### Prerequisites
 
 - Flutter SDK 3.2+
-- Running backend on `http://localhost:8080`
+- Running backend on `http://localhost:8000` (see `backend-python/README.md`)
 
 ### Installation
 
@@ -97,7 +97,28 @@ dart run build_runner watch
 
 ## Configuration
 
-Backend API URL is configured in `lib/core/api/api_client.dart`. Default: `http://localhost:8080`
+The app uses build flavors with `--dart-define` for environment configuration:
+
+| Flavor | API URL | Bundle ID |
+|--------|---------|-----------|
+| `dev` | `http://localhost:8000/api` | `com.mindnest.app.dev` |
+| `staging` | `https://dev-api.mindnest.one/api` | `com.mindnest.app.staging` |
+| `prod` | `https://api.mindnest.one/api` | `com.mindnest.app` |
+
+Use Makefile commands for easy flavor management:
+```bash
+make run-dev        # Local development
+make run-staging    # Staging server
+make run-prod       # Production server
+```
+
+Configuration is in `lib/core/constants/app_config.dart`.
+
+## Web-Specific Notes
+
+- **URL Strategy**: Uses path-based routing (`/path`) instead of hash-based (`/#/path`) via `usePathUrlStrategy()`
+- **Deep Links**: Email verification links work on web via `/verify-email?token=...` route
+- **Local Development**: Run on `localhost` — `FlutterSecureStorage` requires secure context (HTTPS or localhost)
 
 ## Features
 

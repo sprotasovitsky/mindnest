@@ -19,10 +19,10 @@ class Settings(BaseSettings):
     # Neo4j
     neo4j_uri: str = "bolt://localhost:7687"
     neo4j_user: str = "neo4j"
-    neo4j_password: str = "mindnest123"
+    neo4j_password: str = Field(default="")  # Required in production
 
     # PostgreSQL
-    database_url: str = "postgresql+asyncpg://mindnest:mindnest@localhost:5432/mindnest"
+    database_url: str = Field(default="")  # Required in production
 
     # Vertex AI credentials
     vertex_ai_project_id: str = ""
@@ -56,6 +56,47 @@ class Settings(BaseSettings):
     rate_limit_login: str = "5/minute"
     rate_limit_register: str = "3/minute"
     rate_limit_chat: str = "30/minute"
+    rate_limit_verify_email: str = "10/minute"
+    rate_limit_resend_verification: str = "3/minute"
+    rate_limit_password_reset: str = "5/minute"
+    rate_limit_change_password: str = "5/minute"
+
+    # Email (Resend)
+    resend_api_key: str = ""
+    email_from: str = "MindNest <hello@mindnest.one>"
+    frontend_url: str = "https://mindnest.one"
+
+    # Token expiration settings
+    access_token_expire_minutes: int = 15
+    refresh_token_expire_days: int = 7
+    reset_token_expire_minutes: int = 15
+    reset_code_expire_minutes: int = 10
+    reset_code_max_attempts: int = 5
+    resend_email_cooldown_seconds: int = 60
+
+    # Token limits for unverified users
+    unverified_token_limit: int = 1_000_000  # 1M tokens
+
+    # Social login - separate client IDs for each platform
+    google_ios_client_id: str = ""      # iOS client ID
+    google_android_client_id: str = ""  # Android client ID
+    apple_client_id: str = ""           # Bundle ID (com.mindnest.app.dev/staging/prod)
+
+    def get_google_client_ids(self) -> list[str]:
+        """Get all valid Google client IDs for token verification."""
+        ids = []
+        if self.google_ios_client_id:
+            ids.append(self.google_ios_client_id)
+        if self.google_android_client_id:
+            ids.append(self.google_android_client_id)
+        return ids
+
+    def get_apple_client_ids(self) -> list[str]:
+        """Get all valid Apple client IDs (bundle IDs) for token verification."""
+        ids = []
+        if self.apple_client_id:
+            ids.append(self.apple_client_id)
+        return ids
 
     def get_rate_limit(self, limit_type: str) -> str:
         """Get rate limit based on debug mode. Higher limits for local dev."""
@@ -65,6 +106,10 @@ class Settings(BaseSettings):
                 "login": "100/minute",
                 "register": "100/minute",
                 "chat": "200/minute",
+                "verify_email": "100/minute",
+                "resend_verification": "100/minute",
+                "password_reset": "100/minute",
+                "change_password": "100/minute",
             }
             return debug_limits.get(limit_type, "100/minute")
 
@@ -73,6 +118,10 @@ class Settings(BaseSettings):
             "login": self.rate_limit_login,
             "register": self.rate_limit_register,
             "chat": self.rate_limit_chat,
+            "verify_email": self.rate_limit_verify_email,
+            "resend_verification": self.rate_limit_resend_verification,
+            "password_reset": self.rate_limit_password_reset,
+            "change_password": self.rate_limit_change_password,
         }
         return limits.get(limit_type, "30/minute")
 
@@ -91,6 +140,30 @@ class Settings(BaseSettings):
             return "dev-secret-key-not-for-production"
         if len(v) < 32:
             raise ValueError("SECRET_KEY must be at least 32 characters")
+        return v
+
+    @field_validator("neo4j_password")
+    @classmethod
+    def validate_neo4j_password(cls, v: str) -> str:
+        """Validate that neo4j_password is set."""
+        if not v:
+            import os
+            if os.getenv("DEBUG", "").lower() not in ("true", "1", "yes"):
+                raise ValueError("NEO4J_PASSWORD must be set in production")
+            # In debug mode, use a default (for local docker-compose)
+            return "mindnest123"
+        return v
+
+    @field_validator("database_url")
+    @classmethod
+    def validate_database_url(cls, v: str) -> str:
+        """Validate that database_url is set."""
+        if not v:
+            import os
+            if os.getenv("DEBUG", "").lower() not in ("true", "1", "yes"):
+                raise ValueError("DATABASE_URL must be set in production")
+            # In debug mode, use a default (for local docker-compose)
+            return "postgresql+asyncpg://mindnest:mindnest@localhost:5432/mindnest"
         return v
 
     def get_allowed_origins(self) -> list[str]:

@@ -41,50 +41,61 @@ class NetworkError extends AppError {
   final int? statusCode;
 
   const NetworkError(super.message, {this.statusCode, super.isRetryable});
+}
 
-  factory NetworkError.fromDioException(DioException e) {
-    if (e.type == DioExceptionType.connectionTimeout ||
-        e.type == DioExceptionType.receiveTimeout) {
-      return const NetworkError(
-        'Connection timed out. Please try again.',
-        isRetryable: true,
-      );
-    }
-    if (e.type == DioExceptionType.connectionError) {
-      return const NetworkError(
-        'Unable to connect to server. Check your internet connection.',
-        isRetryable: true,
-      );
-    }
-    if (e.response != null) {
-      final statusCode = e.response!.statusCode;
-      final data = e.response!.data;
-      final message = _extractErrorMessage(data);
-
-      if (statusCode == 401) {
-        return NetworkError(
-          message ?? 'Session expired. Please log in again.',
-          statusCode: statusCode,
-        );
-      }
-      if (statusCode == 403) {
-        return NetworkError('Access denied.', statusCode: statusCode);
-      }
-      if (statusCode == 422) {
-        // Validation error
-        return NetworkError(
-          message ?? 'Invalid input. Please check your data.',
-          statusCode: statusCode,
-        );
-      }
-      return NetworkError(
-        message ?? 'Server error occurred.',
-        statusCode: statusCode,
-        isRetryable: statusCode != null && statusCode >= 500,
-      );
-    }
-    return const NetworkError('An unexpected error occurred.');
+/// Creates an appropriate AppError from a DioException.
+/// May return NetworkError, TokenLimitError, or other error types.
+AppError appErrorFromDioException(DioException e) {
+  if (e.type == DioExceptionType.connectionTimeout ||
+      e.type == DioExceptionType.receiveTimeout) {
+    return const NetworkError(
+      'Connection timed out. Please try again.',
+      isRetryable: true,
+    );
   }
+  if (e.type == DioExceptionType.connectionError) {
+    return const NetworkError(
+      'Unable to connect to server. Check your internet connection.',
+      isRetryable: true,
+    );
+  }
+  if (e.response != null) {
+    final statusCode = e.response!.statusCode;
+    final data = e.response!.data;
+    final message = _extractErrorMessage(data);
+
+    if (statusCode == 401) {
+      return NetworkError(
+        message ?? 'Session expired. Please log in again.',
+        statusCode: statusCode,
+      );
+    }
+    if (statusCode == 403) {
+      // Check for token limit exceeded error
+      if (data is Map && data['error'] == 'token_limit_exceeded') {
+        return TokenLimitError(
+          data['message'] as String? ??
+              'Token limit exceeded. Please verify your email.',
+          tokensUsed: data['tokens_used'] as int? ?? 0,
+          limit: data['limit'] as int? ?? 0,
+        );
+      }
+      return NetworkError('Access denied.', statusCode: statusCode);
+    }
+    if (statusCode == 422) {
+      // Validation error
+      return NetworkError(
+        message ?? 'Invalid input. Please check your data.',
+        statusCode: statusCode,
+      );
+    }
+    return NetworkError(
+      message ?? 'Server error occurred.',
+      statusCode: statusCode,
+      isRetryable: statusCode != null && statusCode >= 500,
+    );
+  }
+  return const NetworkError('An unexpected error occurred.');
 }
 
 /// Authentication errors
@@ -106,6 +117,18 @@ class ValidationError extends AppError {
   final Map<String, String>? fieldErrors;
 
   const ValidationError(super.message, {this.fieldErrors});
+}
+
+/// Token limit exceeded error (for unverified users)
+class TokenLimitError extends AppError {
+  final int tokensUsed;
+  final int limit;
+
+  const TokenLimitError(
+    super.message, {
+    required this.tokensUsed,
+    required this.limit,
+  });
 }
 
 /// Extension to extract user-friendly error messages

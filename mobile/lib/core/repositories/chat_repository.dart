@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../api/api_client.dart';
@@ -26,7 +27,7 @@ class ChatRepositoryImpl implements ChatRepository {
       final response = await _apiClient.chat(message, projectId: projectId);
       return ChatResponse.fromJson(response);
     } on DioException catch (e) {
-      throw NetworkError.fromDioException(e);
+      throw appErrorFromDioException(e);
     }
   }
 
@@ -60,13 +61,13 @@ class ChatRepositoryImpl implements ChatRepository {
       }
       return chatMessages;
     } on DioException catch (e) {
-      throw NetworkError.fromDioException(e);
+      throw appErrorFromDioException(e);
     }
   }
 }
 
 @riverpod
-ChatRepository chatRepository(ChatRepositoryRef ref) {
+ChatRepository chatRepository(Ref ref) {
   final apiClient = ref.watch(apiClientProvider);
   return ChatRepositoryImpl(apiClient);
 }

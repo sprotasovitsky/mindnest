@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../api/api_client.dart';
@@ -26,7 +27,7 @@ class MembersRepositoryImpl implements MembersRepository {
           .map((json) => Member.fromJson(json as Map<String, dynamic>))
           .toList();
     } on DioException catch (e) {
-      throw NetworkError.fromDioException(e);
+      throw appErrorFromDioException(e);
     }
   }
 
@@ -36,13 +37,13 @@ class MembersRepositoryImpl implements MembersRepository {
       final response = await _apiClient.addProjectMember(projectId, email);
       return Member.fromJson(response);
     } on DioException catch (e) {
-      throw NetworkError.fromDioException(e);
+      throw appErrorFromDioException(e);
     }
   }
 }
 
 @riverpod
-MembersRepository membersRepository(MembersRepositoryRef ref) {
+MembersRepository membersRepository(Ref ref) {
   final apiClient = ref.watch(apiClientProvider);
   return MembersRepositoryImpl(apiClient);
 }

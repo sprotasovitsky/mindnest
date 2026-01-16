@@ -96,80 +96,80 @@ uvicorn app.main:app --reload --port 8000
 # Health check
 curl http://localhost:8000/health
 
-# Send a message
-curl -X POST http://localhost:8000/api/chat/message \
+# Register user
+curl -X POST http://localhost:8000/api/auth/register \
   -H "Content-Type: application/json" \
-  -d '{
-    "message": "Buy milk tomorrow, assigned to Petya",
-    "project_id": "test_project",
-    "user_id": "user_123"
-  }'
+  -d '{"email": "test@example.com", "password": "Test1234"}'
 
-# Search
-curl -X POST http://localhost:8000/api/chat/search \
+# Login
+curl -X POST http://localhost:8000/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{
-    "query": "What tasks does Petya have?",
-    "project_id": "test_project"
-  }'
+  -d '{"email": "test@example.com", "password": "Test1234"}'
+
+# Send a message (requires Bearer token)
+curl -X POST http://localhost:8000/api/chat \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
+  -d '{"message": "Buy milk tomorrow", "projectId": "project-uuid"}'
 ```
 
 ## API Endpoints
 
-### POST /api/chat/message
+### Auth
 
-Send a message to the knowledge graph.
+| Endpoint | Description |
+|----------|-------------|
+| `POST /api/auth/register` | Register new user |
+| `POST /api/auth/login` | Login user |
+| `POST /api/auth/refresh` | Refresh access token |
+| `GET /api/auth/me` | Get current user info |
+| `POST /api/auth/verify-email` | Verify email with token |
+| `POST /api/auth/resend-verification` | Resend verification email |
+| `POST /api/auth/request-password-reset` | Request password reset |
+| `POST /api/auth/verify-reset-code` | Verify reset code |
+| `POST /api/auth/reset-password` | Reset password |
+| `POST /api/auth/change-password` | Change password |
+| `DELETE /api/auth/account` | Delete account |
+| `POST /api/auth/social/google` | Google OAuth login |
+| `POST /api/auth/social/apple` | Apple Sign-In |
+
+### Chat
+
+| Endpoint | Description |
+|----------|-------------|
+| `POST /api/chat` | Send message, get AI response |
+| `GET /api/chat/history` | Get chat history for project |
+| `GET /api/chat/health` | Health check with stats |
+
+### Projects
+
+| Endpoint | Description |
+|----------|-------------|
+| `POST /api/projects` | Create project |
+| `GET /api/projects` | List user's projects |
+| `GET /api/projects/{id}` | Get project details |
+| `PUT /api/projects/{id}` | Update project |
+| `POST /api/projects/{id}/members` | Add member |
+| `GET /api/projects/{id}/members` | List members |
+
+### POST /api/chat
+
+Send a message to the AI assistant.
 
 **Request:**
 ```json
 {
   "message": "Buy milk tomorrow, assigned to Petya",
-  "project_id": "project_123",
-  "user_id": "user_456",
-  "user_name": "Ivan"  // optional
+  "projectId": "project-uuid"
 }
 ```
 
 **Response:**
 ```json
 {
-  "reply": "I've created a task to buy milk...",
+  "reply": "I've noted that you need to buy milk...",
   "sources": ["Petya is assigned to buy milk"],
-  "confidence": 1.0,
-  "entities_extracted": 2
-}
-```
-
-### POST /api/chat/search
-
-Search the knowledge graph.
-
-**Request:**
-```json
-{
-  "query": "What tasks does Petya have?",
-  "project_id": "project_123",
-  "limit": 10
-}
-```
-
-**Response:**
-```json
-{
-  "facts": [
-    {
-      "fact": "Petya is assigned to buy milk",
-      "valid_at": "2025-01-04T10:00:00",
-      "expired_at": null
-    }
-  ],
-  "entities": [
-    {
-      "uuid": "...",
-      "name": "Petya",
-      "summary": "Team member"
-    }
-  ]
+  "message_type": "DATA"
 }
 ```
 
@@ -211,15 +211,22 @@ Search combines:
 
 ## Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `NEO4J_URI` | Neo4j Bolt URI | `bolt://localhost:7687` |
-| `NEO4J_USER` | Neo4j username | `neo4j` |
-| `NEO4J_PASSWORD` | Neo4j password | `mindnest123` |
-| `VERTEX_AI_PROJECT_ID` | GCP Project ID | required |
-| `GCP_SERVICE_ACCOUNT_EMAIL` | Service account email | required |
-| `GCP_PRIVATE_KEY` | Service account private key | required |
-| `DEBUG` | Enable debug mode | `true` |
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `DATABASE_URL` | PostgreSQL async connection URL | Yes (prod) |
+| `NEO4J_URI` | Neo4j Bolt URI | No (default: localhost:7687) |
+| `NEO4J_USER` | Neo4j username | No (default: neo4j) |
+| `NEO4J_PASSWORD` | Neo4j password | Yes (prod) |
+| `SECRET_KEY` | JWT signing key (min 32 chars) | Yes |
+| `VERTEX_AI_PROJECT_ID` | GCP Project ID | Yes |
+| `GCP_SERVICE_ACCOUNT_EMAIL` | Service account email | Yes |
+| `GCP_PRIVATE_KEY` | Service account private key | Yes |
+| `RESEND_API_KEY` | Resend.com API key for emails | No |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID | No |
+| `APPLE_CLIENT_ID` | Apple Sign-In service ID | No |
+| `DEBUG` | Enable debug mode | No (default: false) |
+
+See `.env.example` for full list with descriptions.
 
 ## Development
 

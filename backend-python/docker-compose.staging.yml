@@ -17,6 +17,16 @@ services:
       - GCP_PRIVATE_KEY=${GCP_PRIVATE_KEY}
       - SECRET_KEY=${SECRET_KEY}
       - DEBUG=false
+      # Email
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - EMAIL_FROM=${EMAIL_FROM}
+      - FRONTEND_URL=${FRONTEND_URL}
+      # Social Login
+      - GOOGLE_IOS_CLIENT_ID=${GOOGLE_IOS_CLIENT_ID}
+      - GOOGLE_ANDROID_CLIENT_ID=${GOOGLE_ANDROID_CLIENT_ID}
+      - APPLE_CLIENT_ID=${APPLE_CLIENT_ID}
+      # CORS
+      - ALLOWED_ORIGINS=https://dev.mindnest.one,https://mindnest.one
     depends_on:
       neo4j:
         condition: service_healthy

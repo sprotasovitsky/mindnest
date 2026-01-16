@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/error/app_error.dart';
 import '../../../../core/providers/chat_provider.dart';
 import '../../../../core/providers/project_provider.dart';
+import '../../../../shared/widgets/email_verification_banner.dart';
+import '../../../../shared/widgets/token_limit_dialog.dart';
 import '../../../../shared/widgets/widgets.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/chat_input.dart';
@@ -29,8 +32,22 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         if (previous?.messages.length != next.messages.length) {
           _scrollToBottom();
         }
+        // Show token limit dialog when error occurs
+        if (next.tokenLimitError != null &&
+            previous?.tokenLimitError == null) {
+          _showTokenLimitDialog(next.tokenLimitError!);
+        }
       });
     });
+  }
+
+  Future<void> _showTokenLimitDialog(TokenLimitError error) async {
+    await TokenLimitDialog.show(
+      context,
+      tokensUsed: error.tokensUsed,
+      limit: error.limit,
+    );
+    ref.read(chatProvider.notifier).clearTokenLimitError();
   }
 
   Future<void> _initializeChat() async {
@@ -116,11 +133,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ),
         ],
       ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: chatState.isLoadingHistory
+      body: Column(
+        children: [
+          // Show verification banner for unverified users
+          const EmailVerificationBanner(),
+          Expanded(
+            child: SafeArea(
+              top: false,
+              child: Column(
+                children: [
+                  Expanded(
+                    child: chatState.isLoadingHistory
                   ? const LoadingOverlay(message: 'Loading chat history...')
                   : ListView.builder(
                       controller: _scrollController,
@@ -140,10 +163,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         );
                       },
                     ),
+                  ),
+                  ChatInput(onSend: _sendMessage),
+                ],
+              ),
             ),
-            ChatInput(onSend: _sendMessage),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

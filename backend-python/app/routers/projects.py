@@ -7,15 +7,16 @@ Uses PostgreSQL for storage.
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Header, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ..database import get_db
+from ..dependencies import get_current_user
 from ..models import User, Project, ProjectMember
-from .auth import get_user_by_email, decode_token, get_user_by_id
+from .auth import get_user_by_email, get_user_by_id
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/projects", tags=["projects"])
@@ -51,36 +52,6 @@ class MemberResponse(BaseModel):
     user_id: str
     email: str
     role: str
-
-
-async def get_current_user(
-    authorization: str = Header(...),
-    db: AsyncSession = Depends(get_db),
-) -> User:
-    """Get current user from Authorization header."""
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authorization header",
-        )
-
-    token = authorization[7:]  # Remove "Bearer "
-    token_data = decode_token(token)
-
-    if not token_data or not token_data.get("id"):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-        )
-
-    user = await get_user_by_id(db, token_data["id"])
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
-        )
-
-    return user
 
 
 @router.post("", response_model=ProjectResponse)
@@ -279,10 +250,19 @@ async def get_members(
             detail="Not a member of this project",
         )
 
-    # Get user details for each member
+    # Get all member user IDs
+    member_user_ids = [m.user_id for m in project.members]
+
+    # Fetch all users in a single query (fix N+1)
+    users_result = await db.execute(
+        select(User).where(User.id.in_(member_user_ids))
+    )
+    users_map = {u.id: u for u in users_result.scalars().all()}
+
+    # Build response with user details
     members = []
     for m in project.members:
-        member_user = await get_user_by_id(db, m.user_id)
+        member_user = users_map.get(m.user_id)
         if member_user:
             members.append(MemberResponse(
                 user_id=m.user_id,

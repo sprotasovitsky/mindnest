@@ -20,6 +20,8 @@ class ChatState with _$ChatState {
     @Default(false) bool isLoadingHistory,
     String? lastProjectId,
     String? error,
+    /// Token limit error (for unverified users who exceeded their limit)
+    TokenLimitError? tokenLimitError,
   }) = _ChatState;
 }
 
@@ -117,6 +119,15 @@ class Chat extends _$Chat {
         ref.read(projectsProvider.notifier).loadProjects();
       }
     } catch (e) {
+      // Check if it's a token limit error
+      if (e is TokenLimitError) {
+        state = state.copyWith(
+          isLoading: false,
+          tokenLimitError: e,
+        );
+        return;
+      }
+
       state = state.copyWith(
         messages: [
           ...state.messages,
@@ -125,6 +136,11 @@ class Chat extends _$Chat {
         isLoading: false,
       );
     }
+  }
+
+  /// Clear the token limit error (after user dismisses the dialog)
+  void clearTokenLimitError() {
+    state = state.copyWith(tokenLimitError: null);
   }
 
   void clearMessages() {

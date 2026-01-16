@@ -185,6 +185,95 @@ class ApiClient {
     return response.data as Map<String, dynamic>;
   }
 
+  // Email verification endpoints
+  Future<Map<String, dynamic>> verifyEmail(String token) async {
+    final response = await _dio.post(
+      '/auth/verify-email',
+      data: {'token': token},
+    );
+    return response.data as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> resendVerification(String email) async {
+    final response = await _dio.post(
+      '/auth/resend-verification',
+      data: {'email': email},
+    );
+    return response.data as Map<String, dynamic>;
+  }
+
+  // Get current user info (with verification status)
+  Future<Map<String, dynamic>> getCurrentUser() async {
+    final response = await _dio.get('/auth/me');
+    return response.data as Map<String, dynamic>;
+  }
+
+  // Password reset endpoints
+  Future<Map<String, dynamic>> requestPasswordReset(String email) async {
+    final response = await _dio.post(
+      '/auth/request-password-reset',
+      data: {'email': email},
+    );
+    return response.data as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> verifyResetCode(
+      String email, String code) async {
+    final response = await _dio.post(
+      '/auth/verify-reset-code',
+      data: {'email': email, 'code': code},
+    );
+    return response.data as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> resetPassword(
+      String resetToken, String newPassword) async {
+    final response = await _dio.post(
+      '/auth/reset-password',
+      data: {'reset_token': resetToken, 'new_password': newPassword},
+    );
+    return response.data as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> changePassword(
+      String currentPassword, String newPassword) async {
+    final response = await _dio.post(
+      '/auth/change-password',
+      data: {
+        'current_password': currentPassword,
+        'new_password': newPassword,
+      },
+    );
+    return response.data as Map<String, dynamic>;
+  }
+
+  // Social login
+  Future<Map<String, dynamic>> socialLogin({
+    required String provider,
+    required String idToken,
+    String? name,
+  }) async {
+    final response = await _dio.post(
+      '/auth/social',
+      data: {
+        'provider': provider,
+        'id_token': idToken,
+        if (name != null) 'name': name,
+      },
+    );
+    return response.data as Map<String, dynamic>;
+  }
+
+  // Delete account
+  Future<void> deleteAccount({String? password}) async {
+    await _dio.delete(
+      '/auth/account',
+      data: {
+        if (password != null) 'password': password,
+      },
+    );
+  }
+
   // Chat endpoints
   Future<Map<String, dynamic>> chat(String message, {String? projectId}) async {
     return _retryRequest(() async {

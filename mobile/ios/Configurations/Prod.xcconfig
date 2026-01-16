@@ -6,6 +6,10 @@ PRODUCT_BUNDLE_IDENTIFIER = com.mindnest.app
 PRODUCT_NAME = MindNest
 DISPLAY_NAME = MindNest
 
+// Google Sign-In
+GOOGLE_CLIENT_ID = 678169768622-0rgb5oe6k2ck6k8q32jpv993uoupdnsf.apps.googleusercontent.com
+GOOGLE_REVERSED_CLIENT_ID = com.googleusercontent.apps.678169768622-0rgb5oe6k2ck6k8q32jpv993uoupdnsf
+
 // Build settings
 SWIFT_OPTIMIZATION_LEVEL = -O
 GCC_OPTIMIZATION_LEVEL = s

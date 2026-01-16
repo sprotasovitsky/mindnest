@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../api/api_client.dart';
@@ -26,7 +27,7 @@ class ProjectRepositoryImpl implements ProjectRepository {
       final response = await _apiClient.getProjects();
       return response.map((json) => Project.fromJson(json)).toList();
     } on DioException catch (e) {
-      throw NetworkError.fromDioException(e);
+      throw appErrorFromDioException(e);
     }
   }
 
@@ -36,7 +37,7 @@ class ProjectRepositoryImpl implements ProjectRepository {
       final response = await _apiClient.createProject(name, description);
       return Project.fromJson(response);
     } on DioException catch (e) {
-      throw NetworkError.fromDioException(e);
+      throw appErrorFromDioException(e);
     }
   }
 
@@ -48,13 +49,13 @@ class ProjectRepositoryImpl implements ProjectRepository {
           name: name, description: description);
       return Project.fromJson(response);
     } on DioException catch (e) {
-      throw NetworkError.fromDioException(e);
+      throw appErrorFromDioException(e);
     }
   }
 }
 
 @riverpod
-ProjectRepository projectRepository(ProjectRepositoryRef ref) {
+ProjectRepository projectRepository(Ref ref) {
   final apiClient = ref.watch(apiClientProvider);
   return ProjectRepositoryImpl(apiClient);
 }

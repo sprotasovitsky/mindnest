@@ -1,6 +1,12 @@
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
+
 /// Application configuration constants
 class AppConfig {
   AppConfig._();
+
+  /// Local development machine IP (update when IP changes)
+  /// Used for testing on real devices and web
+  static const String localIp = '192.168.68.105';
 
   /// Environment name (dev, staging, prod)
   static const String environment = String.fromEnvironment(
@@ -9,10 +15,25 @@ class AppConfig {
   );
 
   /// API Configuration
-  static const String apiUrl = String.fromEnvironment(
+  static const String _apiUrlFromEnv = String.fromEnvironment(
     'API_URL',
-    defaultValue: 'http://10.0.2.2:8000/api',
+    defaultValue: '',
   );
+
+  static String get apiUrl {
+    if (_apiUrlFromEnv.isNotEmpty) return _apiUrlFromEnv;
+
+    // Staging/Prod use proper URLs
+    if (isStaging) return 'https://dev-api.mindnest.one/api';
+    if (isProd) return 'https://api.mindnest.one/api';
+
+    // Dev: platform-specific defaults
+    if (kIsWeb) return 'http://$localIp:8000/api';
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return 'http://10.0.2.2:8000/api'; // Android emulator
+    }
+    return 'http://$localIp:8000/api'; // iOS simulator, real devices
+  }
 
   /// Environment helpers
   static bool get isDev => environment == 'dev';

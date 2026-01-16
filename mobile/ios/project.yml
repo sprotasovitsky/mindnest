@@ -37,6 +37,10 @@ targets:
       - path: MindNest
         excludes:
           - "Info.plist"
+      - path: Runner
+        includes:
+          - "GeneratedPluginRegistrant.h"
+          - "GeneratedPluginRegistrant.m"
       - path: Flutter/AppFrameworkInfo.plist
         buildPhase: none
     info:
@@ -64,7 +68,25 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         CADisableMinimumFrameSynchronization: true
-        UIApplicationSupportsIndirectInputEvents: true
+        # Google Sign-In
+        GIDClientID: $(GOOGLE_CLIENT_ID)
+        CFBundleURLTypes:
+          - CFBundleTypeRole: Editor
+            CFBundleURLName: $(PRODUCT_BUNDLE_IDENTIFIER)
+            CFBundleURLSchemes:
+              - mindnest
+          - CFBundleTypeRole: Editor
+            CFBundleURLName: google-sign-in
+            CFBundleURLSchemes:
+              - $(GOOGLE_REVERSED_CLIENT_ID)
+    entitlements:
+      path: MindNest/MindNest.entitlements
+      properties:
+        com.apple.developer.applesignin:
+          - Default
+        com.apple.developer.associated-domains:
+          - applinks:mindnest.one
+          - applinks:www.mindnest.one
     settings:
       base:
         PRODUCT_NAME: $(PRODUCT_NAME)
@@ -74,6 +96,7 @@ targets:
         ENABLE_BITCODE: NO
         SWIFT_OBJC_BRIDGING_HEADER: MindNest/MindNest-Bridging-Header.h
         ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES: $(inherited)
+        CODE_SIGN_ENTITLEMENTS: MindNest/MindNest.entitlements
     preBuildScripts:
       - name: "Run Script"
         script: |

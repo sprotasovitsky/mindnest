@@ -28,9 +28,6 @@ pip install -r requirements.txt
 # Run the backend
 source venv/bin/activate
 uvicorn app.main:app --reload --port 8000
-
-# Or with environment variables
-uvicorn app.main:app --reload --port 8000
 ```
 
 ### Mobile (from `mobile/` directory)
@@ -351,14 +348,7 @@ After onboarding completes, the project description is passed to all subsequent 
 
 ## Graphiti Knowledge Graph
 
-Graphiti replaces the previous custom implementation:
-- **Neo4j KnowledgeItem/KnowledgeRelation** → Graphiti entities/edges
-- **Qdrant vector storage** → Graphiti embeddings (stored in Neo4j)
-- **VectorSearchService** → Graphiti hybrid search
-- **GraphService** → Graphiti graph traversal
-- **IntentDetectionEngine** → Graphiti entity extraction
-
-### Key Graphiti Features
+### Key Features
 
 1. **Automatic Entity Extraction**: Graphiti LLM extracts entities from text
 2. **Emergent Schema**: Edge types are created and normalized automatically
@@ -485,6 +475,13 @@ docker exec mindnest-neo4j cypher-shell -u neo4j -p mindnest123 \
 - **Credentials**: `mindnest:mindnest` (user:password)
 - **Database**: `mindnest`
 
+### Datetime Handling
+
+All datetime columns use timezone-aware UTC:
+- **Database**: `TIMESTAMP WITH TIME ZONE` (PostgreSQL)
+- **Models**: `DateTime(timezone=True)` with `utc_now()` default
+- **Python code**: `datetime.now(timezone.utc)` (not deprecated `datetime.utcnow()`)
+
 ### Database Migrations (Alembic)
 
 ```bash
@@ -545,6 +542,18 @@ Prompts are loaded via `prompts/__init__.py`:
 - `POST /api/auth/register` - Register new user (rate limit: 3/min)
 - `POST /api/auth/login` - Login user (rate limit: 5/min)
 - `POST /api/auth/refresh` - Refresh access token using refresh token
+- `GET /api/auth/me` - Get current user info (requires auth)
+- `POST /api/auth/verify-email` - Verify email with token
+- `POST /api/auth/resend-verification` - Resend verification email (rate limit: 3/min)
+- `POST /api/auth/request-password-reset` - Request password reset code (rate limit: 5/min)
+- `POST /api/auth/verify-reset-code` - Verify reset code, get reset token
+- `POST /api/auth/reset-password` - Reset password with reset token
+- `POST /api/auth/change-password` - Change password (requires auth, rate limit: 5/min)
+- `DELETE /api/auth/account` - Delete user account (requires auth)
+
+### Social Auth
+- `POST /api/auth/social/google` - Login/register with Google
+- `POST /api/auth/social/apple` - Login/register with Apple
 
 ### Chat (all require authentication)
 - `POST /api/chat` - Send message, process through knowledge graph (rate limit: 30/min)
@@ -614,18 +623,9 @@ Since Graphiti handles entity extraction and graph management, most new features
 tests/
 ├── run-scenario.sh        # Test runner (macOS compatible)
 ├── compare-models.sh      # Model comparison across scenarios
-├── scenarios/             # Test scenario files
-│   ├── 001-new-year-party.md      # Multi-user shopping/tasks
-│   ├── 002-personal-budget.md     # Budget tracking with corrections
-│   ├── 003-recipe-shopping.md     # Recipe management
-│   ├── ...
-│   ├── 013-edge-cases.md          # Edge cases (long text, unicode)
-│   └── 014-enterprise-sprint.md   # High volume stress test
+├── scenarios/             # Test scenario files (.md)
 ├── prompts/               # Saved prompts (for version tracking)
-│   └── prompt-vN.md       # Prompts snapshot for version N
 └── results/               # Test results
-    ├── model-comparison-*/        # Model comparison results
-    └── NNN-vN-description.md
 ```
 
 ### Running Tests
@@ -874,3 +874,149 @@ The mobile app (`ApiClient`) automatically:
 3. Calls `/api/auth/refresh` with the refresh token
 4. Retries the original request with the new access token
 5. Logs out the user if refresh fails
+
+## Deployment & Infrastructure
+
+### URL Map
+
+| Environment | Backend API | Web (Flutter) | Email From |
+|-------------|-------------|---------------|------------|
+| Local | `localhost:8000/api` | `localhost:8080` | `hello@mindnest.one` (if RESEND_API_KEY set) |
+| Staging | `dev-api.mindnest.one/api` | `dev.mindnest.one` | `hello@mindnest.one` |
+| Production | `api.mindnest.one/api` | `mindnest.one` | `hello@mindnest.one` |
+
+### Flutter Web Routes
+
+- `/` - Landing page (marketing, App Store/Play Store buttons)
+- `/login` - Login screen
+- `/verify-email?token=XXX` - Email verification
+- `/forgot-password` - Password reset request
+- `/projects`, `/chat`, `/profile` - App screens (require auth)
+
+### CI/CD Pipeline (`.github/workflows/staging-deploy.yml`)
+
+The staging deployment runs on push to `main` branch:
+
+1. **test** - Python backend tests
+2. **build-flutter-web** - Build Flutter web with staging config
+3. **build-and-deploy** - Docker image + deploy to EC2
+
+Flutter web is deployed to `/var/www/mindnest/` on the EC2 server.
+
+### Shared Infrastructure with Termly
+
+MindNest staging shares EC2 server infrastructure with the [Termly](https://github.com/sprotasovitsky/termly-be) project.
+
+**Termly owns:**
+- `termly-postgres` - PostgreSQL 15 (shared database server)
+- `termly-nginx` - Nginx reverse proxy (port 80/443)
+- `termly-network` - Docker network connecting all services
+- SSL certificates via certbot
+
+**MindNest uses:**
+- `termly-postgres` → creates database `mindnest_staging` (separate from `termly_staging`)
+- `termly-nginx` → routes for `dev-api.mindnest.one` and `dev.mindnest.one`
+- `termly-network` → external network for container communication
+
+**MindNest owns:**
+- `mindnest-backend` - Python FastAPI (port 8000 internal)
+- `mindnest-neo4j` - Neo4j knowledge graph (port 7687 internal)
+
+**Docker Compose structure:**
+```yaml
+# backend-python/docker-compose.staging.yml
+networks:
+  default:
+    name: termly-network
+    external: true  # Uses Termly's network
+```
+
+**Nginx configs location on EC2:**
+- `/opt/termly/nginx/conf.d/dev-api.mindnest.one.conf` - Staging API
+- `/opt/termly/nginx/conf.d/dev.mindnest.one.conf` - Staging Web
+- `/opt/termly/nginx/conf.d/mindnest.one.conf` - Production Web (manual deploy)
+
+**Nginx config features:**
+- `.well-known/` with `Content-Type: application/json` for Apple/Android deep links
+- `.well-known/change-password` → `/forgot-password` redirect (W3C standard for password managers)
+- SPA routing: `try_files $uri $uri/ /index.html` for client-side routes
+
+**Why "termly" references in MindNest deployment:**
+- `termly-postgres` - shared PostgreSQL container name
+- `termly-nginx` - shared Nginx container name
+- `/opt/termly/` - shared deployment directory on EC2
+- `termly-network` - shared Docker network
+
+This is intentional infrastructure sharing, not a naming error.
+
+### Deep Links
+
+#### iOS Universal Links
+
+**File:** `mobile/web/.well-known/apple-app-site-association`
+
+```json
+{
+  "applinks": {
+    "apps": [],
+    "details": [{
+      "appIDs": [
+        "493Z7C2V3J.com.mindnest.app",
+        "493Z7C2V3J.com.mindnest.app.staging",
+        "493Z7C2V3J.com.mindnest.app.dev"
+      ],
+      "paths": ["/verify-email", "/verify-email?*"]
+    }]
+  }
+}
+```
+
+**Apple Team ID:** `493Z7C2V3J`
+
+**Requirements:**
+- Associated Domains capability enabled in Apple Developer Portal
+- Entitlements in `project.yml` with `applinks:mindnest.one` and `applinks:dev.mindnest.one`
+
+#### Android App Links
+
+**File:** `mobile/web/.well-known/assetlinks.json`
+
+Contains SHA256 fingerprints for all app flavors (debug + release).
+
+**AndroidManifest.xml** has HTTPS intent-filter for `/verify-email` path.
+
+**SHA256 Fingerprints:**
+- Release: `D4:97:32:11:78:12:69:5F:9A:2E:9B:5D:2B:82:FC:A1:92:59:E8:1A:7F:43:DC:49:27:DD:96:AA:73:B4:8D:19`
+- Debug: `C2:9D:28:3A:0B:59:29:9D:33:38:A8:7E:AB:1E:D4:B3:C7:08:16:19:F1:2D:3A:7F:5A:71:8D:A9:C1:A1:95:9D`
+
+### Email Verification Flow
+
+```
+User registers → Backend sends email (from hello@mindnest.one)
+Email link: https://mindnest.one/verify-email?token=XXX
+
+User clicks link:
+├── Desktop Browser → Flutter Web → EmailVerifiedScreen
+├── iOS (app installed) → Universal Links → Native App
+├── iOS (no app) → Safari → Flutter Web
+├── Android (app installed) → App Links → Native App
+└── Android (no app) → Chrome → Flutter Web
+```
+
+All paths use the same Flutter code (`EmailVerifiedScreen`) which calls `POST /api/auth/verify-email`.
+
+### Flutter Web Notes
+
+- **URL Strategy**: Uses `usePathUrlStrategy()` for path-based routing (`/path` instead of `/#/path`)
+- **Secure Storage**: `FlutterSecureStorage` requires secure context (HTTPS or localhost)
+- **Local Development**: Always use `localhost` for web testing, not IP address
+
+### Testing Deep Links
+
+```bash
+# iOS Simulator
+xcrun simctl openurl booted "https://dev.mindnest.one/verify-email?token=test"
+
+# Android Emulator
+adb shell am start -a android.intent.action.VIEW -d "https://dev.mindnest.one/verify-email?token=test"
+```
