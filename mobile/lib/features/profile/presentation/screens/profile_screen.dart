@@ -6,11 +6,25 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/providers/auth_provider.dart';
 import '../../../../shared/widgets/email_verification_banner.dart';
 
-class ProfileScreen extends ConsumerWidget {
+class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Refresh user info to get updated email_verified status
+    Future.microtask(() {
+      ref.read(authProvider.notifier).refreshUserInfo();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
     final loginMethod = authState.loginMethod;
 
@@ -110,7 +124,7 @@ class ProfileScreen extends ConsumerWidget {
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton.icon(
-                        onPressed: () => _showLogoutDialog(context, ref),
+                        onPressed: () => _showLogoutDialog(context),
                         icon: const Icon(Icons.logout),
                         label: const Padding(
                           padding: EdgeInsets.symmetric(vertical: 12),
@@ -126,7 +140,6 @@ class ProfileScreen extends ConsumerWidget {
                       child: TextButton(
                         onPressed: () => _showDeleteAccountDialog(
                           context,
-                          ref,
                           hasPassword: loginMethod == 'password',
                         ),
                         style: TextButton.styleFrom(
@@ -145,7 +158,7 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _showLogoutDialog(BuildContext context, WidgetRef ref) async {
+  Future<void> _showLogoutDialog(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -171,8 +184,7 @@ class ProfileScreen extends ConsumerWidget {
   }
 
   Future<void> _showDeleteAccountDialog(
-    BuildContext context,
-    WidgetRef ref, {
+    BuildContext context, {
     required bool hasPassword,
   }) async {
     if (hasPassword) {

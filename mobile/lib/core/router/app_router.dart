@@ -26,6 +26,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final isLoading = authState.isLoading;
       final isAuthenticated = authState.isAuthenticated;
       final location = state.matchedLocation;
+
       final isOnLoginPage = location == '/login';
       final isOnLandingPage = location == '/';
 
