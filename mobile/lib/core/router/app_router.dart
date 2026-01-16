@@ -18,7 +18,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   final authNotifier = _AuthRefreshNotifier(ref);
 
   return GoRouter(
-    initialLocation: '/projects',
+    // Web: start at landing page, Mobile: start at projects (will redirect to login if needed)
+    initialLocation: kIsWeb ? '/' : '/projects',
     refreshListenable: authNotifier,
     redirect: (context, state) {
       final authState = authNotifier.authState;
@@ -26,6 +27,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final isAuthenticated = authState.isAuthenticated;
       final location = state.matchedLocation;
       final isOnLoginPage = location == '/login';
+      final isOnLandingPage = location == '/';
 
       // Public routes that don't require authentication
       final isPublicRoute = location == '/' ||
@@ -37,13 +39,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // Still loading auth state
       if (isLoading) return null;
 
+      // Mobile: redirect from landing to login (landing is for web only)
+      if (!kIsWeb && isOnLandingPage && !isAuthenticated) {
+        return '/login';
+      }
+
       // Not authenticated and not on public route -> redirect to login
       if (!isAuthenticated && !isPublicRoute) {
         return '/login';
       }
 
-      // Authenticated and on login page -> redirect to projects
-      if (isAuthenticated && isOnLoginPage) {
+      // Authenticated and on login/landing page -> redirect to projects
+      if (isAuthenticated && (isOnLoginPage || isOnLandingPage)) {
         return '/projects';
       }
 
