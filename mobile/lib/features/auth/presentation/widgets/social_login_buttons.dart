@@ -44,7 +44,7 @@ class _SocialLoginButtonsState extends ConsumerState<SocialLoginButtons> {
     try {
       debugPrint('Google: Creating GoogleSignIn instance...');
       final googleSignIn = GoogleSignIn(
-        scopes: ['email', 'profile'],
+        scopes: ['email', 'profile', 'openid'],
       );
 
       debugPrint('Google: Calling signIn()...');
