@@ -60,6 +60,7 @@ jobs:
         with:
           name: flutter-web-build
           path: mobile/build/web
+          include-hidden-files: true
           retention-days: 1
 
   build-and-deploy:
