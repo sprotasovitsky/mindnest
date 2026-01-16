@@ -189,10 +189,10 @@ jobs:
             cp nginx/dev-api.mindnest.one.conf /opt/termly/nginx/conf.d/
             cp nginx/dev.mindnest.one.conf /opt/termly/nginx/conf.d/
 
-            # Deploy Flutter web app
+            # Deploy Flutter web app (including hidden files like .well-known)
             mkdir -p /var/www/mindnest
-            rm -rf /var/www/mindnest/*
-            cp -r flutter-web-build/* /var/www/mindnest/
+            rm -rf /var/www/mindnest/{*,.*} 2>/dev/null || true
+            cp -r flutter-web-build/. /var/www/mindnest/
 
             docker exec termly-nginx nginx -s reload
 
