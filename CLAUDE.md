@@ -485,6 +485,13 @@ docker exec mindnest-neo4j cypher-shell -u neo4j -p mindnest123 \
 - **Credentials**: `mindnest:mindnest` (user:password)
 - **Database**: `mindnest`
 
+### Datetime Handling
+
+All datetime columns use timezone-aware UTC:
+- **Database**: `TIMESTAMP WITH TIME ZONE` (PostgreSQL)
+- **Models**: `DateTime(timezone=True)` with `utc_now()` default
+- **Python code**: `datetime.now(timezone.utc)` (not deprecated `datetime.utcnow()`)
+
 ### Database Migrations (Alembic)
 
 ```bash
@@ -944,8 +951,14 @@ networks:
 ```
 
 **Nginx configs location on EC2:**
-- `/opt/termly/nginx/conf.d/dev-api.mindnest.one.conf`
-- `/opt/termly/nginx/conf.d/dev.mindnest.one.conf`
+- `/opt/termly/nginx/conf.d/dev-api.mindnest.one.conf` - Staging API
+- `/opt/termly/nginx/conf.d/dev.mindnest.one.conf` - Staging Web
+- `/opt/termly/nginx/conf.d/mindnest.one.conf` - Production Web (manual deploy)
+
+**Nginx config features:**
+- `.well-known/` with `Content-Type: application/json` for Apple/Android deep links
+- `.well-known/change-password` → `/forgot-password` redirect (W3C standard for password managers)
+- SPA routing: `try_files $uri $uri/ /index.html` for client-side routes
 
 **Why "termly" references in MindNest deployment:**
 - `termly-postgres` - shared PostgreSQL container name
@@ -1010,6 +1023,12 @@ User clicks link:
 ```
 
 All paths use the same Flutter code (`EmailVerifiedScreen`) which calls `POST /api/auth/verify-email`.
+
+### Flutter Web Notes
+
+- **URL Strategy**: Uses `usePathUrlStrategy()` for path-based routing (`/path` instead of `/#/path`)
+- **Secure Storage**: `FlutterSecureStorage` requires secure context (HTTPS or localhost)
+- **Local Development**: Always use `localhost` for web testing, not IP address
 
 ### Testing Deep Links
 
