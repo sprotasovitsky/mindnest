@@ -80,6 +80,7 @@ class Settings(BaseSettings):
     # Social login - separate client IDs for each platform
     google_ios_client_id: str = ""      # iOS client ID
     google_android_client_id: str = ""  # Android client ID
+    google_web_client_id: str = ""      # Web client ID
     apple_client_id: str = ""           # Bundle ID (com.mindnest.app.dev/staging/prod)
 
     def get_google_client_ids(self) -> list[str]:
@@ -89,6 +90,8 @@ class Settings(BaseSettings):
             ids.append(self.google_ios_client_id)
         if self.google_android_client_id:
             ids.append(self.google_android_client_id)
+        if self.google_web_client_id:
+            ids.append(self.google_web_client_id)
         return ids
 
     def get_apple_client_ids(self) -> list[str]:
