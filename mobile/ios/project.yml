@@ -55,6 +55,7 @@ targets:
         CFBundleShortVersionString: $(FLUTTER_BUILD_NAME)
         CFBundleVersion: $(FLUTTER_BUILD_NUMBER)
         LSRequiresIPhoneOS: true
+        ITSAppUsesNonExemptEncryption: false
         UIApplicationSupportsIndirectInputEvents: true
         UILaunchStoryboardName: LaunchScreen
         UIMainStoryboardFile: Main
