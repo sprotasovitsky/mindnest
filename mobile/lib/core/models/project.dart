@@ -4,9 +4,8 @@ part 'project.freezed.dart';
 part 'project.g.dart';
 
 @freezed
-class Project with _$Project {
+sealed class Project with _$Project {
   const Project._();
-
   const factory Project({
     required String id,
     required String name,

@@ -10,7 +10,7 @@ part 'project_provider.freezed.dart';
 part 'project_provider.g.dart';
 
 @freezed
-class ProjectState with _$ProjectState {
+sealed class ProjectState with _$ProjectState {
   const factory ProjectState({
     @Default(true) bool isLoading,
     @Default([]) List<Project> projects,

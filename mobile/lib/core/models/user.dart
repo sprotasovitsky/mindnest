@@ -4,7 +4,7 @@ part 'user.freezed.dart';
 part 'user.g.dart';
 
 @freezed
-class User with _$User {
+sealed class User with _$User {
   const factory User({
     required String id,
     required String email,
@@ -18,7 +18,7 @@ class User with _$User {
 }
 
 @freezed
-class AuthResponse with _$AuthResponse {
+sealed class AuthResponse with _$AuthResponse {
   const factory AuthResponse({
     @JsonKey(name: 'access_token') required String accessToken,
     @JsonKey(name: 'refresh_token') required String refreshToken,
@@ -35,7 +35,7 @@ class AuthResponse with _$AuthResponse {
 }
 
 @freezed
-class RefreshResponse with _$RefreshResponse {
+sealed class RefreshResponse with _$RefreshResponse {
   const factory RefreshResponse({
     @JsonKey(name: 'access_token') required String accessToken,
     @JsonKey(name: 'token_type') @Default('bearer') String tokenType,

@@ -13,7 +13,7 @@ part 'chat_provider.freezed.dart';
 part 'chat_provider.g.dart';
 
 @freezed
-class ChatState with _$ChatState {
+sealed class ChatState with _$ChatState {
   const factory ChatState({
     @Default([]) List<ChatMessage> messages,
     @Default(false) bool isLoading,

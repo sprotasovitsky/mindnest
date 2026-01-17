@@ -11,7 +11,7 @@ part 'auth_provider.freezed.dart';
 part 'auth_provider.g.dart';
 
 @freezed
-class AuthState with _$AuthState {
+sealed class AuthState with _$AuthState {
   const factory AuthState({
     @Default(true) bool isLoading,
     @Default(false) bool isAuthenticated,

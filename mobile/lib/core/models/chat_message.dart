@@ -4,7 +4,7 @@ part 'chat_message.freezed.dart';
 part 'chat_message.g.dart';
 
 @freezed
-class ChatMessage with _$ChatMessage {
+sealed class ChatMessage with _$ChatMessage {
   const factory ChatMessage({
     required String content,
     required bool isUser,
@@ -42,7 +42,7 @@ extension ChatMessageFactory on ChatMessage {
 }
 
 @freezed
-class ChatResponse with _$ChatResponse {
+sealed class ChatResponse with _$ChatResponse {
   const factory ChatResponse({
     required String reply,
     double? confidence,
@@ -54,7 +54,7 @@ class ChatResponse with _$ChatResponse {
 }
 
 @freezed
-class ChatHistoryResponse with _$ChatHistoryResponse {
+sealed class ChatHistoryResponse with _$ChatHistoryResponse {
   const factory ChatHistoryResponse({
     @Default([]) List<ChatHistoryItem> messages,
   }) = _ChatHistoryResponse;
@@ -64,7 +64,7 @@ class ChatHistoryResponse with _$ChatHistoryResponse {
 }
 
 @freezed
-class ChatHistoryItem with _$ChatHistoryItem {
+sealed class ChatHistoryItem with _$ChatHistoryItem {
   const factory ChatHistoryItem({
     @JsonKey(name: 'user_message') String? userMessage,
     @JsonKey(name: 'assistant_reply') String? assistantReply,

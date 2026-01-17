@@ -1,5 +1,5 @@
-// coverage:ignore-file
 // GENERATED CODE - DO NOT MODIFY BY HAND
+// coverage:ignore-file
 // ignore_for_file: type=lint
 // ignore_for_file: unused_element, deprecated_member_use, deprecated_member_use_from_same_package, use_function_type_syntax_for_parameters, unnecessary_const, avoid_init_to_null, invalid_override_different_default_values_named, prefer_expression_function_bodies, annotate_overrides, invalid_annotation_target, unnecessary_question_mark
 
@@ -9,265 +9,280 @@ part of 'chat_provider.dart';
 // FreezedGenerator
 // **************************************************************************
 
+// dart format off
 T _$identity<T>(T value) => value;
-
-final _privateConstructorUsedError = UnsupportedError(
-    'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models');
-
 /// @nodoc
 mixin _$ChatState {
-  List<ChatMessage> get messages => throw _privateConstructorUsedError;
-  bool get isLoading => throw _privateConstructorUsedError;
-  bool get isLoadingHistory => throw _privateConstructorUsedError;
-  String? get lastProjectId => throw _privateConstructorUsedError;
-  String? get error => throw _privateConstructorUsedError;
 
-  /// Token limit error (for unverified users who exceeded their limit)
-  TokenLimitError? get tokenLimitError => throw _privateConstructorUsedError;
+ List<ChatMessage> get messages; bool get isLoading; bool get isLoadingHistory; String? get lastProjectId; String? get error;/// Token limit error (for unverified users who exceeded their limit)
+ TokenLimitError? get tokenLimitError;
+/// Create a copy of ChatState
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$ChatStateCopyWith<ChatState> get copyWith => _$ChatStateCopyWithImpl<ChatState>(this as ChatState, _$identity);
 
-  /// Create a copy of ChatState
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  $ChatStateCopyWith<ChatState> get copyWith =>
-      throw _privateConstructorUsedError;
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ChatState&&const DeepCollectionEquality().equals(other.messages, messages)&&(identical(other.isLoading, isLoading) || other.isLoading == isLoading)&&(identical(other.isLoadingHistory, isLoadingHistory) || other.isLoadingHistory == isLoadingHistory)&&(identical(other.lastProjectId, lastProjectId) || other.lastProjectId == lastProjectId)&&(identical(other.error, error) || other.error == error)&&(identical(other.tokenLimitError, tokenLimitError) || other.tokenLimitError == tokenLimitError));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(messages),isLoading,isLoadingHistory,lastProjectId,error,tokenLimitError);
+
+@override
+String toString() {
+  return 'ChatState(messages: $messages, isLoading: $isLoading, isLoadingHistory: $isLoadingHistory, lastProjectId: $lastProjectId, error: $error, tokenLimitError: $tokenLimitError)';
+}
+
+
 }
 
 /// @nodoc
-abstract class $ChatStateCopyWith<$Res> {
-  factory $ChatStateCopyWith(ChatState value, $Res Function(ChatState) then) =
-      _$ChatStateCopyWithImpl<$Res, ChatState>;
-  @useResult
-  $Res call(
-      {List<ChatMessage> messages,
-      bool isLoading,
-      bool isLoadingHistory,
-      String? lastProjectId,
-      String? error,
-      TokenLimitError? tokenLimitError});
-}
+abstract mixin class $ChatStateCopyWith<$Res>  {
+  factory $ChatStateCopyWith(ChatState value, $Res Function(ChatState) _then) = _$ChatStateCopyWithImpl;
+@useResult
+$Res call({
+ List<ChatMessage> messages, bool isLoading, bool isLoadingHistory, String? lastProjectId, String? error, TokenLimitError? tokenLimitError
+});
 
+
+
+
+}
 /// @nodoc
-class _$ChatStateCopyWithImpl<$Res, $Val extends ChatState>
+class _$ChatStateCopyWithImpl<$Res>
     implements $ChatStateCopyWith<$Res> {
-  _$ChatStateCopyWithImpl(this._value, this._then);
+  _$ChatStateCopyWithImpl(this._self, this._then);
 
-  // ignore: unused_field
-  final $Val _value;
-  // ignore: unused_field
-  final $Res Function($Val) _then;
+  final ChatState _self;
+  final $Res Function(ChatState) _then;
 
-  /// Create a copy of ChatState
-  /// with the given fields replaced by the non-null parameter values.
-  @pragma('vm:prefer-inline')
-  @override
-  $Res call({
-    Object? messages = null,
-    Object? isLoading = null,
-    Object? isLoadingHistory = null,
-    Object? lastProjectId = freezed,
-    Object? error = freezed,
-    Object? tokenLimitError = freezed,
-  }) {
-    return _then(_value.copyWith(
-      messages: null == messages
-          ? _value.messages
-          : messages // ignore: cast_nullable_to_non_nullable
-              as List<ChatMessage>,
-      isLoading: null == isLoading
-          ? _value.isLoading
-          : isLoading // ignore: cast_nullable_to_non_nullable
-              as bool,
-      isLoadingHistory: null == isLoadingHistory
-          ? _value.isLoadingHistory
-          : isLoadingHistory // ignore: cast_nullable_to_non_nullable
-              as bool,
-      lastProjectId: freezed == lastProjectId
-          ? _value.lastProjectId
-          : lastProjectId // ignore: cast_nullable_to_non_nullable
-              as String?,
-      error: freezed == error
-          ? _value.error
-          : error // ignore: cast_nullable_to_non_nullable
-              as String?,
-      tokenLimitError: freezed == tokenLimitError
-          ? _value.tokenLimitError
-          : tokenLimitError // ignore: cast_nullable_to_non_nullable
-              as TokenLimitError?,
-    ) as $Val);
-  }
+/// Create a copy of ChatState
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? messages = null,Object? isLoading = null,Object? isLoadingHistory = null,Object? lastProjectId = freezed,Object? error = freezed,Object? tokenLimitError = freezed,}) {
+  return _then(_self.copyWith(
+messages: null == messages ? _self.messages : messages // ignore: cast_nullable_to_non_nullable
+as List<ChatMessage>,isLoading: null == isLoading ? _self.isLoading : isLoading // ignore: cast_nullable_to_non_nullable
+as bool,isLoadingHistory: null == isLoadingHistory ? _self.isLoadingHistory : isLoadingHistory // ignore: cast_nullable_to_non_nullable
+as bool,lastProjectId: freezed == lastProjectId ? _self.lastProjectId : lastProjectId // ignore: cast_nullable_to_non_nullable
+as String?,error: freezed == error ? _self.error : error // ignore: cast_nullable_to_non_nullable
+as String?,tokenLimitError: freezed == tokenLimitError ? _self.tokenLimitError : tokenLimitError // ignore: cast_nullable_to_non_nullable
+as TokenLimitError?,
+  ));
+}
+
+}
+
+
+/// Adds pattern-matching-related methods to [ChatState].
+extension ChatStatePatterns on ChatState {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _ChatState value)?  $default,{required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case _ChatState() when $default != null:
+return $default(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _ChatState value)  $default,){
+final _that = this;
+switch (_that) {
+case _ChatState():
+return $default(_that);}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _ChatState value)?  $default,){
+final _that = this;
+switch (_that) {
+case _ChatState() when $default != null:
+return $default(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( List<ChatMessage> messages,  bool isLoading,  bool isLoadingHistory,  String? lastProjectId,  String? error,  TokenLimitError? tokenLimitError)?  $default,{required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case _ChatState() when $default != null:
+return $default(_that.messages,_that.isLoading,_that.isLoadingHistory,_that.lastProjectId,_that.error,_that.tokenLimitError);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( List<ChatMessage> messages,  bool isLoading,  bool isLoadingHistory,  String? lastProjectId,  String? error,  TokenLimitError? tokenLimitError)  $default,) {final _that = this;
+switch (_that) {
+case _ChatState():
+return $default(_that.messages,_that.isLoading,_that.isLoadingHistory,_that.lastProjectId,_that.error,_that.tokenLimitError);}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( List<ChatMessage> messages,  bool isLoading,  bool isLoadingHistory,  String? lastProjectId,  String? error,  TokenLimitError? tokenLimitError)?  $default,) {final _that = this;
+switch (_that) {
+case _ChatState() when $default != null:
+return $default(_that.messages,_that.isLoading,_that.isLoadingHistory,_that.lastProjectId,_that.error,_that.tokenLimitError);case _:
+  return null;
+
+}
+}
+
 }
 
 /// @nodoc
-abstract class _$$ChatStateImplCopyWith<$Res>
-    implements $ChatStateCopyWith<$Res> {
-  factory _$$ChatStateImplCopyWith(
-          _$ChatStateImpl value, $Res Function(_$ChatStateImpl) then) =
-      __$$ChatStateImplCopyWithImpl<$Res>;
-  @override
-  @useResult
-  $Res call(
-      {List<ChatMessage> messages,
-      bool isLoading,
-      bool isLoadingHistory,
-      String? lastProjectId,
-      String? error,
-      TokenLimitError? tokenLimitError});
+
+
+class _ChatState implements ChatState {
+  const _ChatState({final  List<ChatMessage> messages = const [], this.isLoading = false, this.isLoadingHistory = false, this.lastProjectId, this.error, this.tokenLimitError}): _messages = messages;
+  
+
+ final  List<ChatMessage> _messages;
+@override@JsonKey() List<ChatMessage> get messages {
+  if (_messages is EqualUnmodifiableListView) return _messages;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableListView(_messages);
+}
+
+@override@JsonKey() final  bool isLoading;
+@override@JsonKey() final  bool isLoadingHistory;
+@override final  String? lastProjectId;
+@override final  String? error;
+/// Token limit error (for unverified users who exceeded their limit)
+@override final  TokenLimitError? tokenLimitError;
+
+/// Create a copy of ChatState
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$ChatStateCopyWith<_ChatState> get copyWith => __$ChatStateCopyWithImpl<_ChatState>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ChatState&&const DeepCollectionEquality().equals(other._messages, _messages)&&(identical(other.isLoading, isLoading) || other.isLoading == isLoading)&&(identical(other.isLoadingHistory, isLoadingHistory) || other.isLoadingHistory == isLoadingHistory)&&(identical(other.lastProjectId, lastProjectId) || other.lastProjectId == lastProjectId)&&(identical(other.error, error) || other.error == error)&&(identical(other.tokenLimitError, tokenLimitError) || other.tokenLimitError == tokenLimitError));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(_messages),isLoading,isLoadingHistory,lastProjectId,error,tokenLimitError);
+
+@override
+String toString() {
+  return 'ChatState(messages: $messages, isLoading: $isLoading, isLoadingHistory: $isLoadingHistory, lastProjectId: $lastProjectId, error: $error, tokenLimitError: $tokenLimitError)';
+}
+
+
 }
 
 /// @nodoc
-class __$$ChatStateImplCopyWithImpl<$Res>
-    extends _$ChatStateCopyWithImpl<$Res, _$ChatStateImpl>
-    implements _$$ChatStateImplCopyWith<$Res> {
-  __$$ChatStateImplCopyWithImpl(
-      _$ChatStateImpl _value, $Res Function(_$ChatStateImpl) _then)
-      : super(_value, _then);
+abstract mixin class _$ChatStateCopyWith<$Res> implements $ChatStateCopyWith<$Res> {
+  factory _$ChatStateCopyWith(_ChatState value, $Res Function(_ChatState) _then) = __$ChatStateCopyWithImpl;
+@override @useResult
+$Res call({
+ List<ChatMessage> messages, bool isLoading, bool isLoadingHistory, String? lastProjectId, String? error, TokenLimitError? tokenLimitError
+});
 
-  /// Create a copy of ChatState
-  /// with the given fields replaced by the non-null parameter values.
-  @pragma('vm:prefer-inline')
-  @override
-  $Res call({
-    Object? messages = null,
-    Object? isLoading = null,
-    Object? isLoadingHistory = null,
-    Object? lastProjectId = freezed,
-    Object? error = freezed,
-    Object? tokenLimitError = freezed,
-  }) {
-    return _then(_$ChatStateImpl(
-      messages: null == messages
-          ? _value._messages
-          : messages // ignore: cast_nullable_to_non_nullable
-              as List<ChatMessage>,
-      isLoading: null == isLoading
-          ? _value.isLoading
-          : isLoading // ignore: cast_nullable_to_non_nullable
-              as bool,
-      isLoadingHistory: null == isLoadingHistory
-          ? _value.isLoadingHistory
-          : isLoadingHistory // ignore: cast_nullable_to_non_nullable
-              as bool,
-      lastProjectId: freezed == lastProjectId
-          ? _value.lastProjectId
-          : lastProjectId // ignore: cast_nullable_to_non_nullable
-              as String?,
-      error: freezed == error
-          ? _value.error
-          : error // ignore: cast_nullable_to_non_nullable
-              as String?,
-      tokenLimitError: freezed == tokenLimitError
-          ? _value.tokenLimitError
-          : tokenLimitError // ignore: cast_nullable_to_non_nullable
-              as TokenLimitError?,
-    ));
-  }
+
+
+
 }
-
 /// @nodoc
+class __$ChatStateCopyWithImpl<$Res>
+    implements _$ChatStateCopyWith<$Res> {
+  __$ChatStateCopyWithImpl(this._self, this._then);
 
-class _$ChatStateImpl implements _ChatState {
-  const _$ChatStateImpl(
-      {final List<ChatMessage> messages = const [],
-      this.isLoading = false,
-      this.isLoadingHistory = false,
-      this.lastProjectId,
-      this.error,
-      this.tokenLimitError})
-      : _messages = messages;
+  final _ChatState _self;
+  final $Res Function(_ChatState) _then;
 
-  final List<ChatMessage> _messages;
-  @override
-  @JsonKey()
-  List<ChatMessage> get messages {
-    if (_messages is EqualUnmodifiableListView) return _messages;
-    // ignore: implicit_dynamic_type
-    return EqualUnmodifiableListView(_messages);
-  }
-
-  @override
-  @JsonKey()
-  final bool isLoading;
-  @override
-  @JsonKey()
-  final bool isLoadingHistory;
-  @override
-  final String? lastProjectId;
-  @override
-  final String? error;
-
-  /// Token limit error (for unverified users who exceeded their limit)
-  @override
-  final TokenLimitError? tokenLimitError;
-
-  @override
-  String toString() {
-    return 'ChatState(messages: $messages, isLoading: $isLoading, isLoadingHistory: $isLoadingHistory, lastProjectId: $lastProjectId, error: $error, tokenLimitError: $tokenLimitError)';
-  }
-
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        (other.runtimeType == runtimeType &&
-            other is _$ChatStateImpl &&
-            const DeepCollectionEquality().equals(other._messages, _messages) &&
-            (identical(other.isLoading, isLoading) ||
-                other.isLoading == isLoading) &&
-            (identical(other.isLoadingHistory, isLoadingHistory) ||
-                other.isLoadingHistory == isLoadingHistory) &&
-            (identical(other.lastProjectId, lastProjectId) ||
-                other.lastProjectId == lastProjectId) &&
-            (identical(other.error, error) || other.error == error) &&
-            (identical(other.tokenLimitError, tokenLimitError) ||
-                other.tokenLimitError == tokenLimitError));
-  }
-
-  @override
-  int get hashCode => Object.hash(
-      runtimeType,
-      const DeepCollectionEquality().hash(_messages),
-      isLoading,
-      isLoadingHistory,
-      lastProjectId,
-      error,
-      tokenLimitError);
-
-  /// Create a copy of ChatState
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @override
-  @pragma('vm:prefer-inline')
-  _$$ChatStateImplCopyWith<_$ChatStateImpl> get copyWith =>
-      __$$ChatStateImplCopyWithImpl<_$ChatStateImpl>(this, _$identity);
+/// Create a copy of ChatState
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? messages = null,Object? isLoading = null,Object? isLoadingHistory = null,Object? lastProjectId = freezed,Object? error = freezed,Object? tokenLimitError = freezed,}) {
+  return _then(_ChatState(
+messages: null == messages ? _self._messages : messages // ignore: cast_nullable_to_non_nullable
+as List<ChatMessage>,isLoading: null == isLoading ? _self.isLoading : isLoading // ignore: cast_nullable_to_non_nullable
+as bool,isLoadingHistory: null == isLoadingHistory ? _self.isLoadingHistory : isLoadingHistory // ignore: cast_nullable_to_non_nullable
+as bool,lastProjectId: freezed == lastProjectId ? _self.lastProjectId : lastProjectId // ignore: cast_nullable_to_non_nullable
+as String?,error: freezed == error ? _self.error : error // ignore: cast_nullable_to_non_nullable
+as String?,tokenLimitError: freezed == tokenLimitError ? _self.tokenLimitError : tokenLimitError // ignore: cast_nullable_to_non_nullable
+as TokenLimitError?,
+  ));
 }
 
-abstract class _ChatState implements ChatState {
-  const factory _ChatState(
-      {final List<ChatMessage> messages,
-      final bool isLoading,
-      final bool isLoadingHistory,
-      final String? lastProjectId,
-      final String? error,
-      final TokenLimitError? tokenLimitError}) = _$ChatStateImpl;
 
-  @override
-  List<ChatMessage> get messages;
-  @override
-  bool get isLoading;
-  @override
-  bool get isLoadingHistory;
-  @override
-  String? get lastProjectId;
-  @override
-  String? get error;
-
-  /// Token limit error (for unverified users who exceeded their limit)
-  @override
-  TokenLimitError? get tokenLimitError;
-
-  /// Create a copy of ChatState
-  /// with the given fields replaced by the non-null parameter values.
-  @override
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  _$$ChatStateImplCopyWith<_$ChatStateImpl> get copyWith =>
-      throw _privateConstructorUsedError;
 }
+
+// dart format on

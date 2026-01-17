@@ -9,7 +9,7 @@ part 'members_provider.freezed.dart';
 part 'members_provider.g.dart';
 
 @freezed
-class MembersState with _$MembersState {
+sealed class MembersState with _$MembersState {
   const factory MembersState({
     @Default(false) bool isLoading,
     @Default([]) List<Member> members,

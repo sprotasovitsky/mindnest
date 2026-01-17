@@ -6,23 +6,52 @@ part of 'project_repository.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$projectRepositoryHash() => r'7a37c4df724a5f4176c7e67273c3e64700918fef';
+// GENERATED CODE - DO NOT MODIFY BY HAND
+// ignore_for_file: type=lint, type=warning
 
-/// See also [projectRepository].
 @ProviderFor(projectRepository)
-final projectRepositoryProvider =
-    AutoDisposeProvider<ProjectRepository>.internal(
-  projectRepository,
-  name: r'projectRepositoryProvider',
-  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
-      ? null
-      : _$projectRepositoryHash,
-  dependencies: null,
-  allTransitiveDependencies: null,
-);
+const projectRepositoryProvider = ProjectRepositoryProvider._();
 
-@Deprecated('Will be removed in 3.0. Use Ref instead')
-// ignore: unused_element
-typedef ProjectRepositoryRef = AutoDisposeProviderRef<ProjectRepository>;
-// ignore_for_file: type=lint
-// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package
+final class ProjectRepositoryProvider
+    extends
+        $FunctionalProvider<
+          ProjectRepository,
+          ProjectRepository,
+          ProjectRepository
+        >
+    with $Provider<ProjectRepository> {
+  const ProjectRepositoryProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'projectRepositoryProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$projectRepositoryHash();
+
+  @$internal
+  @override
+  $ProviderElement<ProjectRepository> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  ProjectRepository create(Ref ref) {
+    return projectRepository(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(ProjectRepository value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<ProjectRepository>(value),
+    );
+  }
+}
+
+String _$projectRepositoryHash() => r'7a37c4df724a5f4176c7e67273c3e64700918fef';
