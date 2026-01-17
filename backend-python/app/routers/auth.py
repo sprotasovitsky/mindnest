@@ -157,6 +157,11 @@ class UserInfoResponse(BaseModel):
     token_limit: int  # 0 if verified (unlimited)
 
 
+class UpdateProfileRequest(BaseModel):
+    """Update user profile request."""
+    name: str = Field(..., min_length=2, max_length=100)
+
+
 class VerifyEmailRequest(BaseModel):
     """Email verification request."""
     token: str = Field(..., min_length=32, max_length=64)
@@ -563,6 +568,48 @@ async def get_current_user_info(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
         )
+
+    settings = get_settings()
+    return UserInfoResponse(
+        id=user.id,
+        email=user.email,
+        name=user.name,
+        email_verified=user.email_verified,
+        tokens_used=user.tokens_used,
+        token_limit=0 if user.email_verified else settings.unverified_token_limit,
+    )
+
+
+@router.patch("/me", response_model=UserInfoResponse)
+async def update_profile(
+    request: Request,
+    data: UpdateProfileRequest,
+    db: AsyncSession = Depends(get_db),
+) -> UserInfoResponse:
+    """Update current user profile (name)."""
+    # Extract token from Authorization header
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+
+    token = auth_header.split(" ", 1)[1]
+    user = await get_user_from_token_db(db, token)
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+        )
+
+    # Update user name
+    user.name = data.name.strip()
+    await db.commit()
+    await db.refresh(user)
+
+    logger.info(f"Profile updated for user {user.id}")
 
     settings = get_settings()
     return UserInfoResponse(

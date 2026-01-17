@@ -195,6 +195,22 @@ class Auth extends _$Auth {
     }
   }
 
+  /// Update user name
+  Future<bool> updateName(String name) async {
+    try {
+      final repository = ref.read(authRepositoryProvider);
+      final user = await repository.updateProfile(name: name);
+
+      state = state.copyWith(name: user.name);
+
+      if (kDebugMode) debugPrint('Auth: Name updated to ${user.name}');
+      return true;
+    } catch (e) {
+      if (kDebugMode) debugPrint('Auth: Failed to update name: $e');
+      return false;
+    }
+  }
+
   Future<void> logout() async {
     if (kDebugMode) debugPrint('Auth: Logging out...');
 

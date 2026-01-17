@@ -24,6 +24,7 @@ abstract class AuthRepository {
   Future<void> verifyEmail(String token);
   Future<void> resendVerification(String email);
   Future<User> getCurrentUser();
+  Future<User> updateProfile({required String name});
 
   // Password reset
   Future<void> requestPasswordReset(String email);
@@ -194,6 +195,19 @@ class AuthRepositoryImpl implements AuthRepository {
       final user = User.fromJson(response);
       // Update local email verified status
       await _authService.setEmailVerified(user.emailVerified);
+      return user;
+    } on DioException catch (e) {
+      throw appErrorFromDioException(e);
+    }
+  }
+
+  @override
+  Future<User> updateProfile({required String name}) async {
+    try {
+      final response = await _apiClient.updateProfile(name: name);
+      final user = User.fromJson(response);
+      // Update local user data
+      await _authService.updateUserName(name);
       return user;
     } on DioException catch (e) {
       throw appErrorFromDioException(e);

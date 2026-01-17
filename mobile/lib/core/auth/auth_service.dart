@@ -83,6 +83,10 @@ class AuthService {
     await _storage.write(key: _emailVerifiedKey, value: verified.toString());
   }
 
+  Future<void> updateUserName(String name) async {
+    await _storage.write(key: AppConfig.userNameKey, value: name);
+  }
+
   /// Get the method used to log in (google, apple, password)
   Future<String?> getLoginMethod() async {
     return await _storage.read(key: _loginMethodKey);

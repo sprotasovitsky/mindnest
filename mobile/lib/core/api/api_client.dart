@@ -208,6 +208,15 @@ class ApiClient {
     return response.data as Map<String, dynamic>;
   }
 
+  // Update user profile
+  Future<Map<String, dynamic>> updateProfile({required String name}) async {
+    final response = await _dio.patch(
+      '/auth/me',
+      data: {'name': name},
+    );
+    return response.data as Map<String, dynamic>;
+  }
+
   // Password reset endpoints
   Future<Map<String, dynamic>> requestPasswordReset(String email) async {
     final response = await _dio.post(

@@ -64,12 +64,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             padding: const EdgeInsets.all(24),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 400),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
+              child: AutofillGroup(
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
                     Icon(
                       Icons.psychology_outlined,
                       size: 80,
@@ -102,6 +103,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           prefixIcon: Icon(Icons.person_outline),
                           border: OutlineInputBorder(),
                         ),
+                        autofillHints: const [AutofillHints.name],
                         textInputAction: TextInputAction.next,
                         textCapitalization: TextCapitalization.words,
                         validator: (value) {
@@ -125,6 +127,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         prefixIcon: Icon(Icons.email_outlined),
                         border: OutlineInputBorder(),
                       ),
+                      autofillHints: const [AutofillHints.email, AutofillHints.username],
                       keyboardType: TextInputType.emailAddress,
                       textInputAction: TextInputAction.next,
                       validator: (value) {
@@ -155,6 +158,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           },
                         ),
                       ),
+                      autofillHints: [_isLogin ? AutofillHints.password : AutofillHints.newPassword],
                       obscureText: _obscurePassword,
                       textInputAction: TextInputAction.done,
                       onFieldSubmitted: (_) => _submit(),
@@ -267,6 +271,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                     ),
                   ],
+                  ),
                 ),
               ),
             ),

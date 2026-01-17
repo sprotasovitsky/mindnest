@@ -58,12 +58,26 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     const SizedBox(height: 24),
                     if (authState.name != null &&
                         authState.name!.isNotEmpty) ...[
-                      Text(
-                        authState.name!,
-                        style:
-                            Theme.of(context).textTheme.titleLarge?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
+                      GestureDetector(
+                        onTap: () => _showEditNameDialog(context, authState.name!),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              authState.name!,
+                              style:
+                                  Theme.of(context).textTheme.titleLarge?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                            ),
+                            const SizedBox(width: 8),
+                            Icon(
+                              Icons.edit,
+                              size: 18,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ],
+                        ),
                       ),
                       const SizedBox(height: 4),
                     ],
@@ -156,6 +170,69 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _showEditNameDialog(BuildContext context, String currentName) async {
+    final controller = TextEditingController(text: currentName);
+    final formKey = GlobalKey<FormState>();
+
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Name'),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            controller: controller,
+            autofocus: true,
+            textCapitalization: TextCapitalization.words,
+            decoration: const InputDecoration(
+              labelText: 'Name',
+              border: OutlineInputBorder(),
+            ),
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'Name is required';
+              }
+              if (value.trim().length < 2) {
+                return 'Name must be at least 2 characters';
+              }
+              if (value.trim().length > 100) {
+                return 'Name must be less than 100 characters';
+              }
+              return null;
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.pop(context, controller.text.trim());
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+
+    controller.dispose();
+
+    if (newName != null && newName != currentName) {
+      if (!mounted) return;
+      final success = await ref.read(authProvider.notifier).updateName(newName);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(success ? 'Name updated' : 'Failed to update name'),
+        ),
+      );
+    }
   }
 
   Future<void> _showLogoutDialog(BuildContext context) async {
