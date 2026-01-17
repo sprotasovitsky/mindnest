@@ -5,12 +5,27 @@ All prompts are stored as .txt files for easy editing and version control.
 """
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from functools import lru_cache
 from typing import Optional
 
 # Directory containing prompt files
 PROMPTS_DIR = Path(__file__).parent
+
+# Day names in English for LLM context
+WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+
+def get_current_datetime_string() -> str:
+    """Get formatted current date and time string for LLM context.
+
+    Returns:
+        Formatted string like "Friday, January 17, 2025 at 14:30 UTC"
+    """
+    now = datetime.now(timezone.utc)
+    weekday = WEEKDAYS[now.weekday()]
+    return now.strftime(f"{weekday}, %B %d, %Y at %H:%M UTC")
 
 
 @lru_cache(maxsize=10)
@@ -83,6 +98,7 @@ def format_response_prompt(
     return template.format(
         system_prompt=get_system_prompt(),
         context_guide=get_context_guide(),
+        current_datetime=get_current_datetime_string(),
         facts_text=facts_text,
         entities_text=entities_text,
         user_name=user_name or "Anonymous",

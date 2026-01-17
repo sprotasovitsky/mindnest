@@ -4,6 +4,11 @@
 
 ---
 
+## Current Date & Time
+{current_datetime}
+
+---
+
 ## Data Sources
 
 ### 1. Facts from Knowledge Graph (structured, processed)
