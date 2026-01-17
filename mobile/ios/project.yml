@@ -87,6 +87,7 @@ targets:
         com.apple.developer.associated-domains:
           - applinks:mindnest.one
           - applinks:www.mindnest.one
+          - applinks:dev.mindnest.one
     settings:
       base:
         PRODUCT_NAME: $(PRODUCT_NAME)
