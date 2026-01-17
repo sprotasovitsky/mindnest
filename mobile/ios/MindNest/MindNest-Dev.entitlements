@@ -9,7 +9,6 @@
 	<key>com.apple.developer.associated-domains</key>
 	<array>
 		<string>applinks:dev.mindnest.one</string>
-		<string>webcredentials:dev.mindnest.one</string>
 	</array>
 </dict>
 </plist>

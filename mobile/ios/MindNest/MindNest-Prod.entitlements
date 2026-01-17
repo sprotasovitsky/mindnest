@@ -10,7 +10,6 @@
 	<array>
 		<string>applinks:mindnest.one</string>
 		<string>applinks:www.mindnest.one</string>
-		<string>webcredentials:mindnest.one</string>
 	</array>
 </dict>
 </plist>
