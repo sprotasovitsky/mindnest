@@ -40,6 +40,7 @@
                 <data android:host="mindnest.one"/>
                 <data android:host="dev.mindnest.one"/>
                 <data android:pathPrefix="/verify-email"/>
+                <data android:pathPrefix="/change-password"/>
             </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.

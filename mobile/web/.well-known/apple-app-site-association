@@ -8,7 +8,7 @@
           "493Z7C2V3J.com.mindnest.app.staging",
           "493Z7C2V3J.com.mindnest.app.dev"
         ],
-        "paths": ["/verify-email", "/verify-email?*"]
+        "paths": ["/verify-email", "/verify-email?*", "/change-password"]
       }
     ]
   }
