@@ -10,6 +10,9 @@ DISPLAY_NAME = MindNest Dev
 GOOGLE_CLIENT_ID = 678169768622-j5us1p6ntgar0d2msm43vdc18fkausqa.apps.googleusercontent.com
 GOOGLE_REVERSED_CLIENT_ID = com.googleusercontent.apps.678169768622-j5us1p6ntgar0d2msm43vdc18fkausqa
 
+// Entitlements
+CODE_SIGN_ENTITLEMENTS = MindNest/MindNest-Dev.entitlements
+
 // Build settings
 SWIFT_OPTIMIZATION_LEVEL = -Onone
 GCC_OPTIMIZATION_LEVEL = 0

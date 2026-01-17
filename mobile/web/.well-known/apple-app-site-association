@@ -11,5 +11,12 @@
         "paths": ["/verify-email", "/verify-email?*", "/change-password"]
       }
     ]
+  },
+  "webcredentials": {
+    "apps": [
+      "493Z7C2V3J.com.mindnest.app",
+      "493Z7C2V3J.com.mindnest.app.staging",
+      "493Z7C2V3J.com.mindnest.app.dev"
+    ]
   }
 }
