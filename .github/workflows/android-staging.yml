@@ -1,0 +1,76 @@
+name: Android Staging Build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/android-staging.yml'
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+          cache-dependency-path: mobile/android/build.gradle.kts
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.27.4'
+          channel: 'stable'
+          cache: true
+
+      - name: Get Flutter dependencies
+        working-directory: mobile
+        run: flutter pub get
+
+      - name: Decode keystore
+        working-directory: mobile/android
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > mindnest-release.jks
+
+      - name: Create key.properties
+        working-directory: mobile/android
+        run: |
+          cat > key.properties << EOF
+          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          storeFile=../mindnest-release.jks
+          EOF
+
+      - name: Build APK (staging)
+        working-directory: mobile
+        run: |
+          flutter build apk --flavor staging --release \
+            --dart-define=ENVIRONMENT=staging \
+            --dart-define=API_URL=https://dev-api.mindnest.one/api
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-apk
+          path: mobile/build/app/outputs/flutter-apk/app-staging-release.apk
+          retention-days: 30
+
+      - name: Upload to Firebase App Distribution
+        uses: wzieba/Firebase-Distribution-Github-Action@v1
+        with:
+          appId: ${{ secrets.FIREBASE_ANDROID_APP_ID }}
+          serviceCredentialsFileContent: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          groups: testers
+          file: mobile/build/app/outputs/flutter-apk/app-staging-release.apk
+          releaseNotes: |
+            Commit: ${{ github.sha }}
+            Branch: ${{ github.ref_name }}
+            Build: ${{ github.run_number }}
