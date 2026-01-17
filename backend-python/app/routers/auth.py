@@ -456,6 +456,30 @@ async def get_user_from_token_db(db: AsyncSession, token: str) -> Optional[User]
     return None
 
 
+async def get_current_user(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """Dependency to get current authenticated user."""
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+
+    token = auth_header.split(" ", 1)[1]
+    user = await get_user_from_token_db(db, token)
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+        )
+
+    return user
+
+
 def decode_token(token: str) -> Optional[dict]:
     """Decode JWT token and return payload."""
     try:
@@ -548,27 +572,9 @@ async def resend_verification(
 
 @router.get("/me", response_model=UserInfoResponse)
 async def get_current_user_info(
-    request: Request,
-    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> UserInfoResponse:
     """Get current user info including verification status."""
-    # Extract token from Authorization header
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
-        )
-
-    token = auth_header.split(" ", 1)[1]
-    user = await get_user_from_token_db(db, token)
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-        )
-
     settings = get_settings()
     return UserInfoResponse(
         id=user.id,
@@ -581,29 +587,14 @@ async def get_current_user_info(
 
 
 @router.patch("/me", response_model=UserInfoResponse)
+@limiter.limit(_get_change_password_limit)  # Reuse same limit (5/min)
 async def update_profile(
     request: Request,
     data: UpdateProfileRequest,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> UserInfoResponse:
     """Update current user profile (name)."""
-    # Extract token from Authorization header
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
-        )
-
-    token = auth_header.split(" ", 1)[1]
-    user = await get_user_from_token_db(db, token)
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-        )
-
     # Update user name
     user.name = data.name.strip()
     await db.commit()

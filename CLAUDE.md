@@ -66,14 +66,17 @@ mobile/ios/
 ├── project.yml              # XcodeGen config (generates .xcodeproj)
 ├── Podfile                  # CocoaPods dependencies
 ├── Configurations/
-│   ├── Dev.xcconfig         # → com.mindnest.app.dev
-│   ├── Staging.xcconfig     # → com.mindnest.app.staging
-│   └── Prod.xcconfig        # → com.mindnest.app
+│   ├── Dev.xcconfig         # → com.mindnest.app.dev + entitlements
+│   ├── Staging.xcconfig     # → com.mindnest.app.staging + entitlements
+│   └── Prod.xcconfig        # → com.mindnest.app + entitlements
 ├── MindNest/                # App source files
 │   ├── AppDelegate.swift
 │   ├── Assets.xcassets/
 │   ├── Info.plist
-│   └── MindNest-Bridging-Header.h
+│   ├── MindNest-Bridging-Header.h
+│   ├── MindNest-Dev.entitlements      # Dev: applinks/webcredentials for dev.mindnest.one
+│   ├── MindNest-Staging.entitlements  # Staging: applinks/webcredentials for dev.mindnest.one
+│   └── MindNest-Prod.entitlements     # Prod: applinks/webcredentials for mindnest.one
 ├── MindNestTests/           # Unit tests
 └── ci_scripts/
     └── ci_post_clone.sh     # Xcode Cloud script
@@ -543,6 +546,7 @@ Prompts are loaded via `prompts/__init__.py`:
 - `POST /api/auth/login` - Login user (rate limit: 5/min)
 - `POST /api/auth/refresh` - Refresh access token using refresh token
 - `GET /api/auth/me` - Get current user info (requires auth)
+- `PATCH /api/auth/me` - Update user profile (name) (requires auth, rate limit: 5/min)
 - `POST /api/auth/verify-email` - Verify email with token
 - `POST /api/auth/resend-verification` - Resend verification email (rate limit: 3/min)
 - `POST /api/auth/request-password-reset` - Request password reset code (rate limit: 5/min)
@@ -841,8 +845,15 @@ Rate limits are enforced via slowapi and vary by environment:
 
 | Endpoint | Production | DEBUG mode |
 |----------|------------|------------|
-| Login | 5/minute | 100/minute |
 | Register | 3/minute | 100/minute |
+| Login | 5/minute | 100/minute |
+| Refresh token | 10/minute | 100/minute |
+| Verify email | 10/minute | 100/minute |
+| Resend verification | 3/minute | 100/minute |
+| Password reset | 5/minute | 100/minute |
+| Change password | 5/minute | 100/minute |
+| Update profile | 5/minute | 100/minute |
+| Social login | 10/minute | 100/minute |
 | Chat | 30/minute | 200/minute |
 
 To enable DEBUG mode locally:
@@ -938,7 +949,7 @@ networks:
 
 **Nginx config features:**
 - `.well-known/` with `Content-Type: application/json` for Apple/Android deep links
-- `.well-known/change-password` → `/forgot-password` redirect (W3C standard for password managers)
+- `.well-known/change-password` → `/change-password` redirect (W3C standard for password managers)
 - SPA routing: `try_files $uri $uri/ /index.html` for client-side routes
 
 **Why "termly" references in MindNest deployment:**
@@ -951,7 +962,7 @@ This is intentional infrastructure sharing, not a naming error.
 
 ### Deep Links
 
-#### iOS Universal Links
+#### iOS Universal Links & Password Autofill
 
 **File:** `mobile/web/.well-known/apple-app-site-association`
 
@@ -965,17 +976,30 @@ This is intentional infrastructure sharing, not a naming error.
         "493Z7C2V3J.com.mindnest.app.staging",
         "493Z7C2V3J.com.mindnest.app.dev"
       ],
-      "paths": ["/verify-email", "/verify-email?*"]
+      "paths": ["/verify-email", "/verify-email?*", "/change-password"]
     }]
+  },
+  "webcredentials": {
+    "apps": [
+      "493Z7C2V3J.com.mindnest.app",
+      "493Z7C2V3J.com.mindnest.app.staging",
+      "493Z7C2V3J.com.mindnest.app.dev"
+    ]
   }
 }
 ```
 
 **Apple Team ID:** `493Z7C2V3J`
 
+**Entitlements (separate per flavor):**
+- `MindNest-Dev.entitlements` → `applinks:dev.mindnest.one`, `webcredentials:dev.mindnest.one`
+- `MindNest-Staging.entitlements` → `applinks:dev.mindnest.one`, `webcredentials:dev.mindnest.one`
+- `MindNest-Prod.entitlements` → `applinks:mindnest.one`, `webcredentials:mindnest.one`
+
+Each xcconfig sets `CODE_SIGN_ENTITLEMENTS` to the appropriate file.
+
 **Requirements:**
 - Associated Domains capability enabled in Apple Developer Portal
-- Entitlements in `project.yml` with `applinks:mindnest.one` and `applinks:dev.mindnest.one`
 
 #### Android App Links
 
@@ -983,7 +1007,7 @@ This is intentional infrastructure sharing, not a naming error.
 
 Contains SHA256 fingerprints for all app flavors (debug + release).
 
-**AndroidManifest.xml** has HTTPS intent-filter for `/verify-email` path.
+**AndroidManifest.xml** has HTTPS intent-filter for `/verify-email` and `/change-password` paths.
 
 **SHA256 Fingerprints:**
 - Release: `D4:97:32:11:78:12:69:5F:9A:2E:9B:5D:2B:82:FC:A1:92:59:E8:1A:7F:43:DC:49:27:DD:96:AA:73:B4:8D:19`
