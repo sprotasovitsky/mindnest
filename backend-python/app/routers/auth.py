@@ -218,14 +218,27 @@ class ChangePasswordRequest(BaseModel):
         return v
 
 
-def create_access_token(user_id: str, email: str, name: str) -> tuple[str, int]:
-    """Create JWT access token. Returns (token, expires_in_seconds)."""
+def create_access_token(
+    user_id: str,
+    email: str,
+    name: str,
+    login_method: str = "password",
+) -> tuple[str, int]:
+    """Create JWT access token. Returns (token, expires_in_seconds).
+
+    Args:
+        user_id: User ID
+        email: User email
+        name: User name
+        login_method: How the user authenticated ('password', 'google', 'apple')
+    """
     settings = get_settings()
     expire = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
     payload = {
         "sub": user_id,
         "email": email,
         "name": name,
+        "login_method": login_method,
         "exp": expire,
         "type": "access",
     }
@@ -233,12 +246,13 @@ def create_access_token(user_id: str, email: str, name: str) -> tuple[str, int]:
     return token, settings.access_token_expire_minutes * 60
 
 
-def create_refresh_token(user_id: str) -> str:
+def create_refresh_token(user_id: str, login_method: str = "password") -> str:
     """Create JWT refresh token."""
     settings = get_settings()
     expire = datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_expire_days)
     payload = {
         "sub": user_id,
+        "login_method": login_method,
         "exp": expire,
         "type": "refresh",
     }
@@ -415,8 +429,13 @@ async def refresh_token(
                 detail="User not found",
             )
 
+        # Preserve login_method from refresh token
+        login_method = payload.get("login_method", "password")
+
         # Create new access token
-        access_token, expires_in = create_access_token(user.id, user.email, user.name)
+        access_token, expires_in = create_access_token(
+            user.id, user.email, user.name, login_method=login_method
+        )
 
         logger.info(f"Token refreshed for user: {user.id}")
 
@@ -438,22 +457,34 @@ async def refresh_token(
         )
 
 
-async def get_user_from_token_db(db: AsyncSession, token: str) -> Optional[User]:
-    """Extract user from JWT token (with database lookup)."""
+async def get_user_from_token_db(
+    db: AsyncSession, token: str, return_payload: bool = False
+) -> Optional[User] | tuple[Optional[User], dict]:
+    """Extract user from JWT token (with database lookup).
+
+    Args:
+        db: Database session
+        token: JWT access token
+        return_payload: If True, returns (user, payload) tuple
+
+    Returns:
+        User object, or (User, payload) tuple if return_payload=True
+    """
     try:
         settings = get_settings()
         payload = jwt.decode(token, settings.secret_key, algorithms=["HS256"])
 
         # Only accept access tokens
         if payload.get("type") not in ("access", None):  # None for backward compat
-            return None
+            return (None, {}) if return_payload else None
 
         user_id = payload.get("sub")
         if user_id:
-            return await get_user_by_id(db, user_id)
+            user = await get_user_by_id(db, user_id)
+            return (user, payload) if return_payload else user
     except Exception as e:
         logger.warning(f"Invalid token: {e}")
-    return None
+    return (None, {}) if return_payload else None
 
 
 async def get_current_user(
@@ -809,26 +840,10 @@ async def reset_password(
 async def change_password(
     request: Request,
     data: ChangePasswordRequest,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Change password for authenticated user."""
-    # Extract token from Authorization header
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
-        )
-
-    token = auth_header.split(" ", 1)[1]
-    user = await get_user_from_token_db(db, token)
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-        )
-
     # Check if user has a password (social-only users can't change password)
     if not user.password_hash:
         raise HTTPException(
@@ -878,8 +893,8 @@ async def delete_account(
 ) -> dict:
     """Delete user account and all associated data.
 
-    - For users with password: requires password confirmation
-    - For social-only users: no password required
+    - For users logged in via social auth (Google/Apple): no password required
+    - For users logged in via email/password: requires password confirmation
     - Deletes: User, SocialAuthProvider, ChatMessages, ProjectMembers
     """
     # Extract token from Authorization header
@@ -891,7 +906,9 @@ async def delete_account(
         )
 
     token = auth_header.split(" ", 1)[1]
-    user = await get_user_from_token_db(db, token)
+
+    # Get user and token payload in single decode
+    user, payload = await get_user_from_token_db(db, token, return_payload=True)
 
     if not user:
         raise HTTPException(
@@ -899,8 +916,11 @@ async def delete_account(
             detail="Invalid or expired token",
         )
 
-    # If user has password, require password confirmation
-    if user.password_hash:
+    # Check login method from token (defaults to 'password' for old tokens)
+    login_method = payload.get("login_method", "password")
+
+    # If logged in via password (not social auth), require password confirmation
+    if login_method == "password" and user.password_hash:
         if not data or not data.password:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

@@ -284,9 +284,11 @@ async def social_login(
         name=data.name or user_info.get("name"),
     )
 
-    # Create tokens
-    access_token, expires_in = create_access_token(user.id, user.email, user.name)
-    refresh_token = create_refresh_token(user.id)
+    # Create tokens with login_method for account deletion logic
+    access_token, expires_in = create_access_token(
+        user.id, user.email, user.name, login_method=data.provider
+    )
+    refresh_token = create_refresh_token(user.id, login_method=data.provider)
 
     logger.info(f"Social login successful for user: {user.id}")
 
