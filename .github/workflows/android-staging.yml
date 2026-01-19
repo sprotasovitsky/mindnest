@@ -63,17 +63,14 @@ jobs:
           path: mobile/build/app/outputs/flutter-apk/app-staging-release.apk
           retention-days: 30
 
-      - name: Create Firebase credentials file
-        run: |
-          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}' > /tmp/firebase-sa.json
-
       - name: Upload to Firebase App Distribution
         uses: wzieba/Firebase-Distribution-Github-Action@v1
         with:
           appId: ${{ secrets.FIREBASE_ANDROID_APP_ID }}
-          serviceCredentialsFile: /tmp/firebase-sa.json
+          serviceCredentialsFileContent: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
           groups: testers
           file: mobile/build/app/outputs/flutter-apk/app-staging-release.apk
+          debug: true
           releaseNotes: |
             Commit: ${{ github.sha }}
             Branch: ${{ github.ref_name }}
