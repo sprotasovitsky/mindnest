@@ -1,10 +1,13 @@
 """Chat API Router.
 
 Classification-based flow with background processing:
-1. Classify message (DATA/QUESTION)
-2. DATA → pending cache + background graph update + quick response
-3. QUESTION → search graph + pending + history + LLM answer
+1. Classify message (DATA/QUESTION/BOTH) with data extraction
+2. DATA/BOTH → save data_to_save to Graphiti (background)
+3. QUESTION/BOTH → search graph + pending + history + LLM answer
 """
+
+# Classifier gets last N messages for context resolution
+CLASSIFIER_HISTORY_LIMIT = 4
 
 import logging
 import uuid
@@ -219,6 +222,26 @@ def format_history_for_prompt(messages: list[ChatMessage]) -> str:
     return "\n".join(lines)
 
 
+def format_history_for_classifier(messages: list[ChatMessage]) -> str:
+    """Format last N messages for classifier context resolution.
+
+    Used to expand references like "recipe 1", "this list", etc.
+    """
+    if not messages:
+        return ""
+
+    # Take last CLASSIFIER_HISTORY_LIMIT messages
+    recent = messages[-CLASSIFIER_HISTORY_LIMIT:] if len(messages) > CLASSIFIER_HISTORY_LIMIT else messages
+
+    lines = []
+    for msg in recent:
+        lines.append(f"[User]: {msg.user_message}")
+        lines.append(f"[Assistant]: {msg.assistant_reply}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
 async def get_project(db: AsyncSession, project_id: str) -> Optional[Project]:
     """Get project by ID."""
     result = await db.execute(select(Project).where(Project.id == project_id))
@@ -306,6 +329,7 @@ async def process_message(
     background_tasks: BackgroundTasks,
     user: User,
     chat_history: str = "",
+    classifier_history: str = "",
     project_description: Optional[str] = None,
 ) -> ChatResponse:
     """Process a chat message with classification-based flow."""
@@ -313,18 +337,38 @@ async def process_message(
     user_id = user.id
     user_name = user.name
 
-    # Step 1: Classify message
-    classification = await classify_message(request.message, user_name)
-    logger.info(f"Classified as {classification.message_type}: {request.message[:50]}...")
+    # Step 1: Classify message with context for reference resolution
+    classification = await classify_message(
+        message=request.message,
+        user_name=user_name,
+        chat_history=classifier_history,
+    )
+    logger.info(
+        f"Classified as {classification.message_type}: "
+        f"data_to_save={'yes' if classification.data_to_save else 'no'}, "
+        f"search_query={classification.search_query or 'none'}"
+    )
 
     # Step 2: Process based on type
     if classification.message_type == MessageType.QUESTION:
+        # Pure question - no data to save
         return await _handle_question(
-            request, kg, project_id, user_name, classification.search_query, chat_history, project_description
+            request, kg, project_id, user_name,
+            classification.search_query, chat_history, project_description
         )
-    else:  # DATA
+    elif classification.message_type == MessageType.BOTH:
+        # Mixed message - save data AND answer question
+        return await _handle_both(
+            request, kg, project_id, user_id, user_name,
+            background_tasks, classification.data_to_save,
+            classification.search_query, chat_history, project_description
+        )
+    else:
+        # Pure data - save and acknowledge
         return await _handle_data(
-            request, kg, project_id, user_id, user_name, background_tasks, chat_history, project_description
+            request, kg, project_id, user_id, user_name,
+            background_tasks, classification.data_to_save,
+            chat_history, project_description
         )
 
 
@@ -335,6 +379,7 @@ async def _handle_data(
     user_id: str,
     user_name: Optional[str],
     background_tasks: BackgroundTasks,
+    data_to_save: Optional[str],
     chat_history: str = "",
     project_description: Optional[str] = None,
 ) -> ChatResponse:
@@ -342,20 +387,23 @@ async def _handle_data(
     cache = get_pending_cache()
     message_id = str(uuid.uuid4())
 
+    # Use extracted data_to_save, or fall back to original message
+    graphiti_message = data_to_save or request.message
+
     # 1. Instantly add to pending cache
     await cache.add(
         project_id=project_id,
         message_id=message_id,
         user_name=user_name or "User",
-        text=request.message,
+        text=graphiti_message,
     )
-    logger.info(f"Added to pending cache: {message_id[:8]}...")
+    logger.info(f"Added to pending cache: {message_id[:8]}... data={graphiti_message[:50]}")
 
-    # 2. Schedule background graph update
+    # 2. Schedule background graph update with extracted/expanded data
     background_tasks.add_task(
         _add_to_graph_background,
         message_id=message_id,
-        message=request.message,
+        message=graphiti_message,
         project_id=project_id,
         user_id=user_id,
         user_name=user_name,
@@ -399,6 +447,95 @@ async def _handle_data(
         confidence=1.0,
         entities_extracted=0,  # Will be updated in background
         message_type="DATA",
+    )
+
+
+async def _handle_both(
+    request: ChatRequest,
+    kg: KnowledgeGraph,
+    project_id: str,
+    user_id: str,
+    user_name: Optional[str],
+    background_tasks: BackgroundTasks,
+    data_to_save: Optional[str],
+    search_query: Optional[str],
+    chat_history: str = "",
+    project_description: Optional[str] = None,
+) -> ChatResponse:
+    """Handle BOTH message - save data AND answer question."""
+    cache = get_pending_cache()
+    message_id = str(uuid.uuid4())
+    query = search_query or request.message
+
+    # 1. Save data to pending cache and schedule background processing
+    if data_to_save:
+        await cache.add(
+            project_id=project_id,
+            message_id=message_id,
+            user_name=user_name or "User",
+            text=data_to_save,
+        )
+        logger.info(f"[BOTH] Added to pending: {message_id[:8]}... data={data_to_save[:50]}")
+
+        background_tasks.add_task(
+            _add_to_graph_background,
+            message_id=message_id,
+            message=data_to_save,
+            project_id=project_id,
+            user_id=user_id,
+            user_name=user_name,
+        )
+
+    # 2. Get pending messages (including what we just added)
+    pending = await cache.get_pending(project_id)
+    pending_context = cache.format_for_prompt(pending)
+
+    # 3. Search knowledge graph
+    search_result = await kg.search(query, project_id)
+    edges = search_result.get("edges", []) if search_result["success"] else []
+    nodes = search_result.get("nodes", []) if search_result["success"] else []
+
+    if not search_result["success"]:
+        logger.warning(f"[BOTH] Search failed: {search_result.get('error')}")
+
+    _log_context(query, edges, nodes)
+
+    # 4. Generate response with graph + pending + history
+    facts, entities = _format_context(edges, nodes)
+    settings = get_settings()
+    prompt = format_response_prompt(
+        message=request.message,
+        facts=facts,
+        entities=entities,
+        user_name=user_name,
+        project_id=project_id,
+        pending_context=pending_context,
+        chat_history=chat_history,
+        project_description=project_description,
+    )
+
+    try:
+        reply = await generate_text(prompt, model=settings.llm_model_pro)
+        if not reply or not reply.strip():
+            logger.warning("[BOTH] LLM returned empty response")
+            reply = "Got it! I've recorded the information. However, I couldn't generate a full response."
+    except Exception as e:
+        logger.error(f"[BOTH] Failed to generate response: {e}")
+        reply = "Got it! I've recorded the information, but encountered an error generating a response."
+
+    return ChatResponse(
+        reply=reply,
+        sources=[e["fact"] for e in edges[:5]],
+        confidence=1.0 if edges or pending else 0.7,
+        entities_extracted=0,
+        message_type="BOTH",
+        debug_context={
+            "query_used": query,
+            "edges_count": len(edges),
+            "nodes_count": len(nodes),
+            "pending_count": len(pending),
+            "data_saved": bool(data_to_save),
+        },
     )
 
 
@@ -503,6 +640,7 @@ async def send_message(
     settings = get_settings()
     history_messages = await get_chat_history_from_db(db, project_id, user_id, settings.chat_history_limit)
     chat_history = format_history_for_prompt(history_messages)
+    classifier_history = format_history_for_classifier(history_messages)
 
     # Check if project needs onboarding (no description set)
     needs_onboarding = not project.description
@@ -546,7 +684,8 @@ async def send_message(
     else:
         # Normal flow - project has description
         response = await process_message(
-            chat_request, kg, background_tasks, user, chat_history, project.description
+            chat_request, kg, background_tasks, user,
+            chat_history, classifier_history, project.description
         )
 
     # Save message to history (don't block on save errors)
