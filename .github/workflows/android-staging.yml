@@ -82,7 +82,7 @@ jobs:
           firebase appdistribution:distribute \
             mobile/build/app/outputs/flutter-apk/app-staging-release.apk \
             --app ${{ secrets.FIREBASE_ANDROID_APP_ID }} \
+            --groups testers \
             --release-notes "Commit: ${{ github.sha }}
           Branch: ${{ github.ref_name }}
           Build: ${{ github.run_number }}"
-          # Add --groups testers after creating the group in Firebase Console
