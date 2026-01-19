@@ -63,15 +63,27 @@ jobs:
           path: mobile/build/app/outputs/flutter-apk/app-staging-release.apk
           retention-days: 30
 
-      - name: Upload to Firebase App Distribution
-        uses: wzieba/Firebase-Distribution-Github-Action@v1
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          appId: ${{ secrets.FIREBASE_ANDROID_APP_ID }}
-          serviceCredentialsFileContent: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
-          groups: testers
-          file: mobile/build/app/outputs/flutter-apk/app-staging-release.apk
-          debug: true
-          releaseNotes: |
-            Commit: ${{ github.sha }}
-            Branch: ${{ github.ref_name }}
-            Build: ${{ github.run_number }}
+          node-version: '20'
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Upload to Firebase App Distribution
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          echo "$GOOGLE_APPLICATION_CREDENTIALS_JSON" > /tmp/firebase-sa.json
+          export GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-sa.json
+
+          firebase appdistribution:distribute \
+            mobile/build/app/outputs/flutter-apk/app-staging-release.apk \
+            --app ${{ secrets.FIREBASE_ANDROID_APP_ID }} \
+            --groups testers \
+            --release-notes "Commit: ${{ github.sha }}
+          Branch: ${{ github.ref_name }}
+          Build: ${{ github.run_number }}"
+
+          rm /tmp/firebase-sa.json
