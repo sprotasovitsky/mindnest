@@ -67,7 +67,8 @@ class Settings(BaseSettings):
     frontend_url: str = "https://mindnest.one"
 
     # Token expiration settings
-    access_token_expire_minutes: int = 15
+    access_token_expire_minutes: int = 15  # Production: 15 min
+    access_token_expire_minutes_debug: int = 120  # Debug: 2 hours for long tests
     refresh_token_expire_days: int = 7
     reset_token_expire_minutes: int = 15
     reset_code_expire_minutes: int = 10
@@ -108,7 +109,7 @@ class Settings(BaseSettings):
             debug_limits = {
                 "login": "100/minute",
                 "register": "100/minute",
-                "chat": "200/minute",
+                "chat": "1000/minute",  # High limit for test scenarios
                 "verify_email": "100/minute",
                 "resend_verification": "100/minute",
                 "password_reset": "100/minute",

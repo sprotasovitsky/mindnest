@@ -233,7 +233,9 @@ def create_access_token(
         login_method: How the user authenticated ('password', 'google', 'apple')
     """
     settings = get_settings()
-    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
+    # Use longer expiration in debug mode for long-running tests
+    expire_minutes = settings.access_token_expire_minutes_debug if settings.debug else settings.access_token_expire_minutes
+    expire = datetime.now(timezone.utc) + timedelta(minutes=expire_minutes)
     payload = {
         "sub": user_id,
         "email": email,
@@ -243,7 +245,7 @@ def create_access_token(
         "type": "access",
     }
     token = jwt.encode(payload, settings.secret_key, algorithm="HS256")
-    return token, settings.access_token_expire_minutes * 60
+    return token, expire_minutes * 60
 
 
 def create_refresh_token(user_id: str, login_method: str = "password") -> str:
