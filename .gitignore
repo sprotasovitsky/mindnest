@@ -58,3 +58,4 @@ backend-python/venv/
 
 # Test results (generated, not tracked)
 tests/results/
+.mcp.json

@@ -10,7 +10,7 @@ def utc_now() -> datetime:
 
 from sqlalchemy import String, Text, ForeignKey, UniqueConstraint, Integer, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 
 from .database import Base
 
@@ -125,3 +125,40 @@ class SocialAuthProvider(Base):
     __table_args__ = (
         UniqueConstraint("provider", "provider_user_id", name="uq_social_provider_user"),
     )
+
+
+class ApiKey(Base):
+    """API key for MCP access."""
+    __tablename__ = "api_keys"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    key_prefix: Mapped[str] = mapped_column(String(8), nullable=False)  # "mn_live_" for identification
+    key_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)  # SHA-256 hash
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    scopes: Mapped[str] = mapped_column(String(50), nullable=False, default="read")  # "read" or "read,write"
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # null = never
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # null = active
+
+    # Relationships
+    user: Mapped["User"] = relationship()
+
+
+class McpLog(Base):
+    """MCP activity log."""
+    __tablename__ = "mcp_logs"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4()))
+    api_key_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), ForeignKey("api_keys.id", ondelete="SET NULL"), nullable=True)
+    user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    action: Mapped[str] = mapped_column(String(50), nullable=False)  # "list_projects", "search_knowledge", "send_message"
+    project_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), nullable=True)  # null for list_projects
+    request_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)  # query, message, etc.
+    response_summary: Mapped[str | None] = mapped_column(String(500), nullable=True)  # brief result summary
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    # Relationships
+    api_key: Mapped["ApiKey | None"] = relationship()
+    user: Mapped["User"] = relationship()
