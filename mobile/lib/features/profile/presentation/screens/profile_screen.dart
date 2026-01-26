@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:speech_to_text/speech_to_text.dart';
 
 import '../../../../core/providers/auth_provider.dart';
+import '../../../../core/providers/settings_provider.dart';
 import '../../../../shared/widgets/email_verification_banner.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -132,6 +134,24 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         onTap: () => context.push('/change-password'),
                       ),
 
+                    // Voice input language selection
+                    Consumer(
+                      builder: (context, ref, _) {
+                        final settings = ref.watch(settingsProvider);
+                        return ListTile(
+                          leading: const Icon(Icons.mic_outlined),
+                          title: const Text('Voice Input Language'),
+                          subtitle: Text(
+                            settings.speechLanguage == null
+                                ? 'Auto (System)'
+                                : _getLanguageLabel(settings.speechLanguage!),
+                          ),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () => _showLanguageSelector(context, ref),
+                        );
+                      },
+                    ),
+
                     const Spacer(),
 
                     // Logout button
@@ -233,6 +253,124 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ),
       );
     }
+  }
+
+  String _getLanguageLabel(String localeId) {
+    // Common locale mappings
+    final Map<String, String> localeLabels = {
+      'en_US': 'English (US)',
+      'en_GB': 'English (UK)',
+      'en_AU': 'English (Australia)',
+      'ru_RU': 'Russian',
+      'uk_UA': 'Ukrainian',
+      'de_DE': 'German',
+      'fr_FR': 'French',
+      'es_ES': 'Spanish (Spain)',
+      'es_MX': 'Spanish (Mexico)',
+      'it_IT': 'Italian',
+      'pt_BR': 'Portuguese (Brazil)',
+      'pt_PT': 'Portuguese (Portugal)',
+      'zh_CN': 'Chinese (Simplified)',
+      'zh_TW': 'Chinese (Traditional)',
+      'ja_JP': 'Japanese',
+      'ko_KR': 'Korean',
+      'pl_PL': 'Polish',
+      'nl_NL': 'Dutch',
+      'tr_TR': 'Turkish',
+      'ar_SA': 'Arabic',
+      'he_IL': 'Hebrew',
+      'hi_IN': 'Hindi',
+    };
+
+    return localeLabels[localeId] ?? localeId;
+  }
+
+  Future<void> _showLanguageSelector(BuildContext context, WidgetRef ref) async {
+    final speech = SpeechToText();
+    List<LocaleName> locales = [];
+
+    try {
+      final available = await speech.initialize();
+      if (available) {
+        locales = await speech.locales();
+      }
+    } catch (e) {
+      // Speech not available
+    }
+
+    if (!context.mounted) return;
+
+    final currentLang = ref.read(settingsProvider).speechLanguage;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.3,
+        maxChildSize: 0.9,
+        expand: false,
+        builder: (context, scrollController) => Column(
+          children: [
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 8),
+              width: 32,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                'Voice Input Language',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: ListView(
+                controller: scrollController,
+                children: [
+                  // Auto option
+                  RadioListTile<String?>(
+                    title: const Text('Auto (System)'),
+                    subtitle: const Text('Use device language'),
+                    value: null,
+                    groupValue: currentLang,
+                    onChanged: (value) {
+                      ref.read(settingsProvider.notifier).setSpeechLanguage(null);
+                      Navigator.pop(context);
+                    },
+                  ),
+                  const Divider(height: 1),
+                  // Available locales
+                  ...locales.map((locale) => RadioListTile<String?>(
+                    title: Text(locale.name),
+                    subtitle: Text(locale.localeId),
+                    value: locale.localeId,
+                    groupValue: currentLang,
+                    onChanged: (value) {
+                      ref.read(settingsProvider.notifier).setSpeechLanguage(value);
+                      Navigator.pop(context);
+                    },
+                  )),
+                  if (locales.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(32),
+                      child: Text(
+                        'Speech recognition not available on this device.',
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _showLogoutDialog(BuildContext context) async {

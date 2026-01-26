@@ -47,6 +47,12 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>GIDClientID</key>
 	<string>$(GOOGLE_CLIENT_ID)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>MindNest needs access to your microphone for voice input in chat.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>MindNest uses speech recognition to convert your voice to text for chat messages.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
