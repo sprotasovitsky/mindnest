@@ -221,3 +221,29 @@ class OAuthConsent(Base):
     __table_args__ = (
         UniqueConstraint("user_id", "client_id", name="uq_oauth_consent_user_client"),
     )
+
+
+# ============================================================================
+# MCP Logging
+# ============================================================================
+
+
+class McpLog(Base):
+    """MCP action log.
+
+    Logs MCP tool invocations for auditing and analytics.
+    Note: Message/query content is NOT stored, only metadata like lengths.
+    """
+    __tablename__ = "mcp_logs"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    oauth_client_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    action: Mapped[str] = mapped_column(String(50), nullable=False)  # list_projects, search_knowledge, send_message
+    project_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), nullable=True)
+    request_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)  # Metadata only, no content
+    response_summary: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    # Relationships
+    user: Mapped["User"] = relationship()

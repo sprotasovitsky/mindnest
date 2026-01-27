@@ -94,19 +94,35 @@ class SendMessageResponse(BaseModel):
 
 
 async def log_mcp_action(
+    db: AsyncSession,
     auth: McpAuth,
     action: str,
     project_id: Optional[str] = None,
     request_data: Optional[dict] = None,
     response_summary: Optional[str] = None,
 ) -> None:
-    """Log an MCP action (OAuth only).
+    """Log an MCP action to database (without message content for privacy).
 
-    Note: Currently just logs to logger. Can be extended to store in DB if needed.
+    Args:
+        db: Database session
+        auth: MCP authentication info
+        action: Action name (list_projects, search_knowledge, send_message)
+        project_id: Project ID if applicable
+        request_data: Request metadata (lengths only, no content)
+        response_summary: Brief result summary
     """
-    auth_info = request_data.copy() if request_data else {}
-    auth_info["auth_method"] = "oauth"
-    auth_info["oauth_client_id"] = auth.oauth_client_id
+    from ..models import McpLog
+
+    log = McpLog(
+        user_id=auth.user.id,
+        oauth_client_id=auth.oauth_client_id,
+        action=action,
+        project_id=project_id,
+        request_data=request_data,
+        response_summary=response_summary,
+    )
+    db.add(log)
+    await db.commit()
 
     logger.info(
         f"MCP action: {action} by user {auth.user.id} "
@@ -195,6 +211,7 @@ async def list_projects(
 
     # Log action
     await log_mcp_action(
+        db=db,
         auth=auth,
         action="list_projects",
         response_summary=f"Found {len(projects)} projects",
@@ -272,17 +289,18 @@ async def search_knowledge(
         for n in result.get("nodes", [])
     ]
 
-    # Log action
+    # Log action (without query content for privacy)
     await log_mcp_action(
+        db=db,
         auth=auth,
         action="search_knowledge",
         project_id=data.project_id,
-        request_data={"query": data.query},
+        request_data={"query_len": len(data.query)},
         response_summary=f"Found {len(facts)} facts, {len(entities)} entities",
     )
 
     logger.info(
-        f"MCP search_knowledge: query='{data.query[:50]}...' "
+        f"MCP search_knowledge: query_len={len(data.query)} "
         f"found {len(facts)} facts, {len(entities)} entities"
     )
 
@@ -331,6 +349,16 @@ async def send_message(
     - Facts: "John's phone number is 555-1234"
     - Events: "Team dinner on Friday at 7pm"
 
+    IMPORTANT: If the message depends on previous context, include that context
+    in the message itself. The knowledge graph processes each message independently.
+
+    Examples with context:
+    - Instead of: "Add 50 more"
+    - Send: "Add 50 more items to the grocery list (currently has milk, bread)"
+
+    - Instead of: "She completed it"
+    - Send: "Maria completed the authentication task"
+
     The message will be processed by AI to extract entities (people, items, dates)
     and facts (relationships between entities). These become searchable via search_knowledge.
 
@@ -356,17 +384,18 @@ async def send_message(
         user_name=auth.user.name,
     )
 
-    # Log action
+    # Log action (without message content for privacy)
     await log_mcp_action(
+        db=db,
         auth=auth,
         action="send_message",
         project_id=data.project_id,
-        request_data={"message": data.message[:200]},  # Truncate for log
+        request_data={"message_len": len(data.message)},
         response_summary="Message queued for processing",
     )
 
     logger.info(
-        f"MCP send_message: message='{data.message[:50]}...' "
+        f"MCP send_message: len={len(data.message)} "
         f"queued for project {data.project_id}"
     )
 

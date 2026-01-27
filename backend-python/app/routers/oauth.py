@@ -269,6 +269,11 @@ async def authorize_login(
     if not client:
         return HTMLResponse(content=_error_page("Unknown client"), status_code=400)
 
+    # SECURITY FIX: Validate redirect_uri against client's registered URIs
+    # This prevents authorization code theft via redirect_uri manipulation
+    if not validate_redirect_uri(client, redirect_uri):
+        return HTMLResponse(content=_error_page("Invalid redirect_uri"), status_code=400)
+
     # SECURITY: Create a session token for the authenticated user
     # This token will be validated in /authorize/decision to prevent bypass attacks
     session_token, _ = create_access_token(
@@ -377,6 +382,11 @@ async def authorize_decision(
     client = await get_or_create_client(db, client_id, redirect_uri)
     if not client:
         return HTMLResponse(content=_error_page("Unknown client"), status_code=400)
+
+    # SECURITY FIX: Validate redirect_uri against client's registered URIs
+    # This prevents authorization code theft via redirect_uri manipulation
+    if not validate_redirect_uri(client, redirect_uri):
+        return HTMLResponse(content=_error_page("Invalid redirect_uri"), status_code=400)
 
     if decision == "deny":
         return _error_response(redirect_uri, "access_denied", "User denied access", state)
