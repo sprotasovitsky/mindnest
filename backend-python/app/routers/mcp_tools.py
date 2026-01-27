@@ -27,6 +27,13 @@ router = APIRouter(prefix="/api/mcp", tags=["mcp"])
 # ============================================================================
 
 
+class CurrentUserResponse(BaseModel):
+    """Current authenticated user info."""
+    id: str
+    name: str
+    email: str
+
+
 class ProjectResponse(BaseModel):
     """Project info."""
     id: str
@@ -145,6 +152,30 @@ async def verify_project_access(
 # ============================================================================
 
 
+@router.get("/me", response_model=CurrentUserResponse)
+async def get_current_user(
+    auth: McpAuth = Depends(get_mcp_auth_read),
+) -> CurrentUserResponse:
+    """Get current authenticated user.
+
+    Requires: read scope
+
+    Returns the user's name and email. Use this to understand who "me/I"
+    refers to when the user asks questions like:
+    - "what are MY tasks?"
+    - "what did I add yesterday?"
+
+    Call this BEFORE search_knowledge when the query contains first-person pronouns.
+    """
+    logger.info(f"MCP get_current_user: user {auth.user.id} ({auth.user.name})")
+
+    return CurrentUserResponse(
+        id=auth.user.id,
+        name=auth.user.name,
+        email=auth.user.email,
+    )
+
+
 @router.get("/projects", response_model=ListProjectsResponse)
 async def list_projects(
     auth: McpAuth = Depends(get_mcp_auth_read),
@@ -189,10 +220,27 @@ async def search_knowledge(
     auth: McpAuth = Depends(get_mcp_auth_read),
     db: AsyncSession = Depends(get_db),
 ) -> SearchResponse:
-    """Search the knowledge graph.
+    """Search project knowledge using natural language.
 
     Requires: read scope
     Searches for facts and entities related to the query in the specified project.
+
+    Use this to find:
+    - Tasks and to-dos: "tasks", "pending tasks"
+    - People and contacts: "people", "team members"
+    - Events and meetings: "events", "meetings"
+    - Purchases and expenses: "purchases", "expenses"
+    - Any information stored via chat messages
+
+    IMPORTANT: For queries with first-person pronouns ("my tasks", "what did I add?"),
+    call get_current_user FIRST to get the user's name, then search with that name.
+
+    Examples:
+    - User asks "my tasks" -> get_current_user() returns name="John" -> search("tasks for John")
+    - User asks "what did I add?" -> get_current_user() returns name="John" -> search("John added")
+
+    Returns facts (relationships like "John needs to buy milk") and entities
+    (people, items, concepts extracted from messages).
     """
     # Verify project access
     await verify_project_access(db, auth.user.id, data.project_id)
@@ -276,8 +324,18 @@ async def send_message(
     """Add a message to the knowledge graph.
 
     Requires: write scope
-    The message will be processed and entities/facts will be extracted.
-    This does NOT generate an AI response - it only stores data.
+
+    Use this to store information that can be searched later:
+    - Tasks: "Buy groceries tomorrow"
+    - Notes: "Meeting notes: discussed Q4 goals"
+    - Facts: "John's phone number is 555-1234"
+    - Events: "Team dinner on Friday at 7pm"
+
+    The message will be processed by AI to extract entities (people, items, dates)
+    and facts (relationships between entities). These become searchable via search_knowledge.
+
+    NOTE: This does NOT generate an AI response - it only stores data.
+    The user's name is automatically associated with the message.
     """
     # Verify project access
     project = await verify_project_access(db, auth.user.id, data.project_id)
