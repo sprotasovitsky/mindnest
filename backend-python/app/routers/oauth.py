@@ -217,7 +217,7 @@ async def authorize(
             scope=granted_scope,
             user_name=user.name,
             user_email=user.email,
-            # Pass authorization params to form
+            user_id=user.id,  # Required for /authorize/decision
             client_id=client_id,
             redirect_uri=redirect_uri,
             state=state,
@@ -724,6 +724,7 @@ async def revoke_token(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Revoke an access or refresh token."""
+    logger.info(f"Token revocation requested (hint: {data.token_type_hint})")
     token_hash = hash_token(data.token)
 
     # Try to find as refresh token
