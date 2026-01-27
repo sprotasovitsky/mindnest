@@ -19,7 +19,7 @@ from .config import get_settings
 from .database import init_db, close_db
 from .graphiti_client import get_knowledge_graph, close_knowledge_graph
 from .llm import close_client as close_llm_client
-from .routers import chat, auth, projects, social_auth, api_keys, mcp_tools, oauth
+from .routers import chat, auth, projects, social_auth, mcp_tools, oauth
 from .mcp_server import setup_mcp_server
 
 # Configure logging
@@ -121,7 +121,7 @@ app.add_middleware(
     allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Requested-With", "X-API-Key"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
 )
 
 # Include routers
@@ -129,7 +129,6 @@ app.include_router(auth.router)
 app.include_router(social_auth.router)
 app.include_router(projects.router)
 app.include_router(chat.router)
-app.include_router(api_keys.router)
 app.include_router(mcp_tools.router)
 app.include_router(oauth.router)
 
