@@ -19,7 +19,8 @@ from .config import get_settings
 from .database import init_db, close_db
 from .graphiti_client import get_knowledge_graph, close_knowledge_graph
 from .llm import close_client as close_llm_client
-from .routers import chat, auth, projects, social_auth
+from .routers import chat, auth, projects, social_auth, mcp_tools, oauth
+from .mcp_server import setup_mcp_server
 
 # Configure logging
 logging.basicConfig(
@@ -128,6 +129,11 @@ app.include_router(auth.router)
 app.include_router(social_auth.router)
 app.include_router(projects.router)
 app.include_router(chat.router)
+app.include_router(mcp_tools.router)
+app.include_router(oauth.router)
+
+# Setup MCP server (exposes /api/mcp/* as MCP tools at /mcp)
+setup_mcp_server(app)
 
 
 @app.get("/")
@@ -145,6 +151,64 @@ async def root():
 async def health():
     """Health check endpoint."""
     return {"status": "healthy"}
+
+
+# ============================================================================
+# OAuth 2.0 Well-Known Endpoints (RFC 9728, RFC 8414)
+# ============================================================================
+
+
+@app.get("/.well-known/oauth-protected-resource")
+async def oauth_protected_resource():
+    """OAuth 2.0 Protected Resource Metadata (RFC 9728).
+
+    Tells clients where to find the authorization server.
+    """
+    settings = get_settings()
+    try:
+        issuer = settings.get_oauth_issuer()
+        resource = settings.get_oauth_resource_uri()
+    except ValueError:
+        # OAuth not configured - return 404
+        return {"error": "OAuth not configured"}
+
+    return {
+        "resource_name": "MindNest MCP Server",
+        "resource": resource,
+        "authorization_servers": [issuer],
+        "bearer_methods_supported": ["header"],
+        "scopes_supported": ["read", "write"],
+    }
+
+
+@app.get("/.well-known/oauth-authorization-server")
+async def oauth_authorization_server():
+    """OAuth 2.0 Authorization Server Metadata (RFC 8414).
+
+    Provides OAuth endpoints and supported features.
+    """
+    settings = get_settings()
+    try:
+        issuer = settings.get_oauth_issuer()
+    except ValueError:
+        # OAuth not configured - return 404
+        return {"error": "OAuth not configured"}
+
+    return {
+        "issuer": issuer,
+        "authorization_endpoint": f"{issuer}/oauth/authorize",
+        "token_endpoint": f"{issuer}/oauth/token",
+        "registration_endpoint": f"{issuer}/oauth/register",
+        "revocation_endpoint": f"{issuer}/oauth/revoke",
+        "response_types_supported": ["code"],
+        "response_modes_supported": ["query"],
+        "grant_types_supported": ["authorization_code", "refresh_token"],
+        "token_endpoint_auth_methods_supported": ["none"],
+        "code_challenge_methods_supported": ["S256"],
+        "scopes_supported": ["read", "write"],
+        # MCP-specific
+        "service_documentation": "https://mindnest.one/docs",
+    }
 
 
 if __name__ == "__main__":

@@ -134,6 +134,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         onTap: () => context.push('/change-password'),
                       ),
 
+                    // API Keys for MCP access
+                    ListTile(
+                      leading: const Icon(Icons.key_outlined),
+                      title: const Text('API Keys'),
+                      subtitle: const Text('Connect with Claude Code'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => context.push('/api-keys'),
+                    ),
+
                     // Voice input language selection
                     Consumer(
                       builder: (context, ref, _) {

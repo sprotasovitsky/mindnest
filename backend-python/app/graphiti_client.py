@@ -113,7 +113,7 @@ class KnowledgeGraph:
         if user_name:
             episode_body = f"[{user_name} says]: {message}"
 
-        logger.info(f"Adding episode: {episode_body[:80]}...")
+        logger.info(f"Adding episode: len={len(episode_body)} for project {project_id}")
 
         try:
             result = await self.client.add_episode(

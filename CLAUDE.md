@@ -140,7 +140,10 @@ docker-compose logs -f       # View logs
 │   ├── main.py                   # FastAPI app entry point
 │   ├── config.py                 # Settings from environment (Pydantic V2)
 │   ├── database.py               # PostgreSQL connection (SQLAlchemy async)
-│   ├── models.py                 # SQLAlchemy models (User, Project, ChatMessage)
+│   ├── models.py                 # SQLAlchemy models (User, Project, ChatMessage, OAuth*)
+│   ├── mcp_server.py             # MCP server setup (fastapi-mcp with OAuth)
+│   ├── mcp_auth.py               # MCP OAuth authentication
+│   ├── oauth_service.py          # OAuth 2.0 business logic
 │   ├── graphiti_client.py        # Graphiti wrapper
 │   ├── llm.py                    # Shared Gemini client (singleton)
 │   ├── classifier.py             # Message classifier (DATA/QUESTION)
@@ -155,7 +158,9 @@ docker-compose logs -f       # View logs
 │   └── routers/
 │       ├── auth.py               # User registration/login
 │       ├── projects.py           # Project management
-│       └── chat.py               # Chat API with history support
+│       ├── chat.py               # Chat API with history support
+│       ├── oauth.py              # OAuth 2.0 endpoints (RFC 6749, 7636, 7591)
+│       └── mcp_tools.py          # MCP tool endpoints (tag: "mcp")
 ├── alembic.ini               # Alembic configuration
 ├── docker-compose.yml        # Neo4j + PostgreSQL
 └── requirements.txt          # Python dependencies
@@ -590,6 +595,142 @@ curl -X POST http://localhost:8000/api/auth/refresh \
   -H "Content-Type: application/json" \
   -d '{"refresh_token": "<refresh_token>"}'
 ```
+
+## MCP Integration (Claude Code)
+
+MindNest exposes an MCP (Model Context Protocol) server for Claude Code integration at `/mcp`.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Claude Code                                                │
+│  ├── Discovers OAuth via WWW-Authenticate header            │
+│  ├── Opens browser for OAuth login                          │
+│  └── Uses Bearer token for MCP requests                     │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│  MCP Transport Layer (mcp_server.py)                        │
+│  ├── /mcp endpoint (fastapi-mcp)                            │
+│  ├── OAuth token presence check (401 if missing)            │
+│  └── WWW-Authenticate: Bearer resource_metadata="..."       │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│  MCP Tools Layer (routers/mcp_tools.py)                     │
+│  ├── Full OAuth token validation (mcp_auth.py)              │
+│  ├── Scope checking (read/write)                            │
+│  └── User context extraction                                │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Files
+
+| File | Purpose |
+|------|---------|
+| `app/mcp_server.py` | MCP server setup with OAuth config |
+| `app/mcp_auth.py` | OAuth token validation for MCP |
+| `app/routers/mcp_tools.py` | MCP tool endpoints (list projects, search, send message) |
+| `app/routers/oauth.py` | OAuth 2.0 endpoints |
+| `app/oauth_service.py` | OAuth business logic |
+
+### OAuth 2.0 Flow
+
+MindNest implements OAuth 2.0 Authorization Code flow with PKCE (RFC 6749, RFC 7636):
+
+```
+1. Claude Code → GET /mcp
+2. Server → 401 + WWW-Authenticate: Bearer resource_metadata=".../.well-known/oauth-protected-resource"
+3. Claude Code → GET /.well-known/oauth-protected-resource
+4. Claude Code → GET /.well-known/oauth-authorization-server
+5. Claude Code → POST /oauth/register (Dynamic Client Registration)
+6. Claude Code → Opens browser: /oauth/authorize?client_id=...&code_challenge=...
+7. User → Logs in, grants consent
+8. Server → Redirects to callback with authorization code
+9. Claude Code → POST /oauth/token (exchanges code for tokens)
+10. Claude Code → GET /mcp with Bearer token
+```
+
+### OAuth Endpoints
+
+| Endpoint | RFC | Purpose |
+|----------|-----|---------|
+| `/.well-known/oauth-protected-resource` | RFC 9728 | Resource metadata (points to auth server) |
+| `/.well-known/oauth-authorization-server` | RFC 8414 | Auth server metadata |
+| `/oauth/register` | RFC 7591 | Dynamic client registration |
+| `/oauth/authorize` | RFC 6749 | Authorization endpoint (shows login/consent) |
+| `/oauth/token` | RFC 6749 | Token endpoint (code → tokens) |
+| `/oauth/revoke` | RFC 7009 | Token revocation |
+
+### MCP Tools
+
+| Tool | Scope | Description |
+|------|-------|-------------|
+| `list_projects` | read | List user's projects |
+| `search_knowledge` | read | Search knowledge graph |
+| `send_message` | write | Send message to project chat |
+
+### Configuration
+
+OAuth requires these environment variables:
+
+```bash
+# Local development (auto-configured in DEBUG mode)
+# Uses: http://localhost:8000
+
+# Production
+OAUTH_ISSUER=https://api.mindnest.one
+OAUTH_RESOURCE_URI=https://api.mindnest.one
+```
+
+Settings in `config.py`:
+```python
+oauth_authorization_code_expire_seconds: int = 600   # 10 minutes
+oauth_access_token_expire_seconds: int = 3600        # 1 hour
+oauth_refresh_token_expire_days: int = 30            # 30 days
+```
+
+### Security Features
+
+1. **PKCE** - Only S256 method supported
+2. **Token rotation** - Refresh tokens rotated on use, replay attacks revoke entire family
+3. **Authorization code replay detection** - Revokes tokens if code reused
+4. **SSRF protection** - Client metadata URLs validated against private ranges
+5. **XSS protection** - All HTML pages escape user input
+6. **Session validation** - Consent decision validates authenticated user matches form
+
+### Testing MCP Locally
+
+1. Create `.mcp.json` in project root:
+```json
+{
+  "mcpServers": {
+    "mindnest": {
+      "type": "http",
+      "url": "http://localhost:8000/mcp"
+    }
+  }
+}
+```
+
+2. Start backend with DEBUG mode:
+```bash
+DEBUG=true uvicorn app.main:app --reload --port 8000
+```
+
+3. Open Claude Code in the project directory - it will detect the MCP server
+
+4. First request triggers OAuth flow (opens browser for login)
+
+### Claude Code Behavior Notes
+
+- **Dynamic Client Registration**: Claude Code generates new `client_id` each session
+- **Consent**: User sees consent page every time (since client_id is always new)
+- **Token storage**: Claude Code stores tokens locally
+- **"Clear authentication"**: Discards tokens locally (does NOT call `/oauth/revoke`)
 
 ## Development Notes
 
