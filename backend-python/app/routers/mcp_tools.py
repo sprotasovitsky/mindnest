@@ -152,7 +152,7 @@ async def verify_project_access(
 # ============================================================================
 
 
-@router.get("/me", response_model=CurrentUserResponse)
+@router.get("/me", response_model=CurrentUserResponse, operation_id="get_current_user")
 async def get_current_user(
     auth: McpAuth = Depends(get_mcp_auth_read),
 ) -> CurrentUserResponse:
@@ -176,7 +176,7 @@ async def get_current_user(
     )
 
 
-@router.get("/projects", response_model=ListProjectsResponse)
+@router.get("/projects", response_model=ListProjectsResponse, operation_id="list_projects")
 async def list_projects(
     auth: McpAuth = Depends(get_mcp_auth_read),
     db: AsyncSession = Depends(get_db),
@@ -214,7 +214,7 @@ async def list_projects(
     )
 
 
-@router.post("/search", response_model=SearchResponse)
+@router.post("/search", response_model=SearchResponse, operation_id="search_knowledge")
 async def search_knowledge(
     data: SearchRequest,
     auth: McpAuth = Depends(get_mcp_auth_read),
@@ -314,7 +314,7 @@ async def _add_to_knowledge_graph(
         logger.error(f"Failed to add MCP message to knowledge graph: {e}")
 
 
-@router.post("/message", response_model=SendMessageResponse)
+@router.post("/message", response_model=SendMessageResponse, operation_id="send_message")
 async def send_message(
     data: SendMessageRequest,
     background_tasks: BackgroundTasks,
