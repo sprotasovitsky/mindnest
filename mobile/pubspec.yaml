@@ -42,7 +42,7 @@ dependencies:
 
   # Speech recognition (Whisper)
   whisper_flutter_new: ^1.0.1
-  record: ^5.2.0
+  record: ^6.1.2
   path_provider: ^2.1.2
 
 dev_dependencies:
