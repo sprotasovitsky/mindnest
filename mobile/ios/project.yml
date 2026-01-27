@@ -69,6 +69,9 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         CADisableMinimumFrameSynchronization: true
+        # Privacy - Microphone & Speech Recognition (required by dependencies)
+        NSMicrophoneUsageDescription: "MindNest needs access to your microphone for voice input in chat."
+        NSSpeechRecognitionUsageDescription: "MindNest uses speech recognition to convert your voice to text for chat messages."
         # Google Sign-In
         GIDClientID: $(GOOGLE_CLIENT_ID)
         CFBundleURLTypes:
