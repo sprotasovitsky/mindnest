@@ -1,7 +1,7 @@
 """MCP Tools Router.
 
 Provides REST endpoints for MCP tools that can be called by Claude Code.
-All endpoints require API key authentication via X-API-Key header.
+Only OAuth 2.0 authentication is supported.
 """
 
 import logging
@@ -15,8 +15,8 @@ from sqlalchemy.orm import selectinload
 
 from ..database import get_db
 from ..graphiti_client import get_knowledge_graph
-from ..mcp_auth import ApiKeyAuth, get_user_from_api_key, get_user_from_api_key_write
-from ..models import McpLog, Project, ProjectMember
+from ..mcp_auth import McpAuth, get_mcp_auth_read, get_mcp_auth_write
+from ..models import Project, ProjectMember
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/mcp", tags=["mcp"])
@@ -87,25 +87,24 @@ class SendMessageResponse(BaseModel):
 
 
 async def log_mcp_action(
-    db: AsyncSession,
-    api_key_id: str,
-    user_id: str,
+    auth: McpAuth,
     action: str,
     project_id: Optional[str] = None,
     request_data: Optional[dict] = None,
     response_summary: Optional[str] = None,
 ) -> None:
-    """Log an MCP action to the database."""
-    log = McpLog(
-        api_key_id=api_key_id,
-        user_id=user_id,
-        action=action,
-        project_id=project_id,
-        request_data=request_data,
-        response_summary=response_summary,
+    """Log an MCP action (OAuth only).
+
+    Note: Currently just logs to logger. Can be extended to store in DB if needed.
+    """
+    auth_info = request_data.copy() if request_data else {}
+    auth_info["auth_method"] = "oauth"
+    auth_info["oauth_client_id"] = auth.oauth_client_id
+
+    logger.info(
+        f"MCP action: {action} by user {auth.user.id} "
+        f"(client: {auth.oauth_client_id}, project: {project_id})"
     )
-    db.add(log)
-    await db.commit()
 
 
 async def verify_project_access(
@@ -148,7 +147,7 @@ async def verify_project_access(
 
 @router.get("/projects", response_model=ListProjectsResponse)
 async def list_projects(
-    auth: ApiKeyAuth = Depends(get_user_from_api_key),
+    auth: McpAuth = Depends(get_mcp_auth_read),
     db: AsyncSession = Depends(get_db),
 ) -> ListProjectsResponse:
     """List all projects for the authenticated user.
@@ -165,9 +164,7 @@ async def list_projects(
 
     # Log action
     await log_mcp_action(
-        db=db,
-        api_key_id=auth.api_key.id,
-        user_id=auth.user.id,
+        auth=auth,
         action="list_projects",
         response_summary=f"Found {len(projects)} projects",
     )
@@ -189,7 +186,7 @@ async def list_projects(
 @router.post("/search", response_model=SearchResponse)
 async def search_knowledge(
     data: SearchRequest,
-    auth: ApiKeyAuth = Depends(get_user_from_api_key),
+    auth: McpAuth = Depends(get_mcp_auth_read),
     db: AsyncSession = Depends(get_db),
 ) -> SearchResponse:
     """Search the knowledge graph.
@@ -229,9 +226,7 @@ async def search_knowledge(
 
     # Log action
     await log_mcp_action(
-        db=db,
-        api_key_id=auth.api_key.id,
-        user_id=auth.user.id,
+        auth=auth,
         action="search_knowledge",
         project_id=data.project_id,
         request_data={"query": data.query},
@@ -275,7 +270,7 @@ async def _add_to_knowledge_graph(
 async def send_message(
     data: SendMessageRequest,
     background_tasks: BackgroundTasks,
-    auth: ApiKeyAuth = Depends(get_user_from_api_key_write),
+    auth: McpAuth = Depends(get_mcp_auth_write),
     db: AsyncSession = Depends(get_db),
 ) -> SendMessageResponse:
     """Add a message to the knowledge graph.
@@ -305,9 +300,7 @@ async def send_message(
 
     # Log action
     await log_mcp_action(
-        db=db,
-        api_key_id=auth.api_key.id,
-        user_id=auth.user.id,
+        auth=auth,
         action="send_message",
         project_id=data.project_id,
         request_data={"message": data.message[:200]},  # Truncate for log

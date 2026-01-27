@@ -8,9 +8,9 @@ def utc_now() -> datetime:
     """Return current UTC time as timezone-aware datetime."""
     return datetime.now(timezone.utc)
 
-from sqlalchemy import String, Text, ForeignKey, UniqueConstraint, Integer, DateTime
+from sqlalchemy import String, Text, ForeignKey, UniqueConstraint, Integer, DateTime, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.dialects.postgresql import UUID, JSONB, ARRAY
 
 from .database import Base
 
@@ -162,3 +162,99 @@ class McpLog(Base):
     # Relationships
     api_key: Mapped["ApiKey | None"] = relationship()
     user: Mapped["User"] = relationship()
+
+
+# ============================================================================
+# OAuth 2.0 Models (for MCP authentication)
+# ============================================================================
+
+
+class OAuthClient(Base):
+    """OAuth 2.0 registered client.
+
+    Stores dynamically registered OAuth clients (per RFC 7591).
+    Clients can also be fetched from Client ID Metadata Documents.
+    """
+    __tablename__ = "oauth_clients"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4()))
+    client_id: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)  # Could be URL for metadata document clients
+    client_secret_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)  # SHA-256 hash, null for public clients
+    client_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    redirect_uris: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False)  # Array of allowed redirect URIs
+    grant_types: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False, default=["authorization_code", "refresh_token"])
+    response_types: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False, default=["code"])
+    token_endpoint_auth_method: Mapped[str] = mapped_column(String(50), nullable=False, default="none")  # none, client_secret_basic, client_secret_post
+    is_dynamic: Mapped[bool] = mapped_column(Boolean, default=True)  # True if registered via dynamic registration
+    metadata_uri: Mapped[str | None] = mapped_column(String(500), nullable=True)  # URL to Client ID Metadata Document
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+
+class OAuthAuthorizationCode(Base):
+    """OAuth 2.0 authorization code.
+
+    Short-lived code used to exchange for tokens.
+    Includes PKCE challenge for security.
+    """
+    __tablename__ = "oauth_authorization_codes"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4()))
+    code_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)  # SHA-256 hash of code
+    client_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    redirect_uri: Mapped[str] = mapped_column(String(500), nullable=False)
+    scope: Mapped[str] = mapped_column(String(255), nullable=False, default="read")
+    code_challenge: Mapped[str] = mapped_column(String(128), nullable=False)  # PKCE code_challenge
+    code_challenge_method: Mapped[str] = mapped_column(String(10), nullable=False, default="S256")  # Only S256 supported
+    state: Mapped[str | None] = mapped_column(String(255), nullable=True)  # Client state for CSRF protection
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # Set when code is exchanged
+
+    # Relationships
+    user: Mapped["User"] = relationship()
+
+
+class OAuthRefreshToken(Base):
+    """OAuth 2.0 refresh token with rotation support.
+
+    Refresh tokens are rotated on each use to detect replay attacks.
+    family_id groups tokens from the same authorization.
+    """
+    __tablename__ = "oauth_refresh_tokens"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4()))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)  # SHA-256 hash
+    client_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    scope: Mapped[str] = mapped_column(String(255), nullable=False, default="read")
+    family_id: Mapped[str] = mapped_column(UUID(as_uuid=False), nullable=False)  # Groups related tokens for rotation
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # Set when revoked or rotated
+
+    # Relationships
+    user: Mapped["User"] = relationship()
+
+
+class OAuthConsent(Base):
+    """Stored user consent for OAuth client.
+
+    Allows skipping consent screen if user has already approved the client.
+    """
+    __tablename__ = "oauth_consents"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    client_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    scope: Mapped[str] = mapped_column(String(255), nullable=False)  # Consented scopes
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+    # Relationships
+    user: Mapped["User"] = relationship()
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "client_id", name="uq_oauth_consent_user_client"),
+    )

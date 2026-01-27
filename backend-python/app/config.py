@@ -75,6 +75,13 @@ class Settings(BaseSettings):
     reset_code_max_attempts: int = 5
     resend_email_cooldown_seconds: int = 60
 
+    # OAuth 2.0 settings (for MCP clients)
+    oauth_issuer: str = ""  # Set via env var per environment
+    oauth_resource_uri: str = ""  # Usually same as issuer
+    oauth_authorization_code_expire_seconds: int = 600  # 10 min
+    oauth_access_token_expire_seconds: int = 3600  # 1 hour
+    oauth_refresh_token_expire_days: int = 30
+
     # Token limits for unverified users
     unverified_token_limit: int = 1_000_000  # 1M tokens
 
@@ -129,6 +136,29 @@ class Settings(BaseSettings):
         }
         return limits.get(limit_type, "30/minute")
 
+    @field_validator("oauth_issuer")
+    @classmethod
+    def validate_oauth_issuer(cls, v: str) -> str:
+        """Validate or set default OAuth issuer based on environment."""
+        if not v:
+            import os
+            if os.getenv("DEBUG", "").lower() in ("true", "1", "yes"):
+                return "http://localhost:8000"
+            # In production, leave empty - will be set via env var
+            return ""
+        return v
+
+    @field_validator("oauth_resource_uri")
+    @classmethod
+    def validate_oauth_resource_uri(cls, v: str) -> str:
+        """Validate or set default OAuth resource URI based on environment."""
+        if not v:
+            import os
+            if os.getenv("DEBUG", "").lower() in ("true", "1", "yes"):
+                return "http://localhost:8000"
+            return ""
+        return v
+
     @field_validator("secret_key")
     @classmethod
     def validate_secret_key(cls, v: str) -> str:
@@ -175,6 +205,23 @@ class Settings(BaseSettings):
         if not self.allowed_origins:
             return []
         return [origin.strip() for origin in self.allowed_origins.split(",") if origin.strip()]
+
+    def get_oauth_issuer(self) -> str:
+        """Get OAuth issuer URL, raising error if not configured in production."""
+        if self.oauth_issuer:
+            return self.oauth_issuer
+        if self.debug:
+            return "http://localhost:8000"
+        raise ValueError(
+            "OAUTH_ISSUER must be set in production. "
+            "Set it to your API URL (e.g., https://api.mindnest.one)"
+        )
+
+    def get_oauth_resource_uri(self) -> str:
+        """Get OAuth resource URI, defaulting to issuer if not set."""
+        if self.oauth_resource_uri:
+            return self.oauth_resource_uri
+        return self.get_oauth_issuer()
 
 
 @lru_cache

@@ -1,128 +1,195 @@
 """MCP Authentication.
 
-Provides dependencies for validating API keys used by MCP clients.
+Provides dependencies for validating OAuth tokens used by MCP clients.
+Only OAuth 2.0 authentication is supported (no API keys).
 """
 
 import logging
-from datetime import datetime, timezone
+from typing import Optional
 
-from fastapi import Depends, Header, HTTPException, status
-from sqlalchemy import select
+from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from .config import get_settings
 from .database import get_db
-from .models import ApiKey, User
-from .routers.api_keys import hash_api_key
+from .models import User
+from .oauth_service import get_user_from_oauth_token
 
 logger = logging.getLogger(__name__)
 
 
-class ApiKeyAuth:
-    """Container for authenticated API key and user."""
+class McpAuth:
+    """Container for authenticated MCP user and OAuth credentials."""
 
-    def __init__(self, user: User, api_key: ApiKey):
+    def __init__(
+        self,
+        user: User,
+        oauth_client_id: str,
+        oauth_scope: str,
+    ):
         self.user = user
-        self.api_key = api_key
+        self.oauth_client_id = oauth_client_id
+        self.oauth_scope = oauth_scope
+
+    @property
+    def is_oauth_auth(self) -> bool:
+        """Check if authenticated via OAuth (always True for MCP)."""
+        return True
 
 
-async def get_user_from_api_key(
-    x_api_key: str = Header(..., alias="X-API-Key"),
-    db: AsyncSession = Depends(get_db),
-) -> ApiKeyAuth:
-    """Validate API key and return user.
+def _get_www_authenticate_header() -> str:
+    """Get WWW-Authenticate header value for 401 responses.
 
-    This is a FastAPI dependency for read-only MCP operations.
-    Requires an API key with at least 'read' scope.
+    Per RFC 9728, includes resource_metadata URL for OAuth discovery.
+    Claude Code uses this to discover the authorization server.
+    """
+    settings = get_settings()
+    try:
+        resource = settings.get_oauth_resource_uri()
+        # Include resource_metadata URL for MCP OAuth discovery
+        return f'Bearer resource="{resource}", resource_metadata="{resource}/.well-known/oauth-protected-resource"'
+    except ValueError:
+        # OAuth not configured, just return basic Bearer
+        return "Bearer"
+
+
+async def _validate_oauth_token(
+    token: str,
+    db: AsyncSession,
+) -> Optional[McpAuth]:
+    """Validate OAuth Bearer token and return auth info.
 
     Args:
-        x_api_key: API key from X-API-Key header
+        token: The Bearer token value
         db: Database session
 
     Returns:
-        ApiKeyAuth containing user and api_key
-
-    Raises:
-        HTTPException: If API key is invalid, expired, or revoked
+        McpAuth if valid, None otherwise
     """
-    # Hash the provided key
-    key_hash = hash_api_key(x_api_key)
+    user, payload = await get_user_from_oauth_token(db, token)
 
-    # Find the API key
-    result = await db.execute(
-        select(ApiKey).where(ApiKey.key_hash == key_hash)
+    if not user or not payload:
+        return None
+
+    client_id = payload.get("client_id", "unknown")
+    scope = payload.get("scope", "read")
+
+    logger.info(f"OAuth authenticated: user {user.id} via client {client_id}")
+
+    return McpAuth(
+        user=user,
+        oauth_client_id=client_id,
+        oauth_scope=scope,
     )
-    api_key = result.scalar_one_or_none()
-
-    if not api_key:
-        logger.warning(f"Invalid API key attempted: {x_api_key[:8]}...")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid API key",
-        )
-
-    # Check if revoked
-    if api_key.revoked_at is not None:
-        logger.warning(f"Revoked API key attempted: {api_key.id}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="API key has been revoked",
-        )
-
-    # Check if expired
-    now = datetime.now(timezone.utc)
-    if api_key.expires_at is not None and api_key.expires_at < now:
-        logger.warning(f"Expired API key attempted: {api_key.id}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="API key has expired",
-        )
-
-    # Get user
-    user_result = await db.execute(
-        select(User).where(User.id == api_key.user_id)
-    )
-    user = user_result.scalar_one_or_none()
-
-    if not user:
-        logger.error(f"API key {api_key.id} has no associated user")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid API key",
-        )
-
-    # Update last_used_at
-    api_key.last_used_at = now
-    await db.commit()
-
-    logger.info(f"API key authenticated: {api_key.id} for user {user.id}")
-
-    return ApiKeyAuth(user=user, api_key=api_key)
 
 
-async def get_user_from_api_key_write(
-    auth: ApiKeyAuth = Depends(get_user_from_api_key),
-) -> ApiKeyAuth:
-    """Validate API key and require write scope.
+async def get_mcp_auth(
+    request: Request,
+    authorization: Optional[str] = Header(None),
+    db: AsyncSession = Depends(get_db),
+) -> McpAuth:
+    """Validate MCP authentication via OAuth Bearer token.
 
-    This is a FastAPI dependency for write MCP operations.
-    Requires an API key with 'write' in scopes.
+    This is a FastAPI dependency for MCP operations.
+    Only OAuth 2.0 authentication is supported.
 
     Args:
-        auth: ApiKeyAuth from get_user_from_api_key
+        request: FastAPI request
+        authorization: Bearer token from Authorization header
+        db: Database session
 
     Returns:
-        ApiKeyAuth containing user and api_key
+        McpAuth containing user and OAuth info
 
     Raises:
-        HTTPException: If API key doesn't have write scope
+        HTTPException: If authentication fails (401 with OAuth discovery info)
     """
-    if "write" not in auth.api_key.scopes:
-        logger.warning(
-            f"Write operation attempted with read-only key: {auth.api_key.id}"
-        )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="API key does not have write permission",
-        )
+    # Try OAuth Bearer token
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization[7:]
+        auth = await _validate_oauth_token(token, db)
+        if auth:
+            return auth
 
-    return auth
+    # No valid authentication found - return 401 with OAuth discovery
+    www_authenticate = _get_www_authenticate_header()
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="OAuth authentication required",
+        headers={"WWW-Authenticate": www_authenticate},
+    )
+
+
+def _get_insufficient_scope_header(required_scope: str) -> str:
+    """Get WWW-Authenticate header for insufficient scope (403).
+
+    Per RFC 6750, includes the required scope for step-up authorization.
+    """
+    settings = get_settings()
+    try:
+        resource = settings.get_oauth_resource_uri()
+        return (
+            f'Bearer error="insufficient_scope", '
+            f'scope="{required_scope}", '
+            f'resource="{resource}", '
+            f'resource_metadata="{resource}/.well-known/oauth-protected-resource"'
+        )
+    except ValueError:
+        return f'Bearer error="insufficient_scope", scope="{required_scope}"'
+
+
+async def get_mcp_auth_read(
+    auth: McpAuth = Depends(get_mcp_auth),
+) -> McpAuth:
+    """Validate MCP authentication and require read scope.
+
+    This is a FastAPI dependency for read-only MCP operations.
+
+    Args:
+        auth: McpAuth from get_mcp_auth
+
+    Returns:
+        McpAuth containing user and OAuth info
+
+    Raises:
+        HTTPException: If authentication fails or lacks read scope
+    """
+    scope = auth.oauth_scope or ""
+    if "read" in scope.split():
+        return auth
+
+    # Return 403 with scope info for step-up authorization
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Read scope required",
+        headers={"WWW-Authenticate": _get_insufficient_scope_header("read")},
+    )
+
+
+async def get_mcp_auth_write(
+    auth: McpAuth = Depends(get_mcp_auth),
+) -> McpAuth:
+    """Validate MCP authentication and require write scope.
+
+    This is a FastAPI dependency for write MCP operations.
+
+    Args:
+        auth: McpAuth from get_mcp_auth
+
+    Returns:
+        McpAuth containing user and OAuth info
+
+    Raises:
+        HTTPException: If authentication fails or lacks write scope
+    """
+    scope = auth.oauth_scope or ""
+    if "write" in scope.split():
+        return auth
+
+    # Return 403 with scope info for step-up authorization
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Write scope required",
+        headers={"WWW-Authenticate": _get_insufficient_scope_header("read write")},
+    )
