@@ -40,8 +40,10 @@ dependencies:
   # URL launcher
   url_launcher: ^6.2.5
 
-  # Speech to text
-  speech_to_text: ^7.3.0
+  # Speech recognition (Whisper)
+  whisper_flutter_new: ^1.0.1
+  record: ^5.2.0
+  path_provider: ^2.1.2
 
 dev_dependencies:
   flutter_test:

@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:speech_to_text/speech_to_text.dart';
 
 import '../../../../core/providers/auth_provider.dart';
-import '../../../../core/providers/settings_provider.dart';
+import '../../../../core/providers/whisper_provider.dart';
+import '../../../../core/services/whisper_service.dart';
 import '../../../../shared/widgets/email_verification_banner.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -134,32 +134,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         onTap: () => context.push('/change-password'),
                       ),
 
-                    // API Keys for MCP access
-                    ListTile(
-                      leading: const Icon(Icons.key_outlined),
-                      title: const Text('API Keys'),
-                      subtitle: const Text('Connect with Claude Code'),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () => context.push('/api-keys'),
-                    ),
-
-                    // Voice input language selection
-                    Consumer(
-                      builder: (context, ref, _) {
-                        final settings = ref.watch(settingsProvider);
-                        return ListTile(
-                          leading: const Icon(Icons.mic_outlined),
-                          title: const Text('Voice Input Language'),
-                          subtitle: Text(
-                            settings.speechLanguage == null
-                                ? 'Auto (System)'
-                                : _getLanguageLabel(settings.speechLanguage!),
-                          ),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () => _showLanguageSelector(context, ref),
-                        );
-                      },
-                    ),
+                    // Speech Model (Whisper)
+                    const _WhisperModelTile(),
 
                     const Spacer(),
 
@@ -264,124 +240,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 
-  String _getLanguageLabel(String localeId) {
-    // Common locale mappings
-    final Map<String, String> localeLabels = {
-      'en_US': 'English (US)',
-      'en_GB': 'English (UK)',
-      'en_AU': 'English (Australia)',
-      'ru_RU': 'Russian',
-      'uk_UA': 'Ukrainian',
-      'de_DE': 'German',
-      'fr_FR': 'French',
-      'es_ES': 'Spanish (Spain)',
-      'es_MX': 'Spanish (Mexico)',
-      'it_IT': 'Italian',
-      'pt_BR': 'Portuguese (Brazil)',
-      'pt_PT': 'Portuguese (Portugal)',
-      'zh_CN': 'Chinese (Simplified)',
-      'zh_TW': 'Chinese (Traditional)',
-      'ja_JP': 'Japanese',
-      'ko_KR': 'Korean',
-      'pl_PL': 'Polish',
-      'nl_NL': 'Dutch',
-      'tr_TR': 'Turkish',
-      'ar_SA': 'Arabic',
-      'he_IL': 'Hebrew',
-      'hi_IN': 'Hindi',
-    };
-
-    return localeLabels[localeId] ?? localeId;
-  }
-
-  Future<void> _showLanguageSelector(BuildContext context, WidgetRef ref) async {
-    final speech = SpeechToText();
-    List<LocaleName> locales = [];
-
-    try {
-      final available = await speech.initialize();
-      if (available) {
-        locales = await speech.locales();
-      }
-    } catch (e) {
-      // Speech not available
-    }
-
-    if (!context.mounted) return;
-
-    final currentLang = ref.read(settingsProvider).speechLanguage;
-
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.6,
-        minChildSize: 0.3,
-        maxChildSize: 0.9,
-        expand: false,
-        builder: (context, scrollController) => Column(
-          children: [
-            Container(
-              margin: const EdgeInsets.symmetric(vertical: 8),
-              width: 32,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.4),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                'Voice Input Language',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-            ),
-            const Divider(height: 1),
-            Expanded(
-              child: ListView(
-                controller: scrollController,
-                children: [
-                  // Auto option
-                  RadioListTile<String?>(
-                    title: const Text('Auto (System)'),
-                    subtitle: const Text('Use device language'),
-                    value: null,
-                    groupValue: currentLang,
-                    onChanged: (value) {
-                      ref.read(settingsProvider.notifier).setSpeechLanguage(null);
-                      Navigator.pop(context);
-                    },
-                  ),
-                  const Divider(height: 1),
-                  // Available locales
-                  ...locales.map((locale) => RadioListTile<String?>(
-                    title: Text(locale.name),
-                    subtitle: Text(locale.localeId),
-                    value: locale.localeId,
-                    groupValue: currentLang,
-                    onChanged: (value) {
-                      ref.read(settingsProvider.notifier).setSpeechLanguage(value);
-                      Navigator.pop(context);
-                    },
-                  )),
-                  if (locales.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.all(32),
-                      child: Text(
-                        'Speech recognition not available on this device.',
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Future<void> _showLogoutDialog(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -478,6 +336,165 @@ class _LoginMethodChip extends StatelessWidget {
       label: Text(label),
       backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
       side: BorderSide.none,
+    );
+  }
+}
+
+class _WhisperModelTile extends ConsumerWidget {
+  const _WhisperModelTile();
+
+  String _formatBytes(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final whisperState = ref.watch(whisperProvider);
+
+    return ListTile(
+      leading: const Icon(Icons.record_voice_over_outlined),
+      title: const Text('Speech Model'),
+      subtitle: _buildSubtitle(whisperState),
+      trailing: _buildTrailing(context, ref, whisperState),
+      onTap: () => _showModelDialog(context, ref, whisperState),
+    );
+  }
+
+  Widget _buildSubtitle(WhisperState state) {
+    switch (state.modelStatus) {
+      case WhisperModelStatus.unknown:
+        return const Text('Checking...');
+      case WhisperModelStatus.notDownloaded:
+        return Text('Not downloaded (~${_formatBytes(WhisperService.modelSizeBytes)})');
+      case WhisperModelStatus.downloading:
+        return Text('Downloading ${(state.downloadProgress * 100).toInt()}%');
+      case WhisperModelStatus.downloaded:
+        final size = state.modelSizeBytes;
+        return Text(size != null ? 'Downloaded (${_formatBytes(size)})' : 'Downloaded');
+      case WhisperModelStatus.error:
+        return Text(state.errorMessage ?? 'Error');
+    }
+  }
+
+  Widget? _buildTrailing(BuildContext context, WidgetRef ref, WhisperState state) {
+    switch (state.modelStatus) {
+      case WhisperModelStatus.unknown:
+        return const SizedBox(
+          width: 24,
+          height: 24,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        );
+      case WhisperModelStatus.downloading:
+        return SizedBox(
+          width: 24,
+          height: 24,
+          child: CircularProgressIndicator(
+            value: state.downloadProgress,
+            strokeWidth: 2,
+          ),
+        );
+      case WhisperModelStatus.notDownloaded:
+      case WhisperModelStatus.error:
+        return const Icon(Icons.download);
+      case WhisperModelStatus.downloaded:
+        return const Icon(Icons.check_circle, color: Colors.green);
+    }
+  }
+
+  void _showModelDialog(BuildContext context, WidgetRef ref, WhisperState state) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Speech Model'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'The speech model enables voice input for chat messages. '
+              'Audio is processed locally on your device for privacy.',
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Icon(
+                  state.modelStatus == WhisperModelStatus.downloaded
+                      ? Icons.check_circle
+                      : Icons.circle_outlined,
+                  size: 20,
+                  color: state.modelStatus == WhisperModelStatus.downloaded
+                      ? Colors.green
+                      : null,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  state.modelStatus == WhisperModelStatus.downloaded
+                      ? 'Model downloaded'
+                      : 'Model not downloaded',
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Size: ~${_formatBytes(WhisperService.modelSizeBytes)}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+          if (state.modelStatus == WhisperModelStatus.downloaded)
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('Delete Model'),
+                    content: const Text(
+                      'Delete the speech model to free up storage space? '
+                      'You can download it again later.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('Cancel'),
+                      ),
+                      FilledButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: Theme.of(context).colorScheme.error,
+                        ),
+                        child: const Text('Delete'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirmed == true) {
+                  await ref.read(whisperProvider.notifier).deleteModel();
+                }
+              },
+              style: TextButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.error,
+              ),
+              child: const Text('Delete'),
+            ),
+          if (state.modelStatus == WhisperModelStatus.notDownloaded ||
+              state.modelStatus == WhisperModelStatus.error)
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(context);
+                ref.read(whisperProvider.notifier).downloadModel();
+              },
+              child: const Text('Download'),
+            ),
+        ],
+      ),
     );
   }
 }

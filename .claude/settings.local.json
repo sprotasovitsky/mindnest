@@ -12,7 +12,20 @@
       "WebFetch(domain:arxiv.org)",
       "WebFetch(domain:medium.com)",
       "WebFetch(domain:neo4j.com)",
-      "WebFetch(domain:raw.githubusercontent.com)"
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:pypi.org)",
+      "WebFetch(domain:fastapi-mcp.tadata.com)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "mcp__mindnest__list_projects_api_mcp_projects_get",
+      "WebFetch(domain:kane.mx)",
+      "mcp__mindnest-test__list_projects_api_mcp_projects_get",
+      "WebFetch(domain:api.anthropic.com)",
+      "mcp__mindnest__get_current_user_api_mcp_me_get",
+      "WebFetch(domain:pub.dev)"
     ]
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "mindnest"
+  ]
 }

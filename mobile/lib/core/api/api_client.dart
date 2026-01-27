@@ -369,31 +369,4 @@ class ApiClient {
     });
   }
 
-  // API Keys endpoints
-  Future<List<dynamic>> getApiKeys() async {
-    return _retryRequest(() async {
-      final response = await _dio.get('/api-keys');
-      final data = response.data as Map<String, dynamic>;
-      return data['keys'] as List<dynamic>;
-    });
-  }
-
-  Future<Map<String, dynamic>> createApiKey(String name, String scopes) async {
-    return _retryRequest(() async {
-      final response = await _dio.post(
-        '/api-keys',
-        data: {
-          'name': name,
-          'scopes': scopes,
-        },
-      );
-      return response.data as Map<String, dynamic>;
-    });
-  }
-
-  Future<void> revokeApiKey(String keyId) async {
-    return _retryRequest(() async {
-      await _dio.delete('/api-keys/$keyId');
-    });
-  }
 }
