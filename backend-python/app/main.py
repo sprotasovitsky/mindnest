@@ -174,6 +174,7 @@ async def oauth_protected_resource():
         return {"error": "OAuth not configured"}
 
     return {
+        "resource_name": "MindNest MCP Server",
         "resource": resource,
         "authorization_servers": [issuer],
         "bearer_methods_supported": ["header"],

@@ -271,7 +271,12 @@ async def authorize_login(
 
     # SECURITY: Create a session token for the authenticated user
     # This token will be validated in /authorize/decision to prevent bypass attacks
-    session_token = create_access_token(user_id=str(user.id))
+    session_token, _ = create_access_token(
+        user_id=str(user.id),
+        email=user.email,
+        name=user.name,
+        login_method="oauth",
+    )
 
     # Check if user has already consented
     consent = await _get_consent(db, user.id, client_id, scope)

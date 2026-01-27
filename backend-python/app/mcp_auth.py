@@ -37,19 +37,17 @@ class McpAuth:
         return True
 
 
-def _get_www_authenticate_header() -> str:
+def get_www_authenticate_header() -> str:
     """Get WWW-Authenticate header value for 401 responses.
 
     Per RFC 9728, includes resource_metadata URL for OAuth discovery.
-    Claude Code uses this to discover the authorization server.
     """
     settings = get_settings()
     try:
         resource = settings.get_oauth_resource_uri()
-        # Include resource_metadata URL for MCP OAuth discovery
-        return f'Bearer resource="{resource}", resource_metadata="{resource}/.well-known/oauth-protected-resource"'
+        # RFC 9728: resource_metadata points to Protected Resource Metadata
+        return f'Bearer resource_metadata="{resource}/.well-known/oauth-protected-resource"'
     except ValueError:
-        # OAuth not configured, just return basic Bearer
         return "Bearer"
 
 
@@ -112,7 +110,7 @@ async def get_mcp_auth(
             return auth
 
     # No valid authentication found - return 401 with OAuth discovery
-    www_authenticate = _get_www_authenticate_header()
+    www_authenticate = get_www_authenticate_header()
 
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
