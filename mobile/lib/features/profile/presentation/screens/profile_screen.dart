@@ -369,7 +369,7 @@ class _WhisperModelTile extends ConsumerWidget {
       case WhisperModelStatus.notDownloaded:
         return Text('Not downloaded (~${_formatBytes(WhisperService.modelSizeBytes)})');
       case WhisperModelStatus.downloading:
-        return Text('Downloading ${(state.downloadProgress * 100).toInt()}%');
+        return const Text('Downloading...');
       case WhisperModelStatus.downloaded:
         final size = state.modelSizeBytes;
         return Text(size != null ? 'Downloaded (${_formatBytes(size)})' : 'Downloaded');
@@ -381,19 +381,11 @@ class _WhisperModelTile extends ConsumerWidget {
   Widget? _buildTrailing(BuildContext context, WidgetRef ref, WhisperState state) {
     switch (state.modelStatus) {
       case WhisperModelStatus.unknown:
+      case WhisperModelStatus.downloading:
         return const SizedBox(
           width: 24,
           height: 24,
           child: CircularProgressIndicator(strokeWidth: 2),
-        );
-      case WhisperModelStatus.downloading:
-        return SizedBox(
-          width: 24,
-          height: 24,
-          child: CircularProgressIndicator(
-            value: state.downloadProgress,
-            strokeWidth: 2,
-          ),
         );
       case WhisperModelStatus.notDownloaded:
       case WhisperModelStatus.error:
