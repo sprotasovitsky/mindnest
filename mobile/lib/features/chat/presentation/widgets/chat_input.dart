@@ -449,23 +449,6 @@ class _ChatInputState extends ConsumerState<ChatInput>
           horizontal: 20,
           vertical: 12,
         ),
-        prefixIcon: _isTranscribing
-            ? Padding(
-                padding: const EdgeInsets.only(left: 12),
-                child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: colorScheme.primary,
-                  ),
-                ),
-              )
-            : null,
-        prefixIconConstraints: const BoxConstraints(
-          minWidth: 44,
-          minHeight: 20,
-        ),
       ),
       onSubmitted: (_) => _send(),
     );

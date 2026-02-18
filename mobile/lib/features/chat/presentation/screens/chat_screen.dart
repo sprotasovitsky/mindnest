@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -27,12 +28,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeChat();
-      // Listen for message changes and scroll to bottom
+      // Listen for token limit errors
       ref.listenManual(chatProvider, (previous, next) {
-        if (previous?.messages.length != next.messages.length) {
-          _scrollToBottom();
-        }
-        // Show token limit dialog when error occurs
         if (next.tokenLimitError != null &&
             previous?.tokenLimitError == null) {
           _showTokenLimitDialog(next.tokenLimitError!);
@@ -55,7 +52,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final project = projectState.currentProject;
     if (project != null) {
       await ref.read(chatProvider.notifier).initializeForProject(project.id);
-      _scrollToBottom();
     }
   }
 
@@ -65,22 +61,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     super.dispose();
   }
 
-  void _scrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
-    });
-  }
-
   Future<void> _sendMessage(String text) async {
     if (text.trim().isEmpty) return;
     await ref.read(chatProvider.notifier).sendMessage(text);
-    // Scroll is handled by listener in initState
   }
 
   void _showProjectSettings() {
@@ -145,23 +128,41 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   Expanded(
                     child: chatState.isLoadingHistory
                   ? const LoadingOverlay(message: 'Loading chat history...')
-                  : ListView.builder(
-                      controller: _scrollController,
-                      padding: const EdgeInsets.all(16),
-                      itemCount: chatState.messages.length +
-                          (chatState.isLoading ? 1 : 0),
-                      itemBuilder: (context, index) {
-                        if (index == chatState.messages.length &&
-                            chatState.isLoading) {
-                          return const LoadingIndicator(message: 'Thinking...');
+                  : NotificationListener<UserScrollNotification>(
+                      onNotification: (notification) {
+                        if (notification.direction == ScrollDirection.reverse) {
+                          FocusManager.instance.primaryFocus?.unfocus();
                         }
-                        final message = chatState.messages[index];
-                        return MessageBubble(
-                          message: message.content,
-                          isUser: message.isUser,
-                          isError: message.isError,
-                        );
+                        return true;
                       },
+                      child: ListView.builder(
+                        controller: _scrollController,
+                        reverse: true,
+                        padding: const EdgeInsets.all(16),
+                        itemCount: chatState.messages.length +
+                            (chatState.isLoading ? 1 : 0),
+                        itemBuilder: (context, index) {
+                          if (chatState.isLoading) {
+                            if (index == 0) {
+                              return const LoadingIndicator(message: 'Thinking...');
+                            }
+                            // Shift index for messages when loading indicator is present
+                            final message = chatState.messages[index - 1];
+                            return MessageBubble(
+                              message: message.content,
+                              isUser: message.isUser,
+                              isError: message.isError,
+                            );
+                          }
+                          
+                          final message = chatState.messages[index];
+                          return MessageBubble(
+                            message: message.content,
+                            isUser: message.isUser,
+                            isError: message.isError,
+                          );
+                        },
+                      ),
                     ),
                   ),
                   ChatInput(onSend: _sendMessage),

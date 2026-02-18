@@ -59,7 +59,7 @@ class Chat extends _$Chat {
 
       if (messages.isNotEmpty) {
         state = state.copyWith(
-          messages: messages,
+          messages: messages.reversed.toList(),
           isLoadingHistory: false,
         );
         return;
@@ -90,7 +90,7 @@ class Chat extends _$Chat {
 
     // Add user message
     state = state.copyWith(
-      messages: [...state.messages, ChatMessageFactory.user(text)],
+      messages: [ChatMessageFactory.user(text), ...state.messages],
       isLoading: true,
     );
 
@@ -105,11 +105,11 @@ class Chat extends _$Chat {
 
       state = state.copyWith(
         messages: [
-          ...state.messages,
           ChatMessageFactory.assistant(
             response.reply,
             confidence: response.confidence,
           ),
+          ...state.messages,
         ],
         isLoading: false,
       );
@@ -130,8 +130,8 @@ class Chat extends _$Chat {
 
       state = state.copyWith(
         messages: [
-          ...state.messages,
           ChatMessageFactory.error('Error: ${e.toUserMessage()}'),
+          ...state.messages,
         ],
         isLoading: false,
       );
