@@ -14,12 +14,11 @@ class WhisperService {
   final WhisperController _controller = WhisperController();
   bool _isModelReady = false;
 
-  /// The Whisper model to use. Base model (~150MB) provides good balance
-  /// of accuracy and size for mobile devices.
+  /// The Whisper model to use. Base model (~142MB) for better accuracy.
   static const WhisperModel _model = WhisperModel.base;
 
   /// Model size in bytes (approximate).
-  static const int modelSizeBytes = 150 * 1024 * 1024; // ~150MB
+  static const int modelSizeBytes = 142 * 1024 * 1024; // ~142MB
 
   /// Check if the Whisper model is downloaded.
   Future<bool> isModelDownloaded() async {

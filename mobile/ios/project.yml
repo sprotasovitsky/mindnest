@@ -68,7 +68,15 @@ targets:
           - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
-        CADisableMinimumFrameSynchronization: true
+        CADisableMinimumFrameDurationOnPhone: true
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+          UISceneConfigurations:
+            UIWindowSceneSessionRoleApplication:
+              - UISceneClassName: UIWindowScene
+                UISceneConfigurationName: flutter
+                UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).SceneDelegate
+                UISceneStoryboardFile: Main
         # Privacy - Microphone & Speech Recognition (required by dependencies)
         NSMicrophoneUsageDescription: "MindNest needs access to your microphone for voice input in chat."
         NSSpeechRecognitionUsageDescription: "MindNest uses speech recognition to convert your voice to text for chat messages."

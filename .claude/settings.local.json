@@ -21,7 +21,10 @@
       "mcp__mindnest-test__list_projects_api_mcp_projects_get",
       "WebFetch(domain:api.anthropic.com)",
       "mcp__mindnest__get_current_user_api_mcp_me_get",
-      "WebFetch(domain:pub.dev)"
+      "WebFetch(domain:pub.dev)",
+      "WebFetch(domain:forum.itsallwidgets.com)",
+      "WebFetch(domain:dilumdesilva.medium.com)",
+      "WebFetch(domain:blog.flutter.dev)"
     ]
   },
   "enableAllProjectMcpServers": true,
