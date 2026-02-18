@@ -40,8 +40,13 @@ dependencies:
   # URL launcher
   url_launcher: ^6.2.5
 
-  # Speech to text
-  speech_to_text: ^7.3.0
+  # Speech recognition (Whisper)
+  whisper_ggml: ^1.7.0
+  record: ^6.1.2
+  path_provider: ^2.1.2
+
+dependency_overrides:
+  flutter_riverpod: ^3.0.0
 
 dev_dependencies:
   flutter_test:

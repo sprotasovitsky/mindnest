@@ -10,7 +10,6 @@ import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/chat/presentation/screens/chat_screen.dart';
 import '../../features/landing/presentation/screens/landing_screen.dart';
 import '../../features/members/presentation/screens/members_screen.dart';
-import '../../features/profile/presentation/screens/api_keys_screen.dart';
 import '../../features/profile/presentation/screens/change_password_screen.dart';
 import '../../features/profile/presentation/screens/profile_screen.dart';
 import '../../features/projects/presentation/screens/projects_list_screen.dart';
@@ -94,11 +93,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/change-password',
         name: 'change-password',
         builder: (context, state) => const ChangePasswordScreen(),
-      ),
-      GoRoute(
-        path: '/api-keys',
-        name: 'api-keys',
-        builder: (context, state) => const ApiKeysScreen(),
       ),
       GoRoute(
         path: '/members',

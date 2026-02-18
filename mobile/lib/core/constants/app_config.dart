@@ -6,7 +6,7 @@ class AppConfig {
 
   /// Local development machine IP (update when IP changes)
   /// Used for testing on real devices and web
-  static const String localIp = '192.168.68.105';
+  static const String localIp = '192.168.68.104';
 
   /// Environment name (dev, staging, prod)
   static const String environment = String.fromEnvironment(

@@ -9,7 +9,7 @@ setup:
 # === Run (Flutter) ===
 
 run-dev:
-	flutter run --flavor dev --dart-define=ENVIRONMENT=dev --dart-define=API_URL=http://localhost:8000/api
+	flutter run --flavor dev --dart-define=ENVIRONMENT=dev --dart-define=API_URL=http://192.168.68.104:8000/api
 
 run-staging:
 	flutter run --flavor staging --dart-define=ENVIRONMENT=staging --dart-define=API_URL=https://dev-api.mindnest.one/api

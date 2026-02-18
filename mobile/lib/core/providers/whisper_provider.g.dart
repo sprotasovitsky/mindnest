@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
-part of 'api_keys_provider.dart';
+part of 'whisper_provider.dart';
 
 // **************************************************************************
 // RiverpodGenerator
@@ -9,51 +9,51 @@ part of 'api_keys_provider.dart';
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
 
-@ProviderFor(ApiKeys)
-const apiKeysProvider = ApiKeysProvider._();
+@ProviderFor(Whisper)
+const whisperProvider = WhisperProvider._();
 
-final class ApiKeysProvider extends $NotifierProvider<ApiKeys, ApiKeysState> {
-  const ApiKeysProvider._()
+final class WhisperProvider extends $NotifierProvider<Whisper, WhisperState> {
+  const WhisperProvider._()
     : super(
         from: null,
         argument: null,
         retry: null,
-        name: r'apiKeysProvider',
-        isAutoDispose: true,
+        name: r'whisperProvider',
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
 
   @override
-  String debugGetCreateSourceHash() => _$apiKeysHash();
+  String debugGetCreateSourceHash() => _$whisperHash();
 
   @$internal
   @override
-  ApiKeys create() => ApiKeys();
+  Whisper create() => Whisper();
 
   /// {@macro riverpod.override_with_value}
-  Override overrideWithValue(ApiKeysState value) {
+  Override overrideWithValue(WhisperState value) {
     return $ProviderOverride(
       origin: this,
-      providerOverride: $SyncValueProvider<ApiKeysState>(value),
+      providerOverride: $SyncValueProvider<WhisperState>(value),
     );
   }
 }
 
-String _$apiKeysHash() => r'7ae780d9f6e9157dee4f01af8aa9731e0d8e6ddc';
+String _$whisperHash() => r'3018d7926bc554e679fbecc22e0f78d5dde46acd';
 
-abstract class _$ApiKeys extends $Notifier<ApiKeysState> {
-  ApiKeysState build();
+abstract class _$Whisper extends $Notifier<WhisperState> {
+  WhisperState build();
   @$mustCallSuper
   @override
   void runBuild() {
     final created = build();
-    final ref = this.ref as $Ref<ApiKeysState, ApiKeysState>;
+    final ref = this.ref as $Ref<WhisperState, WhisperState>;
     final element =
         ref.element
             as $ClassProviderElement<
-              AnyNotifier<ApiKeysState, ApiKeysState>,
-              ApiKeysState,
+              AnyNotifier<WhisperState, WhisperState>,
+              WhisperState,
               Object?,
               Object?
             >;
