@@ -587,6 +587,30 @@ class _ChatInputState extends ConsumerState<ChatInput>
       );
     }
 
+    // On web, voice input is not supported — show disabled button with hint
+    if (kIsWeb) {
+      return Semantics(
+        label: 'Voice input (coming soon)',
+        button: true,
+        child: IconButton.filled(
+          onPressed: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Voice input is coming soon for web'),
+                duration: Duration(seconds: 3),
+              ),
+            );
+          },
+          tooltip: 'Coming soon',
+          icon: const Icon(Icons.mic_rounded),
+          style: IconButton.styleFrom(
+            backgroundColor: colorScheme.surfaceContainerHighest,
+            foregroundColor: colorScheme.outline.withValues(alpha: 0.5),
+          ),
+        ),
+      );
+    }
+
     // When no text and model ready, show mic button
     if (isModelReady) {
       return Semantics(
