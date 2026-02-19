@@ -23,10 +23,13 @@ jobs:
           cache: 'gradle'
           cache-dependency-path: mobile/android/build.gradle.kts
 
+      - name: Accept Android SDK licenses
+        run: yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses || true
+
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.38.6'
+          flutter-version: '3.41.1'
           channel: 'stable'
           cache: true
 
