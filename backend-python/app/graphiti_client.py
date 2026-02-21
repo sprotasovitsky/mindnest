@@ -91,6 +91,25 @@ class KnowledgeGraph:
             raise RuntimeError("KnowledgeGraph not initialized. Call initialize() first.")
         return self._client
 
+    # Instructions for Graphiti's entity/edge extraction LLM
+    EXTRACTION_INSTRUCTIONS = (
+        "1. Separate CURRENT STATE from PLANNED ACTION as distinct facts. "
+        "For example, 'X lacks feature Y' is a current-state fact, while "
+        "'X will add feature Y' is a planned-action fact. These are two "
+        "independent facts and one should NOT invalidate the other.\n"
+        "2. Words like 'will', 'plan to', 'going to', 'should', 'intend to' "
+        "indicate PLANNED ACTIONS. They must NOT cause expiration (invalid_at) "
+        "of any existing current-state facts.\n"
+        "3. Benchmark results, comparisons, and evaluation metrics are timeless "
+        "reference facts — never expire them unless explicitly stated to be wrong.\n"
+        "4. Never set invalid_at on an edge unless the text EXPLICITLY states "
+        "something has ended, been removed, or is no longer true. "
+        "Ambiguity should default to keeping edges valid.\n"
+        "5. Lists of items (groceries, tasks, action plans) are collections. "
+        "Each item is a separate fact. Adding new items does NOT invalidate "
+        "existing items in the same list."
+    )
+
     async def add_episode(
         self,
         message: str,
@@ -115,6 +134,8 @@ class KnowledgeGraph:
 
         logger.info(f"Adding episode: len={len(episode_body)} for project {project_id}")
 
+        settings = get_settings()
+
         try:
             result = await self.client.add_episode(
                 name=f"msg_{user_id}_{ref_time.isoformat()}",
@@ -122,6 +143,8 @@ class KnowledgeGraph:
                 source_description=source_description,
                 reference_time=ref_time,
                 group_id=project_id,
+                custom_extraction_instructions=self.EXTRACTION_INSTRUCTIONS,
+                update_communities=settings.auto_update_communities,
             )
 
             return {
@@ -161,6 +184,7 @@ class KnowledgeGraph:
         return [
             {
                 "fact": edge.fact,
+                "is_active": edge.expired_at is None,
                 "created_at": edge.created_at.isoformat() if edge.created_at else None,
                 "valid_at": edge.valid_at.isoformat() if edge.valid_at else None,
                 "expired_at": edge.expired_at.isoformat() if edge.expired_at else None,
@@ -179,6 +203,27 @@ class KnowledgeGraph:
             for node in nodes
         ]
 
+    def _get_community_config(self) -> CommunitySearchConfig:
+        """Get community search config with BM25 + cosine similarity and RRF reranking."""
+        return CommunitySearchConfig(
+            search_methods=[
+                CommunitySearchMethod.bm25,
+                CommunitySearchMethod.cosine_similarity,
+            ],
+            reranker=CommunityReranker.rrf,
+        )
+
+    def _format_communities(self, communities: list) -> list[dict]:
+        """Format community results for API response."""
+        return [
+            {
+                "name": community.name,
+                "summary": community.summary,
+            }
+            for community in communities
+            if community.summary  # Only include communities with actual summaries
+        ]
+
     async def search(
         self,
         query: str,
@@ -194,6 +239,7 @@ class KnowledgeGraph:
             config = SearchConfig(
                 edge_config=self._get_edge_config(),
                 node_config=self._get_node_config(),
+                community_config=self._get_community_config(),
                 limit=limit,
             )
 
@@ -205,17 +251,19 @@ class KnowledgeGraph:
 
             edges = results.edges or []
             nodes = results.nodes or []
+            communities = results.communities or []
 
-            logger.info(f"Found {len(edges)} edges, {len(nodes)} nodes")
+            logger.info(f"Found {len(edges)} edges, {len(nodes)} nodes, {len(communities)} communities")
 
             return {
                 "success": True,
                 "edges": self._format_edges(edges),
                 "nodes": self._format_nodes(nodes),
+                "communities": self._format_communities(communities),
             }
         except Exception as e:
             logger.error(f"Search failed: {e}")
-            return {"success": False, "error": str(e), "edges": [], "nodes": []}
+            return {"success": False, "error": str(e), "edges": [], "nodes": [], "communities": []}
 
     async def build_communities(self, project_id: str) -> dict:
         """Build communities for a project.

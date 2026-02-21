@@ -72,6 +72,7 @@ def format_response_prompt(
     pending_context: str = "",
     chat_history: str = "",
     project_description: Optional[str] = None,
+    communities: Optional[list[dict]] = None,
 ) -> str:
     """Format the full response prompt with context.
 
@@ -84,13 +85,19 @@ def format_response_prompt(
         pending_context: Recent messages not yet in graph
         chat_history: Formatted previous conversation history
         project_description: Project description for context
+        communities: List of community summaries from knowledge graph
 
     Returns:
         Formatted prompt ready for LLM
     """
-    # Pass raw data as JSON - let LLM interpret with full metadata
-    facts_text = json.dumps(facts, indent=2, ensure_ascii=False) if facts else "[]"
+    # Separate facts into active (current) and superseded (expired) groups
+    active_facts = [f for f in facts if f.get("is_active", True)]
+    expired_facts = [f for f in facts if not f.get("is_active", True)]
+
+    active_facts_text = json.dumps(active_facts, indent=2, ensure_ascii=False) if active_facts else "[]"
+    expired_facts_text = json.dumps(expired_facts, indent=2, ensure_ascii=False) if expired_facts else "[]"
     entities_text = json.dumps(entities, indent=2, ensure_ascii=False) if entities else "[]"
+    communities_text = json.dumps(communities, indent=2, ensure_ascii=False) if communities else "[]"
 
     # Load and format template
     template = get_response_template()
@@ -99,8 +106,10 @@ def format_response_prompt(
         system_prompt=get_system_prompt(),
         context_guide=get_context_guide(),
         current_datetime=get_current_datetime_string(),
-        facts_text=facts_text,
+        active_facts_text=active_facts_text,
+        expired_facts_text=expired_facts_text,
         entities_text=entities_text,
+        communities_text=communities_text,
         user_name=user_name or "Anonymous",
         project_id=project_id or "Unknown",
         message=message,

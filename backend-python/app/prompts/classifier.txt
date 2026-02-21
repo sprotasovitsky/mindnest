@@ -23,7 +23,7 @@ Chat history (for context resolution):
 ## Output format (exactly):
 TYPE: <DATA|QUESTION|BOTH>
 DATA_TO_SAVE: <expanded data to save in knowledge graph, or "none">
-SEARCH_QUERY: <search query if TYPE is QUESTION or BOTH, otherwise "none">
+SEARCH_QUERIES: <one or more search queries separated by " | " if TYPE is QUESTION or BOTH, otherwise "none">
 
 ## DATA_TO_SAVE rules:
 - Extract concrete facts, items, tasks, lists from the message
@@ -34,11 +34,14 @@ SEARCH_QUERY: <search query if TYPE is QUESTION or BOTH, otherwise "none">
 - Include user attribution: "{user_name}: shopping list - milk, bread"
 - If no data to save, write "none"
 
-## SEARCH_QUERY rules:
-- Extract key concepts user is asking about
+## SEARCH_QUERIES rules:
+- For simple questions, use a single search query
+- For complex questions that touch multiple topics, generate 2-3 separate queries separated by " | "
+- Each query should focus on a different aspect of the question
 - Include synonyms and related terms for better search coverage
 - Include people names if relevant
 - If no search needed, write "none"
+- Maximum 3 queries
 
 ## Examples:
 
@@ -46,85 +49,85 @@ Example 1 - Mixed message (data + question):
 User: "Buy groceries: cottage cheese, eggs, bread. Any gift ideas for a surprise?"
 TYPE: BOTH
 DATA_TO_SAVE: Shopping list: cottage cheese, eggs, bread
-SEARCH_QUERY: gift ideas surprise presents
+SEARCH_QUERIES: gift ideas surprise presents
 
 Example 2 - Reference to history:
 History: [Assistant suggested omelet recipe with eggs, milk, cheese]
 User: "Create a shopping list for that recipe"
 TYPE: DATA
 DATA_TO_SAVE: Shopping list for omelet: eggs, milk, cheese
-SEARCH_QUERY: none
+SEARCH_QUERIES: none
 
 Example 3 - Pure question:
 User: "What do we need to buy?"
 TYPE: QUESTION
 DATA_TO_SAVE: none
-SEARCH_QUERY: shopping list items to buy groceries
+SEARCH_QUERIES: shopping list items to buy groceries
 
 Example 4 - Pure data (expense tracking):
 User: "Spent $45 on groceries at the supermarket"
 TYPE: DATA
 DATA_TO_SAVE: Expense: groceries, $45, supermarket
-SEARCH_QUERY: none
+SEARCH_QUERIES: none
 
 Example 5 - Add to existing:
 History: [User created shopping list with milk, bread]
 User: "Add cheese and butter to the list"
 TYPE: DATA
 DATA_TO_SAVE: Add to shopping list: cheese, butter
-SEARCH_QUERY: none
+SEARCH_QUERIES: none
 
 Example 6 - Task assignment with question:
 User: "Assign the alcohol shopping to Boris. What's our total budget?"
 TYPE: BOTH
 DATA_TO_SAVE: Task for Boris: buy alcohol
-SEARCH_QUERY: budget total expenses money
+SEARCH_QUERIES: budget total expenses money
 
 Example 7 - Recipe with question:
 User: "Save this pasta recipe: spaghetti 500g, tomatoes 400g, garlic 3 cloves. How long should I cook it?"
 TYPE: BOTH
 DATA_TO_SAVE: Recipe: pasta - spaghetti 500g, tomatoes 400g, garlic 3 cloves
-SEARCH_QUERY: pasta cooking time instructions
+SEARCH_QUERIES: pasta cooking time instructions
 
 Example 8 - Correction:
 User: "Actually the grocery bill was $42, not $45"
 TYPE: DATA
 DATA_TO_SAVE: Correction: grocery expense is $42 (not $45)
-SEARCH_QUERY: none
+SEARCH_QUERIES: none
 
 Example 9 - Event scheduling with question:
 User: "Schedule team meeting for Monday 3pm. Who's available that day?"
 TYPE: BOTH
 DATA_TO_SAVE: Meeting scheduled: Monday 3pm, team meeting
-SEARCH_QUERY: availability Monday schedule calendar
+SEARCH_QUERIES: availability Monday schedule calendar
 
 Example 10 - Travel planning with question:
 User: "Book flight to Paris for March 15. What hotels are nearby the city center?"
 TYPE: BOTH
 DATA_TO_SAVE: Travel: flight to Paris, March 15
-SEARCH_QUERY: Paris hotels city center accommodation
+SEARCH_QUERIES: Paris hotels city center accommodation
 
 Example 11 - Task completion with follow-up:
 User: "Finished painting the living room. What's next on the renovation list?"
 TYPE: BOTH
 DATA_TO_SAVE: Task completed: painting living room
-SEARCH_QUERY: renovation tasks list pending next
+SEARCH_QUERIES: renovation tasks list pending next
 
-Example 12 - Multi-person expenses:
+Example 12 - Multi-person expenses (multi-query):
 User: "John bought supplies for $50, Mary paid for lunch $30. Who owes whom?"
 TYPE: BOTH
 DATA_TO_SAVE: Expense: John - supplies $50; Expense: Mary - lunch $30
-SEARCH_QUERY: expenses balance settlement who owes
+SEARCH_QUERIES: John expenses payments | Mary expenses payments | balance settlement who owes
 
 Example 13 - Command as question (save request):
 User: "Can you remember this?"
 History: [User shared mom's phone number: 555-1234]
 TYPE: DATA
 DATA_TO_SAVE: Mom's phone number: 555-1234
-SEARCH_QUERY: none
+SEARCH_QUERIES: none
 
 Example 14 - Remember/note fact:
 User: "Remember that mom's birthday is March 5th"
 TYPE: DATA
 DATA_TO_SAVE: Mom's birthday: March 5th
-SEARCH_QUERY: none
+SEARCH_QUERIES: none
