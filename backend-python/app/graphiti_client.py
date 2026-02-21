@@ -93,21 +93,21 @@ class KnowledgeGraph:
 
     # Instructions for Graphiti's entity/edge extraction LLM
     EXTRACTION_INSTRUCTIONS = (
-        "1. Separate CURRENT STATE from PLANNED ACTION as distinct facts. "
-        "For example, 'X lacks feature Y' is a current-state fact, while "
-        "'X will add feature Y' is a planned-action fact. These are two "
+        "1. Separate CURRENT STATE from PLANNED/FUTURE ACTION as distinct facts. "
+        "For example, 'X does not have Y' is a current-state fact, while "
+        "'X will add Y' is a planned-action fact. These are two "
         "independent facts and one should NOT invalidate the other.\n"
         "2. Words like 'will', 'plan to', 'going to', 'should', 'intend to' "
         "indicate PLANNED ACTIONS. They must NOT cause expiration (invalid_at) "
         "of any existing current-state facts.\n"
-        "3. Benchmark results, comparisons, and evaluation metrics are timeless "
-        "reference facts — never expire them unless explicitly stated to be wrong.\n"
+        "3. Numerical data, comparisons, measurements, and test results are "
+        "reference facts — never expire them unless the text explicitly states "
+        "they are wrong or outdated.\n"
         "4. Never set invalid_at on an edge unless the text EXPLICITLY states "
         "something has ended, been removed, or is no longer true. "
         "Ambiguity should default to keeping edges valid.\n"
-        "5. Lists of items (groceries, tasks, action plans) are collections. "
-        "Each item is a separate fact. Adding new items does NOT invalidate "
-        "existing items in the same list."
+        "5. Lists of items are collections. Each item is a separate fact. "
+        "Adding new items does NOT invalidate existing items in the same list."
     )
 
     async def add_episode(
