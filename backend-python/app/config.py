@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     # Embeddings configured in Graphiti: gemini-embedding-001 (3072 dimensions)
 
     # Graphiti features
-    auto_update_communities: bool = False  # Update communities on each add_episode (experimental)
+    auto_update_communities: bool = True  # Build communities after each add_episode
 
     # Search
     search_limit: int = 40  # Max edges/nodes returned from search
