@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -169,8 +169,7 @@ async def oauth_protected_resource():
         issuer = settings.get_oauth_issuer()
         resource = settings.get_oauth_resource_uri()
     except ValueError:
-        # OAuth not configured - return 404
-        return {"error": "OAuth not configured"}
+        return Response(status_code=404)
 
     return {
         "resource_name": "MindNest MCP Server",
@@ -191,8 +190,7 @@ async def oauth_authorization_server():
     try:
         issuer = settings.get_oauth_issuer()
     except ValueError:
-        # OAuth not configured - return 404
-        return {"error": "OAuth not configured"}
+        return Response(status_code=404)
 
     return {
         "issuer": issuer,

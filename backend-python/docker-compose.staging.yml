@@ -25,6 +25,9 @@ services:
       - GOOGLE_IOS_CLIENT_ID=${GOOGLE_IOS_CLIENT_ID}
       - GOOGLE_ANDROID_CLIENT_ID=${GOOGLE_ANDROID_CLIENT_ID}
       - APPLE_CLIENT_ID=${APPLE_CLIENT_ID}
+      # OAuth 2.0 (MCP server authentication)
+      - OAUTH_ISSUER=https://dev-api.mindnest.one
+      - OAUTH_RESOURCE_URI=https://dev-api.mindnest.one
       # CORS
       - ALLOWED_ORIGINS=https://dev.mindnest.one,https://mindnest.one
     depends_on:
