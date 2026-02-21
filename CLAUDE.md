@@ -72,6 +72,10 @@ Presentation (ConsumerWidget/ConsumerStatefulWidget)
 3. QUESTION → search Graphiti graph + pending cache → generate response via Gemini
 4. Pending cache ensures new info is instantly queryable before graph processing completes
 
+## MCP Knowledge Base
+
+MindNest has an MCP server connected to this workspace. Before answering questions about MindNest functionality, architecture, decisions, or status — **query the knowledge graph first** using `mcp__mindnest__search_knowledge`. The knowledge graph contains project vision, architecture details, backlog, security review, model comparison reports, and other project knowledge that may be more up-to-date than this file.
+
 ## Critical Rules
 
 ### DO NOT change AI models without explicit user request
