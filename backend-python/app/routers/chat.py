@@ -167,16 +167,44 @@ async def _multi_query_search(
     }
 
 
-def _log_context(query: str, edges: list[dict], nodes: list[dict]) -> None:
+def _log_context(
+    query: str,
+    edges: list[dict],
+    nodes: list[dict],
+    communities: list[dict] | None = None,
+) -> None:
     """Log search context for debugging."""
-    logger.info(f"=== CONTEXT FOR LLM ===")
-    logger.info(f"Query used: {query}")
-    logger.info(f"Edges ({len(edges)}):")
-    for e in edges[:10]:
-        logger.info(f"  - {e['fact']}")
-    logger.info(f"Nodes ({len(nodes)}):")
-    for n in nodes[:10]:
-        logger.info(f"  - {n['name']}: {n['summary'][:100] if n.get('summary') else 'no summary'}...")
+    comm = communities or []
+    logger.info(f"=== GRAPHITI SEARCH RESULTS ===")
+    logger.info(f"Query: {query}")
+    logger.info(f"Results: {len(edges)} edges, {len(nodes)} nodes, {len(comm)} communities")
+
+    logger.info(f"--- Edges ({len(edges)}) ---")
+    for i, e in enumerate(edges):
+        logger.info(f"  [{i+1}] {e['fact']}")
+
+    logger.info(f"--- Nodes ({len(nodes)}) ---")
+    for i, n in enumerate(nodes):
+        summary = n.get('summary') or 'no summary'
+        logger.info(f"  [{i+1}] {n['name']}: {summary[:200]}")
+
+    if comm:
+        logger.info(f"--- Communities ({len(comm)}) ---")
+        for i, c in enumerate(comm):
+            summary = c.get('summary') or 'no summary'
+            logger.info(f"  [{i+1}] {c.get('name', '?')}: {summary[:200]}")
+
+
+def _log_prompt_stats(prompt: str, message_type: str) -> None:
+    """Log prompt size stats sent to LLM."""
+    char_count = len(prompt)
+    approx_tokens = char_count // 4
+    logger.info(f"=== PROMPT TO LLM ({message_type}) ===")
+    logger.info(f"Prompt size: {char_count} chars (~{approx_tokens} tokens)")
+    # Log last section (the actual user message part) for verification
+    lines = prompt.split('\n')
+    if len(lines) > 5:
+        logger.info(f"Prompt ends with: ...{lines[-3]}")
 
 
 class ChatRequest(BaseModel):
@@ -468,6 +496,7 @@ async def _handle_data(
     pending_context = cache.format_for_prompt(pending)
 
     # 5. Generate response with graph + pending + history + project context
+    _log_context(request.message, edges, nodes, communities)
     facts, entities, comm = _format_context(edges, nodes, communities)
     settings = get_settings()
     prompt = format_response_prompt(
@@ -481,6 +510,7 @@ async def _handle_data(
         project_description=project_description,
         communities=comm,
     )
+    _log_prompt_stats(prompt, "DATA")
 
     try:
         reply = await generate_text(prompt, model=settings.llm_model_pro)
@@ -550,7 +580,7 @@ async def _handle_both(
     if not success:
         logger.warning(f"[BOTH] Search failed: {search_result.get('error')}")
 
-    _log_context(str(queries), edges, nodes)
+    _log_context(str(queries), edges, nodes, communities)
 
     # 4. Generate response with graph + pending + history
     facts, entities, comm = _format_context(edges, nodes, communities)
@@ -566,6 +596,7 @@ async def _handle_both(
         project_description=project_description,
         communities=comm,
     )
+    _log_prompt_stats(prompt, "BOTH")
 
     try:
         reply = await generate_text(prompt, model=settings.llm_model_pro)
@@ -624,7 +655,7 @@ async def _handle_question(
     nodes = search_result.get("nodes", [])
     communities = search_result.get("communities", [])
 
-    _log_context(str(queries), edges, nodes)
+    _log_context(str(queries), edges, nodes, communities)
 
     # Generate response with graph + pending + history + project context
     facts, entities, comm = _format_context(edges, nodes, communities)
@@ -640,6 +671,7 @@ async def _handle_question(
         project_description=project_description,
         communities=comm,
     )
+    _log_prompt_stats(prompt, "QUESTION")
 
     try:
         reply = await generate_text(prompt, model=settings.llm_model_pro)
