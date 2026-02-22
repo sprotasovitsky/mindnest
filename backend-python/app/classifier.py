@@ -27,8 +27,13 @@ class MessageType(str, Enum):
 class ClassificationResult(BaseModel):
     message_type: MessageType
     data_to_save: Optional[str] = None  # Extracted/expanded data for Graphiti
-    search_query: Optional[str] = None
+    search_queries: list[str] = []  # One or more search queries for multi-query search
     confidence: float = 1.0
+
+    @property
+    def search_query(self) -> Optional[str]:
+        """Primary search query (first one) for backward compatibility."""
+        return self.search_queries[0] if self.search_queries else None
 
 
 async def classify_message(
@@ -59,7 +64,7 @@ async def classify_message(
         logger.info(
             f"Classified: type={result.message_type} "
             f"data_to_save={'yes' if result.data_to_save else 'no'} "
-            f"search_query={'yes' if result.search_query else 'no'}"
+            f"search_queries={len(result.search_queries)}"
         )
         return result
     except Exception as e:
@@ -78,7 +83,7 @@ def _parse_classification(response: str) -> ClassificationResult:
 
     message_type = MessageType.DATA
     data_to_save = None
-    search_query = None
+    search_queries: list[str] = []
 
     for line in lines:
         line = line.strip()
@@ -94,13 +99,15 @@ def _parse_classification(response: str) -> ClassificationResult:
             data = line.replace("DATA_TO_SAVE:", "").strip()
             if data.lower() != "none" and data:
                 data_to_save = data
-        elif line.startswith("SEARCH_QUERY:"):
-            query = line.replace("SEARCH_QUERY:", "").strip()
-            if query.lower() != "none" and query:
-                search_query = query
+        elif line.startswith("SEARCH_QUERIES:") or line.startswith("SEARCH_QUERY:"):
+            raw = line.split(":", 1)[1].strip()
+            if raw.lower() != "none" and raw:
+                # Split by " | " for multi-query, fall back to single query
+                queries = [q.strip() for q in raw.split("|") if q.strip()]
+                search_queries = queries[:3]  # Cap at 3 queries
 
     return ClassificationResult(
         message_type=message_type,
         data_to_save=data_to_save,
-        search_query=search_query,
+        search_queries=search_queries,
     )

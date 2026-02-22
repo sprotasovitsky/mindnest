@@ -4,6 +4,7 @@ Provides a shared Google Gemini client for the application.
 Used by both Graphiti and direct LLM calls for response generation.
 """
 
+import asyncio
 import logging
 from typing import Optional
 
@@ -100,11 +101,14 @@ def get_gemini_client(model: Optional[str] = None) -> genai.Client:
         return _client
 
 
+_RETRY_DELAYS = [1, 2, 4]  # Exponential backoff: 1s, 2s, 4s
+
+
 async def generate_text(
     prompt: str,
     model: Optional[str] = None,
 ) -> str:
-    """Generate text using Gemini.
+    """Generate text using Gemini with retry on transient errors.
 
     Args:
         prompt: The prompt to send to the model
@@ -117,18 +121,30 @@ async def generate_text(
     model_name = model or settings.llm_model
     client = get_gemini_client(model=model_name)
 
-    try:
-        response = await client.aio.models.generate_content(
-            model=model_name,
-            contents=prompt,
-        )
-        text = response.text
-        if not text or not text.strip():
-            logger.warning(f"LLM returned empty response. Candidates: {response.candidates}")
-        return text or ""
-    except Exception as e:
-        logger.error(f"Failed to generate text: {e}")
-        raise
+    last_error: Optional[Exception] = None
+    for attempt in range(len(_RETRY_DELAYS) + 1):
+        try:
+            response = await client.aio.models.generate_content(
+                model=model_name,
+                contents=prompt,
+            )
+            text = response.text
+            if not text or not text.strip():
+                logger.warning(f"LLM returned empty response. Candidates: {response.candidates}")
+            return text or ""
+        except Exception as e:
+            last_error = e
+            if attempt < len(_RETRY_DELAYS):
+                delay = _RETRY_DELAYS[attempt]
+                logger.warning(
+                    f"LLM call failed (attempt {attempt + 1}/{len(_RETRY_DELAYS) + 1}), "
+                    f"retrying in {delay}s: {e}"
+                )
+                await asyncio.sleep(delay)
+            else:
+                logger.error(f"LLM call failed after {len(_RETRY_DELAYS) + 1} attempts: {e}")
+
+    raise last_error  # type: ignore[misc]
 
 
 def close_client() -> None:

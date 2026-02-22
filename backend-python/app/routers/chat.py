@@ -9,6 +9,7 @@ Classification-based flow with background processing:
 # Classifier gets last N messages for context resolution
 CLASSIFIER_HISTORY_LIMIT = 4
 
+import asyncio
 import logging
 import uuid
 from datetime import datetime
@@ -113,23 +114,97 @@ def _get_chat_limit() -> str:
     return get_settings().get_rate_limit("chat")
 
 
-def _format_context(edges: list[dict], nodes: list[dict]) -> tuple[list[dict], list[dict]]:
+def _format_context(
+    edges: list[dict], nodes: list[dict], communities: list[dict] | None = None
+) -> tuple[list[dict], list[dict], list[dict]]:
     """Format search results for LLM prompts."""
     facts = [{"fact": e["fact"], **e} for e in edges]
     entities = [{"name": n["name"], "summary": n["summary"], **n} for n in nodes]
-    return facts, entities
+    comm = communities or []
+    return facts, entities, comm
 
 
-def _log_context(query: str, edges: list[dict], nodes: list[dict]) -> None:
+async def _multi_query_search(
+    kg: KnowledgeGraph,
+    queries: list[str],
+    project_id: str,
+) -> dict:
+    """Execute multiple search queries in parallel and merge/dedup results."""
+    if not queries:
+        return {"success": True, "edges": [], "nodes": [], "communities": []}
+
+    if len(queries) == 1:
+        return await kg.search(queries[0], project_id)
+
+    # Execute all queries in parallel
+    tasks = [kg.search(q, project_id) for q in queries]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    merged_edges: dict[str, dict] = {}  # fact text -> edge dict (dedup by fact)
+    merged_nodes: dict[str, dict] = {}  # name -> node dict (dedup by name)
+    merged_communities: dict[str, dict] = {}  # name -> community dict (dedup by name)
+    any_success = False
+
+    for r in results:
+        if isinstance(r, Exception):
+            logger.warning(f"Multi-query search error: {r}")
+            continue
+        if not r.get("success"):
+            continue
+        any_success = True
+        for edge in r.get("edges", []):
+            merged_edges.setdefault(edge["fact"], edge)
+        for node in r.get("nodes", []):
+            merged_nodes.setdefault(node["name"], node)
+        for comm in r.get("communities", []):
+            merged_communities.setdefault(comm["name"], comm)
+
+    return {
+        "success": any_success,
+        "edges": list(merged_edges.values()),
+        "nodes": list(merged_nodes.values()),
+        "communities": list(merged_communities.values()),
+    }
+
+
+def _log_context(
+    query: str,
+    edges: list[dict],
+    nodes: list[dict],
+    communities: list[dict] | None = None,
+) -> None:
     """Log search context for debugging."""
-    logger.info(f"=== CONTEXT FOR LLM ===")
-    logger.info(f"Query used: {query}")
-    logger.info(f"Edges ({len(edges)}):")
-    for e in edges[:10]:
-        logger.info(f"  - {e['fact']}")
-    logger.info(f"Nodes ({len(nodes)}):")
-    for n in nodes[:10]:
-        logger.info(f"  - {n['name']}: {n['summary'][:100] if n.get('summary') else 'no summary'}...")
+    comm = communities or []
+    logger.info(f"=== GRAPHITI SEARCH RESULTS ===")
+    logger.info(f"Query: {query}")
+    logger.info(f"Results: {len(edges)} edges, {len(nodes)} nodes, {len(comm)} communities")
+
+    logger.info(f"--- Edges ({len(edges)}) ---")
+    for i, e in enumerate(edges):
+        logger.info(f"  [{i+1}] {e['fact']}")
+
+    logger.info(f"--- Nodes ({len(nodes)}) ---")
+    for i, n in enumerate(nodes):
+        summary = n.get('summary') or 'no summary'
+        logger.info(f"  [{i+1}] {n['name']}: {summary[:200]}")
+
+    if comm:
+        logger.info(f"--- Communities ({len(comm)}) ---")
+        for i, c in enumerate(comm):
+            summary = c.get('summary') or 'no summary'
+            logger.info(f"  [{i+1}] {c.get('name', '?')}: {summary[:200]}")
+
+
+def _log_prompt_stats(prompt: str, message_type: str) -> None:
+    """Log prompt size stats sent to LLM."""
+    char_count = len(prompt)
+    approx_tokens = char_count // 4
+    logger.info(f"=== PROMPT TO LLM ({message_type}) ===")
+    logger.info(f"Prompt size: {char_count} chars (~{approx_tokens} tokens)")
+    # Log last section (the actual user message part) for verification
+    lines = prompt.split('\n')
+    if len(lines) > 5:
+        logger.info(f"Prompt ends with: ...{lines[-3]}")
 
 
 class ChatRequest(BaseModel):
@@ -346,7 +421,7 @@ async def process_message(
     logger.info(
         f"Classified as {classification.message_type}: "
         f"data_to_save={'yes' if classification.data_to_save else 'no'}, "
-        f"search_query={classification.search_query or 'none'}"
+        f"search_queries={classification.search_queries or 'none'}"
     )
 
     # Step 2: Process based on type
@@ -354,14 +429,14 @@ async def process_message(
         # Pure question - no data to save
         return await _handle_question(
             request, kg, project_id, user_name,
-            classification.search_query, chat_history, project_description
+            classification.search_queries, chat_history, project_description
         )
     elif classification.message_type == MessageType.BOTH:
         # Mixed message - save data AND answer question
         return await _handle_both(
             request, kg, project_id, user_id, user_name,
             background_tasks, classification.data_to_save,
-            classification.search_query, chat_history, project_description
+            classification.search_queries, chat_history, project_description
         )
     else:
         # Pure data - save and acknowledge
@@ -411,15 +486,18 @@ async def _handle_data(
 
     # 3. Search graph for existing context
     search_result = await kg.search(request.message, project_id)
-    edges = search_result.get("edges", []) if search_result["success"] else []
-    nodes = search_result.get("nodes", []) if search_result["success"] else []
+    success = search_result["success"]
+    edges = search_result.get("edges", []) if success else []
+    nodes = search_result.get("nodes", []) if success else []
+    communities = search_result.get("communities", []) if success else []
 
     # 4. Get pending messages (including the one we just added)
     pending = await cache.get_pending(project_id)
     pending_context = cache.format_for_prompt(pending)
 
     # 5. Generate response with graph + pending + history + project context
-    facts, entities = _format_context(edges, nodes)
+    _log_context(request.message, edges, nodes, communities)
+    facts, entities, comm = _format_context(edges, nodes, communities)
     settings = get_settings()
     prompt = format_response_prompt(
         message=request.message,
@@ -430,7 +508,9 @@ async def _handle_data(
         pending_context=pending_context,
         chat_history=chat_history,
         project_description=project_description,
+        communities=comm,
     )
+    _log_prompt_stats(prompt, "DATA")
 
     try:
         reply = await generate_text(prompt, model=settings.llm_model_pro)
@@ -458,14 +538,14 @@ async def _handle_both(
     user_name: Optional[str],
     background_tasks: BackgroundTasks,
     data_to_save: Optional[str],
-    search_query: Optional[str],
+    search_queries: list[str] | None = None,
     chat_history: str = "",
     project_description: Optional[str] = None,
 ) -> ChatResponse:
     """Handle BOTH message - save data AND answer question."""
     cache = get_pending_cache()
     message_id = str(uuid.uuid4())
-    query = search_query or request.message
+    queries = search_queries or [request.message]
 
     # 1. Save data to pending cache and schedule background processing
     if data_to_save:
@@ -490,18 +570,20 @@ async def _handle_both(
     pending = await cache.get_pending(project_id)
     pending_context = cache.format_for_prompt(pending)
 
-    # 3. Search knowledge graph
-    search_result = await kg.search(query, project_id)
-    edges = search_result.get("edges", []) if search_result["success"] else []
-    nodes = search_result.get("nodes", []) if search_result["success"] else []
+    # 3. Search knowledge graph (multi-query)
+    search_result = await _multi_query_search(kg, queries, project_id)
+    success = search_result["success"]
+    edges = search_result.get("edges", []) if success else []
+    nodes = search_result.get("nodes", []) if success else []
+    communities = search_result.get("communities", []) if success else []
 
-    if not search_result["success"]:
+    if not success:
         logger.warning(f"[BOTH] Search failed: {search_result.get('error')}")
 
-    _log_context(query, edges, nodes)
+    _log_context(str(queries), edges, nodes, communities)
 
     # 4. Generate response with graph + pending + history
-    facts, entities = _format_context(edges, nodes)
+    facts, entities, comm = _format_context(edges, nodes, communities)
     settings = get_settings()
     prompt = format_response_prompt(
         message=request.message,
@@ -512,7 +594,9 @@ async def _handle_both(
         pending_context=pending_context,
         chat_history=chat_history,
         project_description=project_description,
+        communities=comm,
     )
+    _log_prompt_stats(prompt, "BOTH")
 
     try:
         reply = await generate_text(prompt, model=settings.llm_model_pro)
@@ -530,7 +614,7 @@ async def _handle_both(
         entities_extracted=0,
         message_type="BOTH",
         debug_context={
-            "query_used": query,
+            "queries_used": queries,
             "edges_count": len(edges),
             "nodes_count": len(nodes),
             "pending_count": len(pending),
@@ -544,13 +628,13 @@ async def _handle_question(
     kg: KnowledgeGraph,
     project_id: str,
     user_name: Optional[str],
-    search_query: Optional[str],
+    search_queries: list[str] | None = None,
     chat_history: str = "",
     project_description: Optional[str] = None,
 ) -> ChatResponse:
     """Handle QUESTION message - search graph + pending and answer."""
     cache = get_pending_cache()
-    query = search_query or request.message
+    queries = search_queries or [request.message]
 
     # Get pending messages FIRST (before search, to avoid race condition)
     # Background tasks may complete during search and remove messages from pending
@@ -560,19 +644,21 @@ async def _handle_question(
     if pending:
         logger.info(f"Including {len(pending)} pending messages in context")
 
-    # Search knowledge graph
-    search_result = await kg.search(query, project_id)
+    # Search knowledge graph (multi-query)
+    search_result = await _multi_query_search(kg, queries, project_id)
+    success = search_result["success"]
 
-    if not search_result["success"]:
+    if not success:
         logger.warning(f"Search failed: {search_result.get('error')}")
 
     edges = search_result.get("edges", [])
     nodes = search_result.get("nodes", [])
+    communities = search_result.get("communities", [])
 
-    _log_context(query, edges, nodes)
+    _log_context(str(queries), edges, nodes, communities)
 
     # Generate response with graph + pending + history + project context
-    facts, entities = _format_context(edges, nodes)
+    facts, entities, comm = _format_context(edges, nodes, communities)
     settings = get_settings()
     prompt = format_response_prompt(
         message=request.message,
@@ -583,7 +669,9 @@ async def _handle_question(
         pending_context=pending_context,
         chat_history=chat_history,
         project_description=project_description,
+        communities=comm,
     )
+    _log_prompt_stats(prompt, "QUESTION")
 
     try:
         reply = await generate_text(prompt, model=settings.llm_model_pro)
@@ -601,7 +689,7 @@ async def _handle_question(
         entities_extracted=0,
         message_type="QUESTION",
         debug_context={
-            "query_used": query,
+            "queries_used": queries,
             "edges_count": len(edges),
             "nodes_count": len(nodes),
             "pending_count": len(pending),

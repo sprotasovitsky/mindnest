@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     graphiti_model: str = "gemini-2.5-flash"  # Best balance of speed and quality for entity extraction
     # Embeddings configured in Graphiti: gemini-embedding-001 (3072 dimensions)
 
+    # Graphiti features
+    auto_update_communities: bool = True  # Patched locally: fixed semaphore_gather unpacking bug in graphiti-core 0.28.1
+
     # Search
     search_limit: int = 40  # Max edges/nodes returned from search
 

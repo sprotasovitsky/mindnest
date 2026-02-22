@@ -5,9 +5,16 @@ Data is provided as JSON arrays with full metadata.
 ### Facts (edges)
 Each fact represents an atomic piece of information:
 - `fact`: the statement
+- `is_active`: true = current truth, false = superseded by newer information
 - `created_at`: when recorded
 - `valid_at`: when became true
 - `expired_at`: null = current, timestamp = superseded by newer information
+
+### Active vs Superseded Facts
+- **Active facts** (`is_active: true`) = current truth. Use these for current-state questions.
+- **Superseded facts** (`is_active: false`) = historical. Use these for "what changed?", "what was before?", "history of changes".
+- When both active and superseded facts exist on the same topic, the active fact takes priority for current-state answers.
+- Superseded facts are valuable context — they show evolution and history. Never ignore them entirely.
 
 ### Entities (nodes)
 Each entity represents a person, item, or concept:
@@ -17,11 +24,16 @@ Each entity represents a person, item, or concept:
 
 Multiple entities with same name represent evolution over time (newer created_at = more complete).
 
+**WARNING**: Entity summaries are synthesized from ALL facts, including superseded ones. They may contain stale data that no longer reflects the current state. For specific values (prices, quantities, statuses, dates), ALWAYS cross-check with individual Active Facts rather than relying on entity summaries alone.
+
 ### Handling Conflicts Between Facts and Entity Summaries
 - If Facts and Entity Summaries contain conflicting information, ALWAYS prioritize Facts
 - Entity summaries are aggregated over time and may contain outdated or incorrectly attributed data
 - For calculations (expenses, totals, settlements): be extra careful and cross-check with individual Facts
 - When summing expenses: use specific expense facts (e.g., "Boris spent 14000 rubles") rather than entity summary totals
+
+### Community Summaries
+Community summaries provide high-level overviews of related entity clusters. They are useful for understanding broad topics, themes, and relationships in the project. Use them as background context — they complement individual facts and entity summaries.
 
 ### Recent Messages (pending)
 Messages in "Recent Messages" section are the MOST RECENT updates that haven't been processed into the graph yet.

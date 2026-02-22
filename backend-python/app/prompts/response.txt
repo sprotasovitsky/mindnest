@@ -11,13 +11,21 @@
 
 ## Data Sources
 
-### 1. Facts from Knowledge Graph (structured, processed)
-Individual facts extracted from previous messages. Check `expired_at` - null means current, timestamp means outdated.
-{facts_text}
+### 1a. Active Facts (current truth)
+These facts are currently valid. Use them to answer questions about the current state.
+{active_facts_text}
+
+### 1b. Superseded Facts (historical, replaced by newer information)
+These facts were valid in the past but have been replaced. Use them ONLY for temporal queries like "what changed?", "what was before?", "history of changes". For current-state questions, prefer Active Facts.
+{expired_facts_text}
 
 ### 2. Entity Summaries (aggregated knowledge)
 Synthesized information about people, items, and concepts mentioned in the project.
 {entities_text}
+
+### 2b. Community Summaries (high-level context)
+Summaries of related entity clusters. Use these for broad context about topics, themes, and relationships in the project.
+{communities_text}
 
 ### 3. Recent Messages (HIGHEST PRIORITY - not yet in graph)
 These messages were JUST received and will REPLACE Facts/Entities after processing.

@@ -32,6 +32,105 @@ from .llm import get_gemini_client
 logger = logging.getLogger(__name__)
 
 
+def _apply_graphiti_patches() -> None:
+    """Monkey-patch graphiti-core 0.28.1 bugs.
+
+    TODO: Remove after upstream merges our PRs:
+      - https://github.com/getzep/graphiti/pull/1254 (update_communities unpacking)
+      - https://github.com/getzep/graphiti/pull/1253 (label_propagation infinite loop)
+    """
+    import graphiti_core.graphiti as _graphiti_mod
+    import graphiti_core.utils.maintenance.community_operations as _comm_mod
+    from collections import defaultdict
+
+    # --- Patch 1: fix update_communities semaphore_gather unpacking (PR #1254) ---
+    # Original code: `communities, community_edges = await semaphore_gather(...)`
+    # crashes with "too many values to unpack" when episode has != 2 nodes.
+    _orig_source = "communities, community_edges = await semaphore_gather"
+    import inspect
+    _src = inspect.getsource(_graphiti_mod.Graphiti.add_episode)
+    if _orig_source in _src:
+        import graphiti_core.graphiti as _gm
+        from graphiti_core.helpers import semaphore_gather
+        from graphiti_core.utils.maintenance.community_operations import update_community
+
+        _original_add_episode = _gm.Graphiti.add_episode
+
+        async def _patched_add_episode(self, *args, **kwargs):
+            # Temporarily disable update_communities, we'll do it ourselves
+            orig_uc = kwargs.get("update_communities", False)
+            kwargs["update_communities"] = False
+            result = await _original_add_episode(self, *args, **kwargs)
+
+            if orig_uc and result and result.nodes:
+                community_results = await semaphore_gather(
+                    *[
+                        update_community(self.driver, self.llm_client, self.embedder, node)
+                        for node in result.nodes
+                    ],
+                    max_coroutines=self.max_coroutines,
+                )
+                for comm_nodes, comm_edges in community_results:
+                    result.communities.extend(comm_nodes)
+                    result.community_edges.extend(comm_edges)
+
+            return result
+
+        _gm.Graphiti.add_episode = _patched_add_episode
+        logger.warning("Applied patch: update_communities semaphore_gather unpacking (PR #1254)")
+    else:
+        logger.warning("Patch #1254 not needed: update_communities code already fixed")
+
+    # --- Patch 2: fix label_propagation infinite loop (PR #1253) ---
+    _orig_label_prop = _comm_mod.label_propagation
+
+    def _patched_label_propagation(projection, max_iterations=30):
+        community_map = {uuid: i for i, uuid in enumerate(projection.keys())}
+
+        for iteration in range(max_iterations):
+            no_change = True
+            new_community_map = {}
+
+            for uuid, neighbors in projection.items():
+                curr_community = community_map[uuid]
+                community_candidates = defaultdict(int)
+                for neighbor in neighbors:
+                    community_candidates[community_map[neighbor.node_uuid]] += neighbor.edge_count
+                community_lst = [
+                    (count, community) for community, count in community_candidates.items()
+                ]
+                community_lst.sort(reverse=True)
+                candidate_rank, community_candidate = community_lst[0] if community_lst else (0, -1)
+                if community_candidate != -1 and candidate_rank > 1:
+                    new_community = community_candidate
+                else:
+                    new_community = max(community_candidate, curr_community)
+                new_community_map[uuid] = new_community
+                if new_community != curr_community:
+                    no_change = False
+
+            if no_change:
+                logger.debug(f"Label propagation converged after {iteration + 1} iterations")
+                break
+            community_map = new_community_map
+        else:
+            logger.warning(
+                f"Label propagation did not converge after {max_iterations} iterations, "
+                f"returning best approximation"
+            )
+
+        community_cluster_map = defaultdict(list)
+        for uuid, community in community_map.items():
+            community_cluster_map[community].append(uuid)
+        return [cluster for cluster in community_cluster_map.values()]
+
+    _comm_mod.label_propagation = _patched_label_propagation
+    logger.warning("Applied patch: label_propagation max iterations cap (PR #1253)")
+
+
+_apply_graphiti_patches()
+
+
 class KnowledgeGraph:
     """Graphiti-based knowledge graph for MindNest."""
 
@@ -91,6 +190,25 @@ class KnowledgeGraph:
             raise RuntimeError("KnowledgeGraph not initialized. Call initialize() first.")
         return self._client
 
+    # Instructions for Graphiti's entity/edge extraction LLM
+    EXTRACTION_INSTRUCTIONS = (
+        "1. Separate CURRENT STATE from PLANNED/FUTURE ACTION as distinct facts. "
+        "For example, 'X does not have Y' is a current-state fact, while "
+        "'X will add Y' is a planned-action fact. These are two "
+        "independent facts and one should NOT invalidate the other.\n"
+        "2. Words like 'will', 'plan to', 'going to', 'should', 'intend to' "
+        "indicate PLANNED ACTIONS. They must NOT cause expiration (invalid_at) "
+        "of any existing current-state facts.\n"
+        "3. Numerical data, comparisons, measurements, and test results are "
+        "reference facts — never expire them unless the text explicitly states "
+        "they are wrong or outdated.\n"
+        "4. Never set invalid_at on an edge unless the text EXPLICITLY states "
+        "something has ended, been removed, or is no longer true. "
+        "Ambiguity should default to keeping edges valid.\n"
+        "5. Lists of items are collections. Each item is a separate fact. "
+        "Adding new items does NOT invalidate existing items in the same list."
+    )
+
     async def add_episode(
         self,
         message: str,
@@ -115,6 +233,8 @@ class KnowledgeGraph:
 
         logger.info(f"Adding episode: len={len(episode_body)} for project {project_id}")
 
+        settings = get_settings()
+
         try:
             result = await self.client.add_episode(
                 name=f"msg_{user_id}_{ref_time.isoformat()}",
@@ -122,6 +242,8 @@ class KnowledgeGraph:
                 source_description=source_description,
                 reference_time=ref_time,
                 group_id=project_id,
+                custom_extraction_instructions=self.EXTRACTION_INSTRUCTIONS,
+                update_communities=settings.auto_update_communities,
             )
 
             return {
@@ -161,6 +283,7 @@ class KnowledgeGraph:
         return [
             {
                 "fact": edge.fact,
+                "is_active": edge.expired_at is None,
                 "created_at": edge.created_at.isoformat() if edge.created_at else None,
                 "valid_at": edge.valid_at.isoformat() if edge.valid_at else None,
                 "expired_at": edge.expired_at.isoformat() if edge.expired_at else None,
@@ -179,6 +302,27 @@ class KnowledgeGraph:
             for node in nodes
         ]
 
+    def _get_community_config(self) -> CommunitySearchConfig:
+        """Get community search config with BM25 + cosine similarity and RRF reranking."""
+        return CommunitySearchConfig(
+            search_methods=[
+                CommunitySearchMethod.bm25,
+                CommunitySearchMethod.cosine_similarity,
+            ],
+            reranker=CommunityReranker.rrf,
+        )
+
+    def _format_communities(self, communities: list) -> list[dict]:
+        """Format community results for API response."""
+        return [
+            {
+                "name": community.name,
+                "summary": community.summary,
+            }
+            for community in communities
+            if community.summary  # Only include communities with actual summaries
+        ]
+
     async def search(
         self,
         query: str,
@@ -194,6 +338,7 @@ class KnowledgeGraph:
             config = SearchConfig(
                 edge_config=self._get_edge_config(),
                 node_config=self._get_node_config(),
+                community_config=self._get_community_config(),
                 limit=limit,
             )
 
@@ -205,17 +350,19 @@ class KnowledgeGraph:
 
             edges = results.edges or []
             nodes = results.nodes or []
+            communities = results.communities or []
 
-            logger.info(f"Found {len(edges)} edges, {len(nodes)} nodes")
+            logger.info(f"Found {len(edges)} edges, {len(nodes)} nodes, {len(communities)} communities")
 
             return {
                 "success": True,
                 "edges": self._format_edges(edges),
                 "nodes": self._format_nodes(nodes),
+                "communities": self._format_communities(communities),
             }
         except Exception as e:
             logger.error(f"Search failed: {e}")
-            return {"success": False, "error": str(e), "edges": [], "nodes": []}
+            return {"success": False, "error": str(e), "edges": [], "nodes": [], "communities": []}
 
     async def build_communities(self, project_id: str) -> dict:
         """Build communities for a project.
