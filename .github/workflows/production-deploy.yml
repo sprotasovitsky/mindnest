@@ -17,7 +17,7 @@ jobs:
           host: ${{ secrets.PRODUCTION_EC2_HOST }}
           username: ${{ secrets.PRODUCTION_EC2_USER }}
           key: ${{ secrets.PRODUCTION_EC2_SSH_KEY }}
-          source: "mobile/web/landing/index.html,mobile/web/favicon.png,mobile/web/favicon.ico"
+          source: "mobile/web/landing/index.html,mobile/web/favicon.ico"
           target: "/var/www/mindnest-prod/"
           strip_components: 2
 
