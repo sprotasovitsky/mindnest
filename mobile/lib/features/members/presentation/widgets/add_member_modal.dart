@@ -78,7 +78,6 @@ class _AddMemberModalState extends ConsumerState<AddMemberModal> {
                 decoration: const InputDecoration(
                   labelText: 'Email',
                   hintText: 'Enter member email',
-                  border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.email_outlined),
                 ),
                 keyboardType: TextInputType.emailAddress,

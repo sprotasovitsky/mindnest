@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/models/project.dart';
 import '../../../../core/providers/project_provider.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_spacing.dart';
 import '../../../../shared/widgets/widgets.dart';
 import '../widgets/create_project_modal.dart';
 
@@ -43,10 +45,22 @@ class ProjectsListScreen extends ConsumerWidget {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        key: const Key('create_project_fab'),
-        onPressed: () => _showCreateProjectModal(context, ref),
-        child: const Icon(Icons.add),
+      floatingActionButton: Container(
+        decoration: const BoxDecoration(
+          borderRadius: BorderRadius.all(Radius.circular(AppSpacing.radiusLg)),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.indigoGlow,
+              blurRadius: 16,
+              offset: Offset(0, 4),
+            ),
+          ],
+        ),
+        child: FloatingActionButton(
+          key: const Key('create_project_fab'),
+          onPressed: () => _showCreateProjectModal(context, ref),
+          child: const Icon(Icons.add),
+        ),
       ),
       body: projectState.isLoading
           ? const LoadingOverlay(message: 'Loading projects...')
@@ -64,7 +78,7 @@ class ProjectsListScreen extends ConsumerWidget {
   Widget _buildProjectList(BuildContext context, WidgetRef ref, List<Project> projects) {
     return ListView.builder(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
       itemCount: projects.length,
       itemBuilder: (_, index) {
         final project = projects[index];
@@ -118,29 +132,79 @@ class _ProjectCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-          child: Icon(
-            Icons.folder_outlined,
-            color: Theme.of(context).colorScheme.onPrimaryContainer,
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: AppSpacing.borderRadiusXl,
+          child: Container(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            decoration: BoxDecoration(
+              gradient: isDark
+                  ? const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        AppColors.darkSurfaceContainerHighest,
+                        AppColors.darkSurfaceContainer,
+                      ],
+                    )
+                  : null,
+              color: isDark ? null : colorScheme.surfaceContainerHighest,
+              borderRadius: AppSpacing.borderRadiusXl,
+              border: Border.all(color: colorScheme.outlineVariant),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: colorScheme.primaryContainer,
+                    borderRadius: AppSpacing.borderRadiusMd,
+                  ),
+                  child: Icon(
+                    Icons.folder_outlined,
+                    color: colorScheme.onPrimaryContainer,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.lg),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        project.name,
+                        style: theme.textTheme.titleMedium,
+                      ),
+                      if (project.description != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          project.description!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ],
+            ),
           ),
         ),
-        title: Text(
-          project.name,
-          style: const TextStyle(fontWeight: FontWeight.w500),
-        ),
-        subtitle: project.description != null
-            ? Text(
-                project.description!,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              )
-            : null,
-        trailing: const Icon(Icons.chevron_right),
-        onTap: onTap,
       ),
     );
   }

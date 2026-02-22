@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/providers/auth_provider.dart';
 import '../../../../core/providers/whisper_provider.dart';
 import '../../../../core/services/whisper_service.dart';
+import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/email_verification_banner.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -46,15 +47,27 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 child: Column(
                   children: [
                     const SizedBox(height: 32),
-                    CircleAvatar(
-                      radius: 48,
-                      backgroundColor:
-                          Theme.of(context).colorScheme.primaryContainer,
-                      child: Icon(
-                        Icons.person,
-                        size: 48,
-                        color:
-                            Theme.of(context).colorScheme.onPrimaryContainer,
+                    Container(
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.indigoGlow,
+                            blurRadius: 20,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      child: CircleAvatar(
+                        radius: 48,
+                        backgroundColor:
+                            Theme.of(context).colorScheme.primaryContainer,
+                        child: Icon(
+                          Icons.person,
+                          size: 48,
+                          color:
+                              Theme.of(context).colorScheme.onPrimaryContainer,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -391,7 +404,7 @@ class _WhisperModelTile extends ConsumerWidget {
       case WhisperModelStatus.error:
         return const Icon(Icons.download);
       case WhisperModelStatus.downloaded:
-        return const Icon(Icons.check_circle, color: Colors.green);
+        return const Icon(Icons.check_circle, color: AppColors.success);
     }
   }
 
@@ -417,7 +430,7 @@ class _WhisperModelTile extends ConsumerWidget {
                       : Icons.circle_outlined,
                   size: 20,
                   color: state.modelStatus == WhisperModelStatus.downloaded
-                      ? Colors.green
+                      ? AppColors.success
                       : null,
                 ),
                 const SizedBox(width: 8),

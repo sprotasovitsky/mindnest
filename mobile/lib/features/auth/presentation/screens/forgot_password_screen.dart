@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/error/app_error.dart';
 import '../../../../core/repositories/auth_repository.dart';
+import '../../../../core/theme/app_colors.dart';
 
 /// 3-step password reset screen:
 /// 1. Enter email -> request code
@@ -121,7 +122,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Password reset successfully! Please log in.'),
-            backgroundColor: Colors.green,
+            backgroundColor: AppColors.success,
           ),
         );
         context.go('/login');

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/error/app_error.dart';
 import '../../../../core/repositories/auth_repository.dart';
+import '../../../../core/theme/app_colors.dart';
 
 /// Screen for changing password (requires current password).
 class ChangePasswordScreen extends ConsumerStatefulWidget {
@@ -53,7 +54,7 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Password changed successfully!'),
-            backgroundColor: Colors.green,
+            backgroundColor: AppColors.success,
           ),
         );
         context.pop();

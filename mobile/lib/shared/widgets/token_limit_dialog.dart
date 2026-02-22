@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers/auth_provider.dart';
+import '../../core/theme/app_colors.dart';
 
 /// A dialog shown when an unverified user has exceeded their token limit.
 /// Prompts the user to verify their email to continue using the app.
@@ -74,7 +75,7 @@ class _TokenLimitDialogState extends ConsumerState<TokenLimitDialog> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Verification email sent! Check your inbox.'),
-              backgroundColor: Colors.green,
+              backgroundColor: AppColors.success,
             ),
           );
           Navigator.of(context).pop(true);
@@ -82,7 +83,7 @@ class _TokenLimitDialogState extends ConsumerState<TokenLimitDialog> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Failed to send verification email. Try again.'),
-              backgroundColor: Colors.red,
+              backgroundColor: AppColors.error,
             ),
           );
         }
@@ -95,7 +96,7 @@ class _TokenLimitDialogState extends ConsumerState<TokenLimitDialog> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Failed to send verification email. Try again.'),
-            backgroundColor: Colors.red,
+            backgroundColor: AppColors.error,
           ),
         );
       }

@@ -72,7 +72,6 @@ class _CreateProjectModalState extends ConsumerState<CreateProjectModal> {
                 decoration: const InputDecoration(
                   labelText: 'Project Name',
                   hintText: 'Enter project name',
-                  border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.folder_outlined),
                 ),
                 textInputAction: TextInputAction.done,

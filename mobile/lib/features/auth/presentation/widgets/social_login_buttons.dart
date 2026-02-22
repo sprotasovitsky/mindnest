@@ -5,6 +5,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../../../../core/providers/auth_provider.dart';
+import '../../../../core/theme/app_colors.dart';
 
 // Platform check helper that works on web
 bool get _isIOSPlatform {
@@ -197,6 +198,7 @@ class _SocialLoginButtonsState extends ConsumerState<SocialLoginButtons> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -204,7 +206,7 @@ class _SocialLoginButtonsState extends ConsumerState<SocialLoginButtons> {
         // Google Sign-In button
         SizedBox(
           width: double.infinity,
-          height: 48,
+          height: 52,
           child: OutlinedButton.icon(
             onPressed: _isLoading ? null : _handleGoogleSignIn,
             icon: _loadingProvider == 'google'
@@ -227,13 +229,6 @@ class _SocialLoginButtonsState extends ConsumerState<SocialLoginButtons> {
                     ),
                   ),
             label: const Text('Continue with Google'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: theme.colorScheme.onSurface,
-              side: BorderSide(color: theme.colorScheme.outline),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
           ),
         ),
 
@@ -242,7 +237,7 @@ class _SocialLoginButtonsState extends ConsumerState<SocialLoginButtons> {
           const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
-            height: 48,
+            height: 52,
             child: ElevatedButton.icon(
               onPressed: _isLoading ? null : _handleAppleSignIn,
               icon: _loadingProvider == 'apple'
@@ -257,11 +252,12 @@ class _SocialLoginButtonsState extends ConsumerState<SocialLoginButtons> {
                   : const Icon(Icons.apple, size: 24),
               label: const Text('Continue with Apple'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.black,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
+                backgroundColor: isDark
+                    ? AppColors.white90
+                    : AppColors.black90,
+                foregroundColor: isDark
+                    ? AppColors.black90
+                    : Colors.white,
               ),
             ),
           ),

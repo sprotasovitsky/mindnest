@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers/auth_provider.dart';
+import '../../core/theme/app_colors.dart';
 
 /// A warning banner displayed for users who haven't verified their email.
 /// Shows "Please verify your email" message with a "Resend" button.
@@ -39,7 +40,7 @@ class _EmailVerificationBannerState
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Verification email sent! Check your inbox.'),
-              backgroundColor: Colors.green,
+              backgroundColor: AppColors.success,
             ),
           );
 
@@ -55,7 +56,7 @@ class _EmailVerificationBannerState
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Failed to send verification email. Try again.'),
-              backgroundColor: Colors.red,
+              backgroundColor: AppColors.error,
             ),
           );
         }
@@ -68,7 +69,7 @@ class _EmailVerificationBannerState
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Failed to send verification email. Try again.'),
-            backgroundColor: Colors.red,
+            backgroundColor: AppColors.error,
           ),
         );
       }

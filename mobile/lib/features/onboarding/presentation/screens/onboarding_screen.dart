@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_spacing.dart';
+
 final hasCompletedOnboardingProvider = FutureProvider<bool>((ref) async {
   final prefs = await SharedPreferences.getInstance();
   return prefs.getBool('hasCompletedOnboarding') ?? false;
@@ -25,28 +28,28 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       description:
           'Your personal AI assistant for knowledge management and task organization.',
       icon: Icons.psychology,
-      color: Colors.deepPurple,
+      color: AppColors.indigo,
     ),
     OnboardingPage(
       title: 'Organize Your Knowledge',
       description:
           'Store notes, ideas, and information. MindNest remembers everything and finds connections between your thoughts.',
       icon: Icons.lightbulb_outline,
-      color: Colors.amber,
+      color: AppColors.warning,
     ),
     OnboardingPage(
       title: 'Manage Tasks Intelligently',
       description:
           'Create tasks and let AI help you break them down, prioritize, and track dependencies.',
       icon: Icons.task_alt,
-      color: Colors.green,
+      color: AppColors.success,
     ),
     OnboardingPage(
       title: 'Chat Naturally',
       description:
           'Just ask questions in plain language. MindNest understands context and provides relevant answers from your knowledge base.',
       icon: Icons.chat_bubble_outline,
-      color: Colors.blue,
+      color: AppColors.indigoLight,
     ),
   ];
 
@@ -152,9 +155,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 width: double.infinity,
                 child: FilledButton(
                   onPressed: _nextPage,
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
                   child: Text(
                     _currentPage == _pages.length - 1 ? 'Get Started' : 'Next',
                     style: const TextStyle(fontSize: 16),
@@ -179,7 +179,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             height: 120,
             decoration: BoxDecoration(
               color: page.color.withValues(alpha: 0.15),
-              shape: BoxShape.circle,
+              borderRadius: AppSpacing.borderRadiusXl,
             ),
             child: Icon(
               page.icon,
