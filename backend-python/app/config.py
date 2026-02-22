@@ -82,7 +82,7 @@ class Settings(BaseSettings):
     oauth_issuer: str = ""  # Set via env var per environment
     oauth_resource_uri: str = ""  # Usually same as issuer
     oauth_authorization_code_expire_seconds: int = 600  # 10 min
-    oauth_access_token_expire_seconds: int = 3600  # 1 hour
+    oauth_access_token_expire_seconds: int = 86400  # 24 hours
     oauth_refresh_token_expire_days: int = 30
 
     # Token limits for unverified users
