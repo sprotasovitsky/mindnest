@@ -1,6 +1,8 @@
 name: Deploy Landing Page to Production
 
 on:
+  push:
+    branches: [production]
   workflow_dispatch:
 
 jobs:
