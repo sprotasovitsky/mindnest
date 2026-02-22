@@ -83,7 +83,6 @@ class _ProjectSettingsSheetState extends ConsumerState<ProjectSettingsSheet> {
                 controller: _nameController,
                 decoration: const InputDecoration(
                   labelText: 'Project Name',
-                  border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.folder_outlined),
                 ),
                 textInputAction: TextInputAction.done,

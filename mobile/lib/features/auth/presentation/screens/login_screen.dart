@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/auth/auth_service.dart';
 import '../../../../core/providers/auth_provider.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_spacing.dart';
 import '../widgets/social_login_buttons.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -56,6 +58,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
       body: SafeArea(
@@ -71,15 +76,37 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                    Icon(
-                      Icons.psychology_outlined,
-                      size: 80,
-                      color: Theme.of(context).colorScheme.primary,
+                    // Logo
+                    Center(
+                      child: Container(
+                        width: 120,
+                        height: 120,
+                        decoration: BoxDecoration(
+                          borderRadius: AppSpacing.borderRadiusXxl,
+                          boxShadow: isDark
+                              ? const [
+                                  BoxShadow(
+                                    color: AppColors.indigoGlow,
+                                    blurRadius: 24,
+                                    spreadRadius: 4,
+                                  ),
+                                ]
+                              : null,
+                        ),
+                        child: ClipRRect(
+                          borderRadius: AppSpacing.borderRadiusXxl,
+                          child: Image.asset(
+                            'assets/app-icon-1024.png',
+                            width: 120,
+                            height: 120,
+                          ),
+                        ),
+                      ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 24),
                     Text(
                       'MindNest',
-                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      style: theme.textTheme.headlineMedium?.copyWith(
                             fontWeight: FontWeight.bold,
                           ),
                       textAlign: TextAlign.center,
@@ -87,8 +114,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     const SizedBox(height: 8),
                     Text(
                       'Knowledge & Task Management',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
                           ),
                       textAlign: TextAlign.center,
                     ),
@@ -101,7 +128,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         decoration: const InputDecoration(
                           labelText: 'Name',
                           prefixIcon: Icon(Icons.person_outline),
-                          border: OutlineInputBorder(),
                         ),
                         autofillHints: const [AutofillHints.name],
                         textInputAction: TextInputAction.next,
@@ -125,7 +151,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       decoration: const InputDecoration(
                         labelText: 'Email',
                         prefixIcon: Icon(Icons.email_outlined),
-                        border: OutlineInputBorder(),
                       ),
                       autofillHints: const [AutofillHints.email, AutofillHints.username],
                       keyboardType: TextInputType.emailAddress,
@@ -148,7 +173,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       decoration: InputDecoration(
                         labelText: 'Password',
                         prefixIcon: const Icon(Icons.lock_outline),
-                        border: const OutlineInputBorder(),
                         suffixIcon: IconButton(
                           icon: Icon(
                             _obscurePassword ? Icons.visibility : Icons.visibility_off,
@@ -191,7 +215,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         child: Text(
                           authState.error!,
                           style: TextStyle(
-                            color: Theme.of(context).colorScheme.error,
+                            color: colorScheme.error,
                           ),
                           textAlign: TextAlign.center,
                         ),
@@ -201,16 +225,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                     FilledButton(
                       onPressed: authState.isLoading ? null : _submit,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        child: authState.isLoading
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : Text(_isLogin ? 'Sign In' : 'Create Account'),
-                      ),
+                      child: authState.isLoading
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Text(_isLogin ? 'Sign In' : 'Create Account'),
                     ),
 
                     const SizedBox(height: 24),
@@ -218,25 +239,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     // OR divider
                     Row(
                       children: [
-                        Expanded(
-                          child: Divider(
-                            color: Theme.of(context).colorScheme.outlineVariant,
-                          ),
-                        ),
+                        const Expanded(child: Divider()),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           child: Text(
                             'OR',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
                                 ),
                           ),
                         ),
-                        Expanded(
-                          child: Divider(
-                            color: Theme.of(context).colorScheme.outlineVariant,
-                          ),
-                        ),
+                        const Expanded(child: Divider()),
                       ],
                     ),
 

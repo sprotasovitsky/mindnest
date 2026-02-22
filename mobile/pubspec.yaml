@@ -27,6 +27,7 @@ dependencies:
   # UI
   cupertino_icons: ^1.0.6
   flutter_markdown: ^0.6.18
+  google_fonts: ^6.2.1
 
   # Utils
   intl: ^0.20.0
@@ -60,3 +61,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/app-icon-1024.png

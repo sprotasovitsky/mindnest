@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 
+import '../../../../core/theme/app_colors.dart';
+
 class MessageBubble extends StatelessWidget {
   final String message;
   final bool isUser;
@@ -17,19 +19,46 @@ class MessageBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
 
-    Color backgroundColor;
     Color textColor;
+    BoxDecoration decoration;
 
     if (isError) {
-      backgroundColor = colorScheme.errorContainer;
       textColor = colorScheme.onErrorContainer;
+      decoration = BoxDecoration(
+        color: colorScheme.errorContainer,
+        borderRadius: _bubbleRadius(isUser),
+      );
     } else if (isUser) {
-      backgroundColor = colorScheme.primary;
-      textColor = colorScheme.onPrimary;
+      textColor = Colors.white;
+      decoration = BoxDecoration(
+        color: AppColors.indigo,
+        borderRadius: _bubbleRadius(isUser),
+        boxShadow: const [
+          BoxShadow(
+            color: AppColors.indigoGlow,
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
+      );
     } else {
-      backgroundColor = colorScheme.surfaceContainerHighest;
       textColor = colorScheme.onSurface;
+      decoration = BoxDecoration(
+        gradient: isDark
+            ? const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [AppColors.white05, Colors.transparent],
+              )
+            : null,
+        color: isDark ? null : colorScheme.surfaceContainerHighest,
+        borderRadius: _bubbleRadius(isUser),
+        border: isDark
+            ? Border.all(color: colorScheme.outlineVariant)
+            : null,
+      );
     }
 
     return Align(
@@ -40,15 +69,7 @@ class MessageBubble extends StatelessWidget {
         ),
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: backgroundColor,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(16),
-            topRight: const Radius.circular(16),
-            bottomLeft: isUser ? const Radius.circular(16) : Radius.zero,
-            bottomRight: isUser ? Radius.zero : const Radius.circular(16),
-          ),
-        ),
+        decoration: decoration,
         child: Row(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -69,7 +90,7 @@ class MessageBubble extends StatelessWidget {
                   p: TextStyle(color: textColor),
                   code: TextStyle(
                     backgroundColor: isUser
-                        ? colorScheme.primaryContainer
+                        ? Colors.white.withValues(alpha: 0.15)
                         : colorScheme.surfaceContainerHigh,
                   ),
                 ),
@@ -78,6 +99,15 @@ class MessageBubble extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  BorderRadius _bubbleRadius(bool isUser) {
+    return BorderRadius.only(
+      topLeft: const Radius.circular(16),
+      topRight: const Radius.circular(16),
+      bottomLeft: isUser ? const Radius.circular(16) : const Radius.circular(4),
+      bottomRight: isUser ? const Radius.circular(4) : const Radius.circular(16),
     );
   }
 }

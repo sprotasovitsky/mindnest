@@ -440,11 +440,19 @@ class _ChatInputState extends ConsumerState<ChatInput>
       decoration: InputDecoration(
         hintText: _isTranscribing ? 'Transcribing...' : 'Type a message...',
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(100),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(100),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(100),
           borderSide: BorderSide.none,
         ),
         filled: true,
-        fillColor: colorScheme.surfaceContainerHighest,
+        fillColor: colorScheme.surfaceContainer,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 20,
           vertical: 12,

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_colors.dart';
+
 /// A widget to display error messages with optional retry
 class ErrorView extends StatelessWidget {
   final String message;
@@ -66,7 +68,7 @@ void showSuccessSnackBar(BuildContext context, String message) {
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
       content: Text(message),
-      backgroundColor: Colors.green,
+      backgroundColor: AppColors.success,
       behavior: SnackBarBehavior.floating,
     ),
   );
