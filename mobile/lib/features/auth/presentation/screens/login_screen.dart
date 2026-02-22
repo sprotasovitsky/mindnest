@@ -76,13 +76,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                    // Logo container
+                    // Logo
                     Center(
                       child: Container(
                         width: 120,
                         height: 120,
                         decoration: BoxDecoration(
-                          color: colorScheme.primaryContainer,
                           borderRadius: AppSpacing.borderRadiusXxl,
                           boxShadow: isDark
                               ? const [
@@ -94,10 +93,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 ]
                               : null,
                         ),
-                        child: Icon(
-                          Icons.psychology_outlined,
-                          size: 64,
-                          color: colorScheme.primary,
+                        child: ClipRRect(
+                          borderRadius: AppSpacing.borderRadiusXxl,
+                          child: Image.asset(
+                            'assets/app-icon-1024.png',
+                            width: 120,
+                            height: 120,
+                          ),
                         ),
                       ),
                     ),
