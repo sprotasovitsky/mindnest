@@ -1,0 +1,49 @@
+name: Deploy Landing Page to Production
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy-landing:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Copy landing page and nginx config to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "mobile/web/landing/index.html,backend-python/nginx/mindnest.one.conf"
+          target: "/opt/mindnest-prod-landing/"
+          strip_components: 0
+
+      - name: Deploy to production
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+
+            # Deploy landing page
+            mkdir -p /var/www/mindnest-prod/landing
+            cp /opt/mindnest-prod-landing/mobile/web/landing/index.html /var/www/mindnest-prod/landing/index.html
+
+            # Update nginx config
+            cp /opt/mindnest-prod-landing/backend-python/nginx/mindnest.one.conf /opt/termly/nginx/conf.d/mindnest.one.conf
+
+            # Reload nginx
+            docker exec termly-nginx nginx -t && docker exec termly-nginx nginx -s reload
+
+            # Cleanup
+            rm -rf /opt/mindnest-prod-landing
+
+            echo "Landing page deployed to mindnest.one"
+
+      - name: Verify deployment
+        run: |
+          sleep 5
+          curl -sf https://mindnest.one/ | grep -q "MindNest" && echo "Landing page is live!" || echo "Warning: could not verify landing page"
