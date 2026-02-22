@@ -11,38 +11,34 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Copy landing page and nginx config to server
+      - name: Copy landing page to server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.PRODUCTION_EC2_HOST }}
           username: ${{ secrets.PRODUCTION_EC2_USER }}
           key: ${{ secrets.PRODUCTION_EC2_SSH_KEY }}
-          source: "mobile/web/landing/index.html,backend-python/nginx/mindnest.one.conf"
-          target: "/opt/mindnest/prod-landing-tmp/"
-          strip_components: 0
+          source: "mobile/web/landing/index.html"
+          target: "/var/www/mindnest-prod/"
+          strip_components: 2
 
-      - name: Deploy to production
+      - name: Copy nginx config to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.PRODUCTION_EC2_HOST }}
+          username: ${{ secrets.PRODUCTION_EC2_USER }}
+          key: ${{ secrets.PRODUCTION_EC2_SSH_KEY }}
+          source: "backend-python/nginx/mindnest.one.conf"
+          target: "/opt/termly/nginx/conf.d/"
+          strip_components: 2
+
+      - name: Reload nginx
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.PRODUCTION_EC2_HOST }}
           username: ${{ secrets.PRODUCTION_EC2_USER }}
           key: ${{ secrets.PRODUCTION_EC2_SSH_KEY }}
           script: |
-            set -e
-
-            # Deploy landing page
-            mkdir -p /var/www/mindnest-prod/landing
-            cp /opt/mindnest/prod-landing-tmp/mobile/web/landing/index.html /var/www/mindnest-prod/landing/index.html
-
-            # Update nginx config
-            cp /opt/mindnest/prod-landing-tmp/backend-python/nginx/mindnest.one.conf /opt/termly/nginx/conf.d/mindnest.one.conf
-
-            # Reload nginx
             docker exec termly-nginx nginx -t && docker exec termly-nginx nginx -s reload
-
-            # Cleanup
-            rm -rf /opt/mindnest/prod-landing-tmp
-
             echo "Landing page deployed to mindnest.one"
 
       - name: Verify deployment
