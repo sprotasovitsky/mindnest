@@ -1,0 +1,1085 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MindNest — AI-Powered Knowledge & Task Management</title>
+  <meta name="description" content="MindNest is an AI-first platform for knowledge and task management. Organize thoughts, manage tasks, and get intelligent insights through natural conversation.">
+  <meta name="theme-color" content="#0B1026">
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg-deep: #0B1026;
+      --bg-mid: #111338;
+      --bg-surface: #1A1B4B;
+      --indigo-accent: #6366f1;
+      --indigo-light: #818cf8;
+      --indigo-glow: rgba(99, 102, 241, 0.15);
+      --white: #ffffff;
+      --white-90: rgba(255,255,255,0.9);
+      --white-70: rgba(255,255,255,0.7);
+      --white-50: rgba(255,255,255,0.5);
+      --white-20: rgba(255,255,255,0.2);
+      --white-10: rgba(255,255,255,0.1);
+      --white-05: rgba(255,255,255,0.05);
+      --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-display: 'Space Grotesk', 'Inter', sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font-body);
+      background: var(--bg-deep);
+      color: var(--white-90);
+      line-height: 1.6;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ─── Animated Background ─── */
+    .bg-graph {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    .bg-graph svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    .graph-node {
+      animation: float 8s ease-in-out infinite;
+    }
+    .graph-node:nth-child(2n) { animation-delay: -2s; animation-duration: 10s; }
+    .graph-node:nth-child(3n) { animation-delay: -4s; animation-duration: 12s; }
+    .graph-node:nth-child(5n) { animation-delay: -1s; animation-duration: 9s; }
+
+    .graph-line {
+      animation: pulse-line 6s ease-in-out infinite;
+    }
+    .graph-line:nth-child(2n) { animation-delay: -3s; }
+    .graph-line:nth-child(3n) { animation-delay: -1.5s; }
+
+    @keyframes float {
+      0%, 100% { transform: translate(0, 0); }
+      25% { transform: translate(4px, -6px); }
+      50% { transform: translate(-3px, 5px); }
+      75% { transform: translate(5px, 3px); }
+    }
+
+    @keyframes pulse-line {
+      0%, 100% { opacity: 0.06; }
+      50% { opacity: 0.12; }
+    }
+
+    /* ─── Layout ─── */
+    .container {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 0 24px;
+      position: relative;
+      z-index: 1;
+    }
+
+    section {
+      padding: 100px 0;
+    }
+
+    /* ─── Navigation ─── */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      padding: 16px 0;
+      transition: background 0.3s, backdrop-filter 0.3s;
+    }
+
+    nav.scrolled {
+      background: rgba(11, 16, 38, 0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--white-10);
+    }
+
+    nav .container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: var(--white);
+    }
+
+    .nav-brand svg {
+      width: 36px;
+      height: 36px;
+    }
+
+    .nav-brand span {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 20px;
+      letter-spacing: -0.02em;
+    }
+
+    /* ─── Hero ─── */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      padding-top: 80px;
+      text-align: center;
+    }
+
+    .hero .container {
+      width: 100%;
+    }
+
+    .hero-icon {
+      width: 120px;
+      height: 120px;
+      margin: 0 auto 40px;
+      border-radius: 28px;
+      overflow: hidden;
+      box-shadow: 0 0 80px rgba(99, 102, 241, 0.25), 0 0 160px rgba(99, 102, 241, 0.1);
+    }
+
+    .hero-icon svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .hero h1 {
+      font-family: var(--font-display);
+      font-size: clamp(48px, 8vw, 80px);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.05;
+      margin-bottom: 20px;
+      background: linear-gradient(135deg, var(--white) 0%, var(--indigo-light) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-tagline {
+      max-width: 640px;
+      margin: 0 auto 20px;
+    }
+
+    .hero-tagline .tagline-main {
+      display: block;
+      font-size: clamp(20px, 2.8vw, 26px);
+      color: var(--white-90);
+      font-weight: 500;
+      line-height: 1.4;
+      margin-bottom: 12px;
+    }
+
+    .hero-tagline .tagline-main em {
+      font-style: normal;
+      color: var(--indigo-light);
+    }
+
+    .hero-tagline .tagline-sub {
+      display: block;
+      font-size: clamp(15px, 2vw, 17px);
+      color: var(--white-50);
+      line-height: 1.6;
+    }
+
+    .hero-coming-soon {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin: 32px auto 36px;
+      padding: 10px 24px;
+      background: rgba(99, 102, 241, 0.08);
+      border: 1px solid rgba(99, 102, 241, 0.2);
+      border-radius: 100px;
+      color: var(--indigo-light);
+      font-family: var(--font-display);
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+    }
+
+    .coming-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--indigo-light);
+      animation: blink 2s ease-in-out infinite;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    /* ─── Scroll Indicator ─── */
+    .scroll-indicator {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      margin-top: 56px;
+      color: var(--white-50);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.05em;
+      transition: color 0.2s;
+    }
+
+    .scroll-indicator:hover {
+      color: var(--white-70);
+    }
+
+    .scroll-arrow {
+      width: 24px;
+      height: 24px;
+      animation: bounce 2s ease-in-out infinite;
+    }
+
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(6px); }
+    }
+
+    /* ─── Section Headers ─── */
+    .section-label {
+      display: inline-block;
+      font-family: var(--font-display);
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--indigo-light);
+      margin-bottom: 16px;
+    }
+
+    .section-title {
+      font-family: var(--font-display);
+      font-size: clamp(32px, 5vw, 48px);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.1;
+      margin-bottom: 16px;
+    }
+
+    .section-subtitle {
+      font-size: 18px;
+      color: var(--white-50);
+      max-width: 560px;
+      line-height: 1.6;
+    }
+
+    .section-header {
+      text-align: center;
+      margin-bottom: 64px;
+    }
+
+    .section-header .section-subtitle {
+      margin: 0 auto;
+    }
+
+    /* ─── Features ─── */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+
+    .feature-card {
+      background: linear-gradient(135deg, var(--white-05) 0%, transparent 100%);
+      border: 1px solid var(--white-10);
+      border-radius: 20px;
+      padding: 36px 28px;
+      transition: transform 0.25s, border-color 0.25s, background 0.25s;
+    }
+
+    .feature-card:hover {
+      transform: translateY(-4px);
+      border-color: var(--indigo-accent);
+      background: linear-gradient(135deg, var(--indigo-glow) 0%, transparent 100%);
+    }
+
+    .feature-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 14px;
+      background: var(--indigo-glow);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 20px;
+    }
+
+    .feature-icon svg {
+      width: 28px;
+      height: 28px;
+      color: var(--indigo-light);
+    }
+
+    .feature-card h3 {
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 10px;
+      letter-spacing: -0.01em;
+    }
+
+    .feature-card p {
+      font-size: 15px;
+      color: var(--white-50);
+      line-height: 1.6;
+    }
+
+    /* ─── How It Works ─── */
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 32px;
+      counter-reset: step;
+    }
+
+    .step {
+      counter-increment: step;
+      position: relative;
+    }
+
+    .step-number {
+      font-family: var(--font-display);
+      font-size: 64px;
+      font-weight: 700;
+      color: var(--white-05);
+      line-height: 1;
+      margin-bottom: 16px;
+    }
+
+    .step h3 {
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+
+    .step p {
+      font-size: 15px;
+      color: var(--white-50);
+      line-height: 1.6;
+      margin-bottom: 20px;
+    }
+
+    .chat-mockup {
+      background: var(--white-05);
+      border: 1px solid var(--white-10);
+      border-radius: 16px;
+      padding: 16px;
+      font-size: 13px;
+    }
+
+    .chat-msg {
+      padding: 10px 14px;
+      border-radius: 12px;
+      margin-bottom: 8px;
+      max-width: 90%;
+      line-height: 1.5;
+    }
+
+    .chat-msg:last-child { margin-bottom: 0; }
+
+    .chat-msg.user {
+      background: var(--indigo-accent);
+      color: var(--white);
+      margin-left: auto;
+      border-bottom-right-radius: 4px;
+    }
+
+    .chat-msg.ai {
+      background: var(--white-10);
+      color: var(--white-70);
+      border-bottom-left-radius: 4px;
+    }
+
+    /* ─── Use Cases ─── */
+    .usecases-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+
+    .usecase-card {
+      background: var(--white-05);
+      border: 1px solid var(--white-10);
+      border-radius: 20px;
+      padding: 32px 28px;
+      text-align: center;
+      transition: transform 0.25s, border-color 0.25s;
+    }
+
+    .usecase-card:hover {
+      transform: translateY(-4px);
+      border-color: var(--white-20);
+    }
+
+    .usecase-emoji {
+      font-size: 40px;
+      margin-bottom: 16px;
+      display: block;
+    }
+
+    .usecase-card h3 {
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+
+    .usecase-card p {
+      font-size: 14px;
+      color: var(--white-50);
+      line-height: 1.6;
+    }
+
+    /* ─── FAQ ─── */
+    .faq-list {
+      max-width: 720px;
+      margin: 0 auto;
+    }
+
+    .faq-item {
+      border-bottom: 1px solid var(--white-10);
+    }
+
+    .faq-question {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 24px 0;
+      background: none;
+      border: none;
+      color: var(--white-90);
+      font-family: var(--font-body);
+      font-size: 17px;
+      font-weight: 500;
+      text-align: left;
+      cursor: pointer;
+      gap: 16px;
+      transition: color 0.2s;
+    }
+
+    .faq-question:hover {
+      color: var(--white);
+    }
+
+    .faq-chevron {
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+      transition: transform 0.3s;
+      color: var(--white-50);
+    }
+
+    .faq-item.open .faq-chevron {
+      transform: rotate(180deg);
+    }
+
+    .faq-answer {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.35s ease, padding 0.35s ease;
+    }
+
+    .faq-item.open .faq-answer {
+      max-height: 300px;
+    }
+
+    .faq-answer p {
+      padding-bottom: 24px;
+      font-size: 15px;
+      color: var(--white-50);
+      line-height: 1.7;
+    }
+
+    /* ─── Footer ─── */
+    footer {
+      border-top: 1px solid var(--white-10);
+      padding: 40px 0;
+      text-align: center;
+      position: relative;
+      z-index: 1;
+    }
+
+    footer p {
+      font-size: 14px;
+      color: var(--white-50);
+    }
+
+    footer a {
+      color: var(--white-50);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    footer a:hover {
+      color: var(--white-90);
+    }
+
+    /* ─── Scroll Reveal ─── */
+    .reveal {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ─── Responsive ─── */
+    @media (max-width: 768px) {
+      section { padding: 72px 0; }
+
+      .features-grid,
+      .steps,
+      .usecases-grid {
+        grid-template-columns: 1fr;
+        gap: 20px;
+      }
+
+      .hero { min-height: auto; padding: 120px 0 80px; }
+
+      .hero-icon {
+        width: 88px;
+        height: 88px;
+        border-radius: 22px;
+        margin-bottom: 28px;
+      }
+
+      .scroll-indicator { margin-top: 40px; }
+    }
+
+    @media (min-width: 769px) and (max-width: 1024px) {
+      .features-grid,
+      .usecases-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .steps {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Animated Background Graph -->
+<div class="bg-graph">
+  <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <radialGradient id="bg-fade" cx="50%" cy="40%" r="60%">
+        <stop offset="0%" stop-color="#1A1B4B" stop-opacity="0.4"/>
+        <stop offset="100%" stop-color="#0B1026" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    <rect width="100%" height="100%" fill="url(#bg-fade)"/>
+    <!-- Floating nodes -->
+    <circle class="graph-node" cx="10%" cy="15%" r="2" fill="white" opacity="0.08"/>
+    <circle class="graph-node" cx="25%" cy="8%" r="1.5" fill="white" opacity="0.06"/>
+    <circle class="graph-node" cx="45%" cy="20%" r="2.5" fill="white" opacity="0.07"/>
+    <circle class="graph-node" cx="70%" cy="12%" r="2" fill="white" opacity="0.09"/>
+    <circle class="graph-node" cx="85%" cy="22%" r="1.5" fill="white" opacity="0.06"/>
+    <circle class="graph-node" cx="15%" cy="45%" r="2" fill="white" opacity="0.07"/>
+    <circle class="graph-node" cx="35%" cy="55%" r="1.5" fill="white" opacity="0.08"/>
+    <circle class="graph-node" cx="60%" cy="40%" r="2.5" fill="white" opacity="0.06"/>
+    <circle class="graph-node" cx="80%" cy="50%" r="2" fill="white" opacity="0.07"/>
+    <circle class="graph-node" cx="92%" cy="35%" r="1.5" fill="white" opacity="0.05"/>
+    <circle class="graph-node" cx="8%" cy="70%" r="2" fill="white" opacity="0.06"/>
+    <circle class="graph-node" cx="30%" cy="78%" r="2.5" fill="white" opacity="0.08"/>
+    <circle class="graph-node" cx="55%" cy="68%" r="2" fill="white" opacity="0.07"/>
+    <circle class="graph-node" cx="75%" cy="75%" r="1.5" fill="white" opacity="0.06"/>
+    <circle class="graph-node" cx="90%" cy="65%" r="2" fill="white" opacity="0.08"/>
+    <circle class="graph-node" cx="20%" cy="90%" r="1.5" fill="white" opacity="0.05"/>
+    <circle class="graph-node" cx="50%" cy="88%" r="2" fill="white" opacity="0.07"/>
+    <circle class="graph-node" cx="78%" cy="92%" r="2.5" fill="white" opacity="0.06"/>
+    <!-- Connecting lines -->
+    <line class="graph-line" x1="10%" y1="15%" x2="25%" y2="8%" stroke="white" stroke-width="0.5" opacity="0.06"/>
+    <line class="graph-line" x1="25%" y1="8%" x2="45%" y2="20%" stroke="white" stroke-width="0.5" opacity="0.06"/>
+    <line class="graph-line" x1="45%" y1="20%" x2="70%" y2="12%" stroke="white" stroke-width="0.5" opacity="0.06"/>
+    <line class="graph-line" x1="70%" y1="12%" x2="85%" y2="22%" stroke="white" stroke-width="0.5" opacity="0.06"/>
+    <line class="graph-line" x1="10%" y1="15%" x2="15%" y2="45%" stroke="white" stroke-width="0.5" opacity="0.06"/>
+    <line class="graph-line" x1="45%" y1="20%" x2="60%" y2="40%" stroke="white" stroke-width="0.5" opacity="0.06"/>
+    <line class="graph-line" x1="85%" y1="22%" x2="92%" y2="35%" stroke="white" stroke-width="0.5" opacity="0.06"/>
+    <line class="graph-line" x1="15%" y1="45%" x2="35%" y2="55%" stroke="white" stroke-width="0.5" opacity="0.06"/>
+    <line class="graph-line" x1="60%" y1="40%" x2="80%" y2="50%" stroke="white" stroke-width="0.5" opacity="0.06"/>
+    <line class="graph-line" x1="35%" y1="55%" x2="55%" y2="68%" stroke="white" stroke-width="0.5" opacity="0.06"/>
+    <line class="graph-line" x1="80%" y1="50%" x2="90%" y2="65%" stroke="white" stroke-width="0.5" opacity="0.06"/>
+    <line class="graph-line" x1="8%" y1="70%" x2="30%" y2="78%" stroke="white" stroke-width="0.5" opacity="0.06"/>
+    <line class="graph-line" x1="55%" y1="68%" x2="75%" y2="75%" stroke="white" stroke-width="0.5" opacity="0.06"/>
+    <line class="graph-line" x1="30%" y1="78%" x2="50%" y2="88%" stroke="white" stroke-width="0.5" opacity="0.06"/>
+    <line class="graph-line" x1="75%" y1="75%" x2="90%" y2="65%" stroke="white" stroke-width="0.5" opacity="0.06"/>
+    <line class="graph-line" x1="50%" y1="88%" x2="78%" y2="92%" stroke="white" stroke-width="0.5" opacity="0.06"/>
+    <line class="graph-line" x1="25%" y1="8%" x2="35%" y2="55%" stroke="white" stroke-width="0.5" opacity="0.04"/>
+    <line class="graph-line" x1="70%" y1="12%" x2="80%" y2="50%" stroke="white" stroke-width="0.5" opacity="0.04"/>
+    <line class="graph-line" x1="15%" y1="45%" x2="8%" y2="70%" stroke="white" stroke-width="0.5" opacity="0.04"/>
+    <line class="graph-line" x1="92%" y1="35%" x2="90%" y2="65%" stroke="white" stroke-width="0.5" opacity="0.04"/>
+  </svg>
+</div>
+
+<!-- Navigation -->
+<nav id="nav">
+  <div class="container">
+    <a href="/" class="nav-brand">
+      <svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="nav-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#0B1026"/>
+            <stop offset="100%" style="stop-color:#1A1B4B"/>
+          </linearGradient>
+          <radialGradient id="nav-fade" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="white" stop-opacity="1"/>
+            <stop offset="60%" stop-color="white" stop-opacity="1"/>
+            <stop offset="100%" stop-color="white" stop-opacity="0"/>
+          </radialGradient>
+          <mask id="nav-vignette">
+            <rect width="512" height="512" fill="url(#nav-fade)"/>
+          </mask>
+          <clipPath id="nav-rounded">
+            <rect width="512" height="512" rx="115"/>
+          </clipPath>
+        </defs>
+        <rect width="512" height="512" rx="115" fill="url(#nav-bg)"/>
+        <g clip-path="url(#nav-rounded)" mask="url(#nav-vignette)" opacity="0.22">
+          <circle cx="75" cy="52" r="8" fill="white"/><circle cx="190" cy="68" r="7" fill="white"/>
+          <circle cx="330" cy="48" r="7.5" fill="white"/><circle cx="445" cy="70" r="8" fill="white"/>
+          <circle cx="42" cy="145" r="7.5" fill="white"/><circle cx="165" cy="125" r="7" fill="white"/>
+          <circle cx="290" cy="110" r="8" fill="white"/><circle cx="420" cy="150" r="7" fill="white"/>
+          <circle cx="60" cy="240" r="7" fill="white"/><circle cx="185" cy="210" r="7.5" fill="white"/>
+          <circle cx="320" cy="235" r="7" fill="white"/><circle cx="455" cy="215" r="7.5" fill="white"/>
+          <circle cx="48" cy="330" r="7.5" fill="white"/><circle cx="175" cy="315" r="7" fill="white"/>
+          <circle cx="305" cy="340" r="7.5" fill="white"/><circle cx="440" cy="310" r="7" fill="white"/>
+          <circle cx="70" cy="410" r="7" fill="white"/><circle cx="200" cy="395" r="7.5" fill="white"/>
+          <circle cx="350" cy="415" r="7" fill="white"/><circle cx="465" cy="390" r="7.5" fill="white"/>
+          <circle cx="110" cy="460" r="8" fill="white"/><circle cx="256" cy="450" r="7.5" fill="white"/>
+          <circle cx="400" cy="458" r="8" fill="white"/>
+          <line x1="75" y1="52" x2="190" y2="68" stroke="white" stroke-width="5"/>
+          <line x1="190" y1="68" x2="330" y2="48" stroke="white" stroke-width="5"/>
+          <line x1="330" y1="48" x2="445" y2="70" stroke="white" stroke-width="5"/>
+          <line x1="75" y1="52" x2="42" y2="145" stroke="white" stroke-width="5"/>
+          <line x1="190" y1="68" x2="165" y2="125" stroke="white" stroke-width="5"/>
+          <line x1="330" y1="48" x2="290" y2="110" stroke="white" stroke-width="5"/>
+          <line x1="445" y1="70" x2="420" y2="150" stroke="white" stroke-width="5"/>
+          <line x1="42" y1="145" x2="165" y2="125" stroke="white" stroke-width="5"/>
+          <line x1="165" y1="125" x2="290" y2="110" stroke="white" stroke-width="5"/>
+          <line x1="290" y1="110" x2="420" y2="150" stroke="white" stroke-width="5"/>
+          <line x1="42" y1="145" x2="60" y2="240" stroke="white" stroke-width="5"/>
+          <line x1="165" y1="125" x2="185" y2="210" stroke="white" stroke-width="5"/>
+          <line x1="420" y1="150" x2="455" y2="215" stroke="white" stroke-width="5"/>
+          <line x1="60" y1="240" x2="185" y2="210" stroke="white" stroke-width="5"/>
+          <line x1="185" y1="210" x2="320" y2="235" stroke="white" stroke-width="5"/>
+          <line x1="320" y1="235" x2="455" y2="215" stroke="white" stroke-width="5"/>
+          <line x1="290" y1="110" x2="320" y2="235" stroke="white" stroke-width="5"/>
+          <line x1="60" y1="240" x2="48" y2="330" stroke="white" stroke-width="5"/>
+          <line x1="185" y1="210" x2="175" y2="315" stroke="white" stroke-width="5"/>
+          <line x1="320" y1="235" x2="305" y2="340" stroke="white" stroke-width="5"/>
+          <line x1="455" y1="215" x2="440" y2="310" stroke="white" stroke-width="5"/>
+          <line x1="48" y1="330" x2="175" y2="315" stroke="white" stroke-width="5"/>
+          <line x1="175" y1="315" x2="305" y2="340" stroke="white" stroke-width="5"/>
+          <line x1="305" y1="340" x2="440" y2="310" stroke="white" stroke-width="5"/>
+          <line x1="48" y1="330" x2="70" y2="410" stroke="white" stroke-width="5"/>
+          <line x1="175" y1="315" x2="200" y2="395" stroke="white" stroke-width="5"/>
+          <line x1="305" y1="340" x2="350" y2="415" stroke="white" stroke-width="5"/>
+          <line x1="440" y1="310" x2="465" y2="390" stroke="white" stroke-width="5"/>
+          <line x1="70" y1="410" x2="200" y2="395" stroke="white" stroke-width="5"/>
+          <line x1="200" y1="395" x2="350" y2="415" stroke="white" stroke-width="5"/>
+          <line x1="350" y1="415" x2="465" y2="390" stroke="white" stroke-width="5"/>
+          <line x1="70" y1="410" x2="110" y2="460" stroke="white" stroke-width="5"/>
+          <line x1="200" y1="395" x2="256" y2="450" stroke="white" stroke-width="5"/>
+          <line x1="350" y1="415" x2="400" y2="458" stroke="white" stroke-width="5"/>
+          <line x1="110" y1="460" x2="256" y2="450" stroke="white" stroke-width="5"/>
+          <line x1="256" y1="450" x2="400" y2="458" stroke="white" stroke-width="5"/>
+        </g>
+        <line x1="140" y1="148" x2="140" y2="368" stroke="white" stroke-width="14" opacity="0.5"/>
+        <line x1="372" y1="148" x2="372" y2="368" stroke="white" stroke-width="14" opacity="0.5"/>
+        <line x1="140" y1="148" x2="200" y2="178" stroke="white" stroke-width="14" opacity="0.7"/>
+        <line x1="200" y1="178" x2="256" y2="282" stroke="white" stroke-width="14" opacity="0.7"/>
+        <line x1="256" y1="282" x2="312" y2="178" stroke="white" stroke-width="14" opacity="0.7"/>
+        <line x1="312" y1="178" x2="372" y2="148" stroke="white" stroke-width="14" opacity="0.7"/>
+        <circle cx="140" cy="148" r="22" fill="white"/>
+        <circle cx="372" cy="148" r="22" fill="white"/>
+        <circle cx="140" cy="368" r="22" fill="white"/>
+        <circle cx="372" cy="368" r="22" fill="white"/>
+        <circle cx="200" cy="178" r="17" fill="white" opacity="0.85"/>
+        <circle cx="312" cy="178" r="17" fill="white" opacity="0.85"/>
+        <circle cx="140" cy="225" r="11" fill="white" opacity="0.4"/>
+        <circle cx="140" cy="298" r="11" fill="white" opacity="0.4"/>
+        <circle cx="372" cy="225" r="11" fill="white" opacity="0.4"/>
+        <circle cx="372" cy="298" r="11" fill="white" opacity="0.4"/>
+        <circle cx="256" cy="282" r="44" fill="white" opacity="0.1"/>
+        <circle cx="256" cy="282" r="34" fill="white" opacity="0.15"/>
+        <circle cx="256" cy="282" r="22" fill="white"/>
+      </svg>
+      <span>MindNest</span>
+    </a>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-icon">
+      <svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="hero-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#0B1026"/>
+            <stop offset="100%" style="stop-color:#1A1B4B"/>
+          </linearGradient>
+          <radialGradient id="hero-fade" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="white" stop-opacity="1"/>
+            <stop offset="60%" stop-color="white" stop-opacity="1"/>
+            <stop offset="100%" stop-color="white" stop-opacity="0"/>
+          </radialGradient>
+          <mask id="hero-vignette">
+            <rect width="512" height="512" fill="url(#hero-fade)"/>
+          </mask>
+          <clipPath id="hero-rounded">
+            <rect width="512" height="512" rx="115"/>
+          </clipPath>
+        </defs>
+        <rect width="512" height="512" rx="115" fill="url(#hero-bg)"/>
+        <g clip-path="url(#hero-rounded)" mask="url(#hero-vignette)" opacity="0.22">
+          <circle cx="75" cy="52" r="8" fill="white"/><circle cx="190" cy="68" r="7" fill="white"/>
+          <circle cx="330" cy="48" r="7.5" fill="white"/><circle cx="445" cy="70" r="8" fill="white"/>
+          <circle cx="42" cy="145" r="7.5" fill="white"/><circle cx="165" cy="125" r="7" fill="white"/>
+          <circle cx="290" cy="110" r="8" fill="white"/><circle cx="420" cy="150" r="7" fill="white"/>
+          <circle cx="60" cy="240" r="7" fill="white"/><circle cx="185" cy="210" r="7.5" fill="white"/>
+          <circle cx="320" cy="235" r="7" fill="white"/><circle cx="455" cy="215" r="7.5" fill="white"/>
+          <circle cx="48" cy="330" r="7.5" fill="white"/><circle cx="175" cy="315" r="7" fill="white"/>
+          <circle cx="305" cy="340" r="7.5" fill="white"/><circle cx="440" cy="310" r="7" fill="white"/>
+          <circle cx="70" cy="410" r="7" fill="white"/><circle cx="200" cy="395" r="7.5" fill="white"/>
+          <circle cx="350" cy="415" r="7" fill="white"/><circle cx="465" cy="390" r="7.5" fill="white"/>
+          <circle cx="110" cy="460" r="8" fill="white"/><circle cx="256" cy="450" r="7.5" fill="white"/>
+          <circle cx="400" cy="458" r="8" fill="white"/>
+          <line x1="75" y1="52" x2="190" y2="68" stroke="white" stroke-width="5"/>
+          <line x1="190" y1="68" x2="330" y2="48" stroke="white" stroke-width="5"/>
+          <line x1="330" y1="48" x2="445" y2="70" stroke="white" stroke-width="5"/>
+          <line x1="75" y1="52" x2="42" y2="145" stroke="white" stroke-width="5"/>
+          <line x1="190" y1="68" x2="165" y2="125" stroke="white" stroke-width="5"/>
+          <line x1="330" y1="48" x2="290" y2="110" stroke="white" stroke-width="5"/>
+          <line x1="445" y1="70" x2="420" y2="150" stroke="white" stroke-width="5"/>
+          <line x1="42" y1="145" x2="165" y2="125" stroke="white" stroke-width="5"/>
+          <line x1="165" y1="125" x2="290" y2="110" stroke="white" stroke-width="5"/>
+          <line x1="290" y1="110" x2="420" y2="150" stroke="white" stroke-width="5"/>
+          <line x1="42" y1="145" x2="60" y2="240" stroke="white" stroke-width="5"/>
+          <line x1="165" y1="125" x2="185" y2="210" stroke="white" stroke-width="5"/>
+          <line x1="420" y1="150" x2="455" y2="215" stroke="white" stroke-width="5"/>
+          <line x1="60" y1="240" x2="185" y2="210" stroke="white" stroke-width="5"/>
+          <line x1="185" y1="210" x2="320" y2="235" stroke="white" stroke-width="5"/>
+          <line x1="320" y1="235" x2="455" y2="215" stroke="white" stroke-width="5"/>
+          <line x1="290" y1="110" x2="320" y2="235" stroke="white" stroke-width="5"/>
+          <line x1="60" y1="240" x2="48" y2="330" stroke="white" stroke-width="5"/>
+          <line x1="185" y1="210" x2="175" y2="315" stroke="white" stroke-width="5"/>
+          <line x1="320" y1="235" x2="305" y2="340" stroke="white" stroke-width="5"/>
+          <line x1="455" y1="215" x2="440" y2="310" stroke="white" stroke-width="5"/>
+          <line x1="48" y1="330" x2="175" y2="315" stroke="white" stroke-width="5"/>
+          <line x1="175" y1="315" x2="305" y2="340" stroke="white" stroke-width="5"/>
+          <line x1="305" y1="340" x2="440" y2="310" stroke="white" stroke-width="5"/>
+          <line x1="48" y1="330" x2="70" y2="410" stroke="white" stroke-width="5"/>
+          <line x1="175" y1="315" x2="200" y2="395" stroke="white" stroke-width="5"/>
+          <line x1="305" y1="340" x2="350" y2="415" stroke="white" stroke-width="5"/>
+          <line x1="440" y1="310" x2="465" y2="390" stroke="white" stroke-width="5"/>
+          <line x1="70" y1="410" x2="200" y2="395" stroke="white" stroke-width="5"/>
+          <line x1="200" y1="395" x2="350" y2="415" stroke="white" stroke-width="5"/>
+          <line x1="350" y1="415" x2="465" y2="390" stroke="white" stroke-width="5"/>
+          <line x1="70" y1="410" x2="110" y2="460" stroke="white" stroke-width="5"/>
+          <line x1="200" y1="395" x2="256" y2="450" stroke="white" stroke-width="5"/>
+          <line x1="350" y1="415" x2="400" y2="458" stroke="white" stroke-width="5"/>
+          <line x1="110" y1="460" x2="256" y2="450" stroke="white" stroke-width="5"/>
+          <line x1="256" y1="450" x2="400" y2="458" stroke="white" stroke-width="5"/>
+        </g>
+        <line x1="140" y1="148" x2="140" y2="368" stroke="white" stroke-width="14" opacity="0.5"/>
+        <line x1="372" y1="148" x2="372" y2="368" stroke="white" stroke-width="14" opacity="0.5"/>
+        <line x1="140" y1="148" x2="200" y2="178" stroke="white" stroke-width="14" opacity="0.7"/>
+        <line x1="200" y1="178" x2="256" y2="282" stroke="white" stroke-width="14" opacity="0.7"/>
+        <line x1="256" y1="282" x2="312" y2="178" stroke="white" stroke-width="14" opacity="0.7"/>
+        <line x1="312" y1="178" x2="372" y2="148" stroke="white" stroke-width="14" opacity="0.7"/>
+        <circle cx="140" cy="148" r="22" fill="white"/>
+        <circle cx="372" cy="148" r="22" fill="white"/>
+        <circle cx="140" cy="368" r="22" fill="white"/>
+        <circle cx="372" cy="368" r="22" fill="white"/>
+        <circle cx="200" cy="178" r="17" fill="white" opacity="0.85"/>
+        <circle cx="312" cy="178" r="17" fill="white" opacity="0.85"/>
+        <circle cx="140" cy="225" r="11" fill="white" opacity="0.4"/>
+        <circle cx="140" cy="298" r="11" fill="white" opacity="0.4"/>
+        <circle cx="372" cy="225" r="11" fill="white" opacity="0.4"/>
+        <circle cx="372" cy="298" r="11" fill="white" opacity="0.4"/>
+        <circle cx="256" cy="282" r="44" fill="white" opacity="0.1"/>
+        <circle cx="256" cy="282" r="34" fill="white" opacity="0.15"/>
+        <circle cx="256" cy="282" r="22" fill="white"/>
+      </svg>
+    </div>
+
+    <h1>MindNest</h1>
+    <div class="hero-tagline">
+      <span class="tagline-main">Your AI-powered <em>knowledge assistant</em></span>
+      <span class="tagline-sub">Organize thoughts, manage tasks, and get intelligent insights through natural conversation.</span>
+    </div>
+
+    <div class="hero-coming-soon">
+      <span class="coming-dot"></span>
+      Launching Soon
+    </div>
+
+    <a href="#features" class="scroll-indicator">
+      Explore
+      <svg class="scroll-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </a>
+  </div>
+</section>
+
+<!-- Features -->
+<section id="features">
+  <div class="container">
+    <div class="section-header reveal">
+      <span class="section-label">Core Features</span>
+      <h2 class="section-title">Everything connects</h2>
+      <p class="section-subtitle">MindNest builds a knowledge graph from your conversations, connecting ideas, tasks, and people automatically.</p>
+    </div>
+
+    <div class="features-grid">
+      <div class="feature-card reveal">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="18" r="3"/>
+            <line x1="8.5" y1="7.5" x2="15.5" y2="16.5"/><line x1="15.5" y1="7.5" x2="8.5" y2="16.5"/>
+          </svg>
+        </div>
+        <h3>Knowledge Graph</h3>
+        <p>Your information is stored as an interconnected graph, not isolated notes. MindNest understands relationships between people, events, tasks, and facts.</p>
+      </div>
+
+      <div class="feature-card reveal">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+          </svg>
+        </div>
+        <h3>Task Management</h3>
+        <p>Just tell MindNest what you need to do. It extracts tasks from natural language, tracks deadlines, and reminds you at the right time.</p>
+      </div>
+
+      <div class="feature-card reveal">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+        </div>
+        <h3>AI Chat Interface</h3>
+        <p>No forms, no menus. Just chat naturally. MindNest understands context, remembers everything you've shared, and answers in your language.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- How It Works -->
+<section id="how-it-works">
+  <div class="container">
+    <div class="section-header reveal">
+      <span class="section-label">How It Works</span>
+      <h2 class="section-title">Chat. Store. Retrieve.</h2>
+      <p class="section-subtitle">MindNest processes every message — extracting entities, building connections, and making everything searchable.</p>
+    </div>
+
+    <div class="steps">
+      <div class="step reveal">
+        <div class="step-number">01</div>
+        <h3>Tell MindNest anything</h3>
+        <p>Share facts, tasks, ideas, or notes — just like texting a friend.</p>
+        <div class="chat-mockup">
+          <div class="chat-msg user">Meeting with Alex on Friday at 3pm to discuss the Q1 budget</div>
+          <div class="chat-msg ai">Got it! I've saved the meeting with Alex for Friday at 3pm about Q1 budget.</div>
+        </div>
+      </div>
+
+      <div class="step reveal">
+        <div class="step-number">02</div>
+        <h3>It builds connections</h3>
+        <p>MindNest extracts people, dates, topics and links them in your knowledge graph.</p>
+        <div class="chat-mockup">
+          <div class="chat-msg user">Alex's email is alex@company.com and he manages the marketing team</div>
+          <div class="chat-msg ai">Added Alex's contact info and linked him to the marketing team.</div>
+        </div>
+      </div>
+
+      <div class="step reveal">
+        <div class="step-number">03</div>
+        <h3>Ask and get answers</h3>
+        <p>Query your knowledge naturally. MindNest searches the graph and gives you precise answers.</p>
+        <div class="chat-mockup">
+          <div class="chat-msg user">What do I have scheduled with Alex?</div>
+          <div class="chat-msg ai">You have a meeting with Alex (alex@company.com, marketing team) on Friday at 3pm to discuss the Q1 budget.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Use Cases -->
+<section id="use-cases">
+  <div class="container">
+    <div class="section-header reveal">
+      <span class="section-label">Use Cases</span>
+      <h2 class="section-title">Built for how you think</h2>
+      <p class="section-subtitle">Whether you're managing a team, organizing family life, or tracking personal projects.</p>
+    </div>
+
+    <div class="usecases-grid">
+      <div class="usecase-card reveal">
+        <span class="usecase-emoji" role="img" aria-label="briefcase">&#x1F4BC;</span>
+        <h3>Teams & Work</h3>
+        <p>Track project decisions, meeting notes, contacts, and action items. Everyone on the team stays in sync through shared projects.</p>
+      </div>
+
+      <div class="usecase-card reveal">
+        <span class="usecase-emoji" role="img" aria-label="house">&#x1F3E0;</span>
+        <h3>Family & Home</h3>
+        <p>Shopping lists, appointments, school events, household tasks. Share a family project and let MindNest keep everyone organized.</p>
+      </div>
+
+      <div class="usecase-card reveal">
+        <span class="usecase-emoji" role="img" aria-label="light bulb">&#x1F4A1;</span>
+        <h3>Personal Knowledge</h3>
+        <p>Capture ideas, bookmark insights, track habits, and build your second brain. Everything you learn is connected and searchable.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section id="faq">
+  <div class="container">
+    <div class="section-header reveal">
+      <span class="section-label">FAQ</span>
+      <h2 class="section-title">Questions & answers</h2>
+    </div>
+
+    <div class="faq-list reveal">
+      <div class="faq-item">
+        <button class="faq-question" aria-expanded="false">
+          What makes MindNest different from a note-taking app?
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="faq-answer">
+          <p>MindNest doesn't just store text — it understands it. Every message is processed by AI to extract entities (people, dates, places) and relationships, building a knowledge graph that connects your information. You can ask questions in natural language and get precise answers based on everything you've ever told MindNest.</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-question" aria-expanded="false">
+          Is my data private and secure?
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="faq-answer">
+          <p>Yes. Each user has their own isolated knowledge graph. Your data is stored securely and is never shared with other users. Project-level sharing is opt-in — you control who has access to what.</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-question" aria-expanded="false">
+          What languages does MindNest support?
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="faq-answer">
+          <p>MindNest uses multilingual AI embeddings, so you can write in any language and search across languages. For example, you can store information in Russian and find it by searching in English, or vice versa.</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-question" aria-expanded="false">
+          Can I share projects with other people?
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="faq-answer">
+          <p>Yes. You can create shared projects and invite team members or family. Everyone contributes to the same knowledge graph, and MindNest keeps track of who added what. Perfect for team knowledge bases or family organization.</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-question" aria-expanded="false">
+          Is MindNest available on mobile?
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="faq-answer">
+          <p>MindNest is available on iOS, Android, and the web — all from a single codebase. Your data syncs instantly across all devices. Download from the App Store or Google Play, or use the web app.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="container">
+    <p>&copy; 2026 MindNest</p>
+  </div>
+</footer>
+
+<script>
+  // Nav scroll effect
+  const nav = document.getElementById('nav');
+  window.addEventListener('scroll', () => {
+    nav.classList.toggle('scrolled', window.scrollY > 40);
+  }, { passive: true });
+
+  // Scroll reveal
+  const reveals = document.querySelectorAll('.reveal');
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.15 });
+  reveals.forEach(el => observer.observe(el));
+
+  // FAQ accordion
+  document.querySelectorAll('.faq-question').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const item = btn.parentElement;
+      const isOpen = item.classList.contains('open');
+      // Close all
+      document.querySelectorAll('.faq-item.open').forEach(i => {
+        i.classList.remove('open');
+        i.querySelector('.faq-question').setAttribute('aria-expanded', 'false');
+      });
+      // Toggle current
+      if (!isOpen) {
+        item.classList.add('open');
+        btn.setAttribute('aria-expanded', 'true');
+      }
+    });
+  });
+</script>
+</body>
+</html>
