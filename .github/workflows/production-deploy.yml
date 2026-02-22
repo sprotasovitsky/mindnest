@@ -18,7 +18,7 @@ jobs:
           username: ${{ secrets.PRODUCTION_EC2_USER }}
           key: ${{ secrets.PRODUCTION_EC2_SSH_KEY }}
           source: "mobile/web/landing/index.html,backend-python/nginx/mindnest.one.conf"
-          target: "/tmp/mindnest-prod-landing/"
+          target: "/opt/mindnest/prod-landing-tmp/"
           strip_components: 0
 
       - name: Deploy to production
@@ -32,16 +32,16 @@ jobs:
 
             # Deploy landing page
             mkdir -p /var/www/mindnest-prod/landing
-            cp /tmp/mindnest-prod-landing/mobile/web/landing/index.html /var/www/mindnest-prod/landing/index.html
+            cp /opt/mindnest/prod-landing-tmp/mobile/web/landing/index.html /var/www/mindnest-prod/landing/index.html
 
             # Update nginx config
-            cp /tmp/mindnest-prod-landing/backend-python/nginx/mindnest.one.conf /opt/termly/nginx/conf.d/mindnest.one.conf
+            cp /opt/mindnest/prod-landing-tmp/backend-python/nginx/mindnest.one.conf /opt/termly/nginx/conf.d/mindnest.one.conf
 
             # Reload nginx
             docker exec termly-nginx nginx -t && docker exec termly-nginx nginx -s reload
 
             # Cleanup
-            rm -rf /opt/mindnest-prod-landing
+            rm -rf /opt/mindnest/prod-landing-tmp
 
             echo "Landing page deployed to mindnest.one"
 
