@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'mobile/**'
+      - '!mobile/web/landing/**'
       - '.github/workflows/android-staging.yml'
   workflow_dispatch:
 
