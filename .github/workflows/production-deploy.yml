@@ -14,9 +14,9 @@ jobs:
       - name: Copy landing page and nginx config to server
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
+          host: ${{ secrets.PRODUCTION_EC2_HOST }}
+          username: ${{ secrets.PRODUCTION_EC2_USER }}
+          key: ${{ secrets.PRODUCTION_EC2_SSH_KEY }}
           source: "mobile/web/landing/index.html,backend-python/nginx/mindnest.one.conf"
           target: "/opt/mindnest-prod-landing/"
           strip_components: 0
@@ -24,9 +24,9 @@ jobs:
       - name: Deploy to production
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
+          host: ${{ secrets.PRODUCTION_EC2_HOST }}
+          username: ${{ secrets.PRODUCTION_EC2_USER }}
+          key: ${{ secrets.PRODUCTION_EC2_SSH_KEY }}
           script: |
             set -e
 
