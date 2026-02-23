@@ -172,7 +172,7 @@ class _GraphPainter extends CustomPainter {
 
     // Determine base color + opacity multiplier for theme
     final baseColor = isDark ? Colors.white : Colors.black;
-    final opacityScale = isDark ? 1.0 : 0.4;
+    final opacityScale = isDark ? 1.0 : 0.7;
 
     // 3. Draw edges
     for (final e in _edges) {
