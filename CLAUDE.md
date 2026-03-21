@@ -72,6 +72,29 @@ Presentation (ConsumerWidget/ConsumerStatefulWidget)
 3. QUESTION → search Graphiti graph + pending cache → generate response via Gemini
 4. Pending cache ensures new info is instantly queryable before graph processing completes
 
+## ECC (Everything Claude Code) — Available Tools
+
+The `everything-claude-code` plugin is installed globally. Use these tools proactively — suggest them when the moment is right if the user hasn't asked.
+
+### Commands
+| Command | When to use |
+|---|---|
+| `/plan` | Before implementing any non-trivial feature — create a plan first |
+| `/tdd` | When adding new backend endpoints or Flutter widgets — write tests first |
+| `/code-review` | Before opening a PR — run a review pass |
+| `/build-fix` | When `dart run build_runner build` or `uvicorn` throws errors |
+| `/e2e` | When adding new UI flows — generate Maestro tests |
+| `/security-scan` | After changes to `auth.py`, `chat.py`, or any auth-related code |
+
+### Agents
+- `python` — for FastAPI backend tasks
+- `swift` — for iOS-specific Flutter issues
+
+### Hooks
+- Memory persistence, strategic compaction, session lifecycle — active automatically.
+
+**Reminder rule:** If the user is about to implement a feature without a plan, suggest `/plan`. If they're fixing a build error, suggest `/build-fix`. If a PR is ready, suggest `/code-review`.
+
 ## MCP Knowledge Base
 
 MindNest has an MCP server connected to this workspace. Before answering questions about MindNest functionality, architecture, decisions, or status — **query the knowledge graph first** using `mcp__mindnest__search_knowledge`. The knowledge graph contains project vision, architecture details, backlog, security review, model comparison reports, and other project knowledge that may be more up-to-date than this file.
