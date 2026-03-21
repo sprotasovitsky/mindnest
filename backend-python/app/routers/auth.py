@@ -6,7 +6,6 @@ Uses PostgreSQL for user storage and bcrypt for password hashing.
 
 import hashlib
 import logging
-import random
 import re
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -648,7 +647,7 @@ async def update_profile(
 
 def generate_reset_code() -> str:
     """Generate a 6-digit numeric code."""
-    return f"{random.randint(0, 999999):06d}"
+    return f"{secrets.randbelow(1_000_000):06d}"
 
 
 def hash_code(code: str, user_id: str) -> str:
