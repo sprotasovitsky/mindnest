@@ -61,6 +61,27 @@ async def classify_message(
     try:
         response = await generate_text(prompt)
         result = _parse_classification(response)
+
+        # If BOTH but no data extracted — retry with chain-of-thought (max 2 attempts)
+        if result.message_type == MessageType.BOTH and not result.data_to_save:
+            cot_suffix = (
+                "\n\nBefore answering, briefly explain your reasoning:\n"
+                "1. What facts/data are present in the message?\n"
+                "2. What questions are asked?\n"
+                "Then give the final output in the required format."
+            )
+            for retry in range(2):
+                logger.info(f"BOTH with no data — CoT retry {retry + 1}/2")
+                response = await generate_text(prompt + cot_suffix)
+                result = _parse_classification(response)
+                if result.data_to_save:
+                    break
+
+            # Final fallback: use original message as data
+            if result.message_type == MessageType.BOTH and not result.data_to_save:
+                logger.warning("BOTH with no data after retries — using original message")
+                result.data_to_save = message
+
         logger.info(
             f"Classified: type={result.message_type} "
             f"data_to_save={'yes' if result.data_to_save else 'no'} "
