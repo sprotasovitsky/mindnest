@@ -52,34 +52,34 @@ async def classify_message(
         ClassificationResult with type, data_to_save, and search_query
     """
     prompt_template = load_prompt("classifier")
+    cot_suffix = (
+        "\n\nBefore answering, briefly explain your reasoning:\n"
+        "1. What facts/data are present in the message?\n"
+        "2. What questions are asked?\n"
+        "Then give the final output in the required format."
+    )
     prompt = prompt_template.format(
         message=message,
         user_name=user_name or "User",
         chat_history=chat_history or "(no history)",
-    )
+    ) + cot_suffix
 
     try:
         response = await generate_text(prompt)
         result = _parse_classification(response)
 
-        # If BOTH but no data extracted — retry with chain-of-thought (max 2 attempts)
+        # Up to 2 retries if BOTH but no data extracted
         if result.message_type == MessageType.BOTH and not result.data_to_save:
-            cot_suffix = (
-                "\n\nBefore answering, briefly explain your reasoning:\n"
-                "1. What facts/data are present in the message?\n"
-                "2. What questions are asked?\n"
-                "Then give the final output in the required format."
-            )
             for retry in range(2):
-                logger.info(f"BOTH with no data — CoT retry {retry + 1}/2")
-                response = await generate_text(prompt + cot_suffix)
+                logger.info(f"BOTH with no data — retry {retry + 1}/2")
+                response = await generate_text(prompt)
                 result = _parse_classification(response)
                 if result.data_to_save:
                     break
 
             # Final fallback: use original message as data
             if result.message_type == MessageType.BOTH and not result.data_to_save:
-                logger.warning("BOTH with no data after retries — using original message")
+                logger.warning("BOTH with no data after 2 retries — using original message")
                 result.data_to_save = message
 
         logger.info(
