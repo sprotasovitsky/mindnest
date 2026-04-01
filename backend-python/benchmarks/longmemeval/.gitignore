@@ -1,0 +1,6 @@
+# Dataset files (downloaded separately, ~3GB total)
+data/*.json
+!data/longmemeval_s.json
+
+# Benchmark results
+results/

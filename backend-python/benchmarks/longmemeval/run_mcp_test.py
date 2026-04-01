@@ -132,19 +132,32 @@ def mcp_search(
 # Session ingestion
 # ---------------------------------------------------------------------------
 
+def _normalize_sessions(raw_sessions: list) -> list[list[dict]]:
+    """Normalize session format (same as run_chat_test)."""
+    out: list[list[dict]] = []
+    for s in raw_sessions:
+        if isinstance(s, dict) and "turns" in s:
+            out.append(s["turns"])
+        elif isinstance(s, list):
+            out.append(s)
+        else:
+            out.append([s])
+    return out
+
+
 def ingest_sessions(
     api_url: str,
     token: str,
     project_id: str,
-    sessions: list[dict],
+    sessions: list,
     inter_message_delay: float,
     inter_session_delay: float,
     short_turn_threshold: int,
 ) -> int:
     """Send all user-role turns to /api/mcp/message. Returns total messages sent."""
+    normalized = _normalize_sessions(sessions)
     total_sent = 0
-    for s_idx, session in enumerate(sessions):
-        turns = session.get("turns", [])
+    for s_idx, turns in enumerate(normalized):
         prev_user_text = ""
         for t_idx, turn in enumerate(turns):
             role = turn.get("role", "")
@@ -165,7 +178,7 @@ def ingest_sessions(
             if t_idx < len(turns) - 1:
                 time.sleep(inter_message_delay)
 
-        if s_idx < len(sessions) - 1:
+        if s_idx < len(normalized) - 1:
             time.sleep(inter_session_delay)
 
     return total_sent
@@ -174,6 +187,10 @@ def ingest_sessions(
 # ---------------------------------------------------------------------------
 # Main benchmark loop
 # ---------------------------------------------------------------------------
+
+def _get_instance_id(instance: dict) -> str:
+    return instance.get("question_id") or instance.get("id", "")
+
 
 def run(config: BenchmarkConfig) -> None:
     dataset = load_dataset(config.dataset_path)
@@ -203,13 +220,13 @@ def run(config: BenchmarkConfig) -> None:
 
     with open(output_path, "a") as out_f:
         for idx, instance in enumerate(dataset):
-            instance_id = instance.get("id", str(idx))
+            instance_id = _get_instance_id(instance) or str(idx)
             if instance_id in done_ids:
                 logger.info(f"[{idx+1}/{len(dataset)}] Skipping {instance_id}")
                 continue
 
             question = instance.get("question", "")
-            sessions = instance.get("sessions", [])
+            sessions = instance.get("haystack_sessions") or instance.get("sessions", [])
 
             logger.info(
                 f"[{idx+1}/{len(dataset)}] Instance {instance_id} — "

@@ -41,7 +41,7 @@ class BenchmarkConfig:
 
     # Dataset path (relative to this file's directory or absolute)
     dataset_path: str = str(
-        Path(__file__).parent / "data" / "longmemeval_s.json"
+        Path(__file__).parent / "data" / "longmemeval_s_cleaned.json"
     )
 
     # Output directory
