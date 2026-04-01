@@ -91,18 +91,43 @@ def send_chat(api_url: str, token: str, project_id: str, message: str, retries: 
 # Onboarding
 # ---------------------------------------------------------------------------
 
+# Onboarding is a 4-step flow:
+#   1. LLM asks what the project is about
+#   2. LLM asks 3 clarifying questions
+#   3. LLM presents a summary for confirmation
+#   4. User says "yes" → DESCRIPTION_CONFIRMED
+# We send different messages at each step to complete it quickly.
+ONBOARDING_STEPS = [
+    # Step 1 response: describe the project
+    "This project is a personal memory assistant for storing and searching "
+    "information about my daily life, work, tasks, health, and hobbies.",
+    # Step 2 response: answer clarifying questions
+    "The scope covers all areas of my life. Key participants are me and the "
+    "people I interact with (family, friends, colleagues). My goal is to have "
+    "a searchable memory bank where I can quickly find any fact or detail.",
+    # Step 3 response: confirm the description
+    "yes",
+    # Fallback confirmations (in case LLM keeps asking)
+    "That's correct, please save it.",
+    "yes, confirm",
+]
+
+
 def wait_for_onboarding(
     api_url: str, token: str, project_id: str, seed_message: str, max_attempts: int = 10
 ) -> None:
-    """Send seed message and poll until project has a description (onboarding done)."""
+    """Drive through the multi-step onboarding flow until description is set."""
     logger.info(f"Starting onboarding for project {project_id}")
     for attempt in range(max_attempts):
-        resp = send_chat(api_url, token, project_id, seed_message)
+        # Pick the message for this step
+        msg = ONBOARDING_STEPS[attempt] if attempt < len(ONBOARDING_STEPS) else "yes"
+        logger.info(f"Onboarding step {attempt + 1}: sending {msg[:60]!r}")
+        resp = send_chat(api_url, token, project_id, msg)
         message_type = resp.get("message_type", "")
         if message_type != "ONBOARDING":
             logger.info(f"Onboarding complete (message_type={message_type!r})")
             return
-        # Confirm by checking project description
+        # Check if description was set
         project = get_project(api_url, token, project_id)
         if project.get("description"):
             logger.info("Onboarding complete — project has description")
