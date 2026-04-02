@@ -1,0 +1,18 @@
+You have been asked a question and given some facts from a personal knowledge graph.
+
+Question: {question}
+
+Facts found so far:
+{facts_summary}
+
+Your task: decide if these facts are enough to answer the question.
+
+ANSWER — if the facts contain the answer, OR if no facts are relevant (the knowledge graph simply doesn't have this info). Respond:
+ANSWER: done
+
+SEARCH_MORE — ONLY if the facts contain a PARTIAL answer and you see a specific entity name that could lead to the missing piece. Respond:
+SEARCH_MORE: <entity name>
+
+Example: facts say "User redeemed coupon using Cartwheel app" but don't say where Cartwheel is from → SEARCH_MORE: Cartwheel app
+Example: facts say nothing about the topic at all → ANSWER: done (don't search further)
+Example: facts fully answer the question → ANSWER: done

@@ -625,25 +625,8 @@ async def _handle_both(
 
 ITERATIVE_SEARCH_MAX = 2  # Max additional search rounds
 
-ITERATIVE_SEARCH_PROMPT = """You have been asked a question and given some facts from a knowledge graph.
-Decide if the facts are sufficient to answer the question fully.
-
-Question: {question}
-
-Facts found so far:
-{facts_summary}
-
-If you can answer the question confidently with these facts, respond with:
-ANSWER: <your concise answer>
-
-If the facts mention something relevant but you need more information to answer fully, respond with:
-SEARCH_MORE: <1-2 search queries separated by " | ">
-
-IMPORTANT: Your search queries should be SHORT — just entity names or key concepts
-from the facts above that might lead to the answer. For example:
-- If facts mention "Cartwheel app" but you need to know what store it belongs to → search "Cartwheel app"
-- If facts mention "Dr. Smith" but you need their specialty → search "Dr. Smith"
-- Do NOT write long natural language questions. Just search for the entity name."""
+def _get_iterative_search_prompt() -> str:
+    return load_prompt("iterative_search")
 
 
 async def _iterative_search(
@@ -666,7 +649,7 @@ async def _iterative_search(
     for iteration in range(ITERATIVE_SEARCH_MAX):
         # Ask LLM if we have enough to answer
         facts_summary = "\n".join(f"- {e['fact']}" for e in edges[:20]) or "(none)"
-        verdict_prompt = ITERATIVE_SEARCH_PROMPT.format(
+        verdict_prompt = _get_iterative_search_prompt().format(
             question=question, facts_summary=facts_summary
         )
 
