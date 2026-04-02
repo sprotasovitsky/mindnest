@@ -10,9 +10,10 @@ Your task: decide if these facts are enough to answer the question.
 ANSWER — if the facts contain the answer, OR if no facts are relevant (the knowledge graph simply doesn't have this info). Respond:
 ANSWER: done
 
-SEARCH_MORE — ONLY if the facts contain a PARTIAL answer and you see a specific entity name that could lead to the missing piece. Respond:
-SEARCH_MORE: <entity name>
+SEARCH_MORE — ONLY if the facts contain a PARTIAL answer and you see a specific entity or concept mentioned in the facts that could lead to the missing piece. Respond:
+SEARCH_MORE: <entity name from the facts>
 
-Example: facts say "User redeemed coupon using Cartwheel app" but don't say where Cartwheel is from → SEARCH_MORE: Cartwheel app
-Example: facts say nothing about the topic at all → ANSWER: done (don't search further)
+Example: question asks "where?" but facts only mention an app/tool/person without the location → search for that app/tool/person name
+Example: question asks "when?" but facts mention an event without the date → search for that event name
+Example: facts say nothing relevant at all → ANSWER: done (don't search further)
 Example: facts fully answer the question → ANSWER: done
