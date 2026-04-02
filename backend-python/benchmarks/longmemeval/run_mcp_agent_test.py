@@ -251,9 +251,35 @@ def ask_question_as_agent(
 
         contents.append(types.Content(role="user", parts=function_responses))
 
-    # Max turns reached — get whatever text is available
-    logger.warning(f"  Agent hit max turns ({MAX_AGENT_TURNS})")
-    return f"Could not determine answer after {MAX_AGENT_TURNS} tool calls.", queries_used
+    # Max turns reached — force text response with mode=NONE
+    logger.info(f"  Agent hit max turns — forcing text response")
+    final_config = types.GenerateContentConfig(
+        tools=[tools],
+        tool_config=types.ToolConfig(
+            function_calling_config=types.FunctionCallingConfig(mode="NONE"),
+        ),
+        system_instruction=system_prompt,
+    )
+    if model.startswith("gemini-3"):
+        final_config = types.GenerateContentConfig(
+            tools=[tools],
+            tool_config=types.ToolConfig(
+                function_calling_config=types.FunctionCallingConfig(mode="NONE"),
+            ),
+            thinking_config=types.ThinkingConfig(thinking_budget=1024) if "lite" in model else None,
+            system_instruction=system_prompt,
+        )
+    try:
+        response = client.models.generate_content(
+            model=model, contents=contents, config=final_config,
+        )
+        text_parts = [p.text for p in response.candidates[0].content.parts if p.text]
+        answer = " ".join(text_parts).strip()
+        logger.info(f"  Forced answer: {answer[:100]}")
+        return answer, queries_used
+    except Exception as e:
+        logger.error(f"  Forced answer failed: {e}")
+        return f"Could not determine answer after {MAX_AGENT_TURNS} tool calls.", queries_used
 
 
 # ---------------------------------------------------------------------------
