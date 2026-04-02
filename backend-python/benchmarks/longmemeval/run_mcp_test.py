@@ -214,16 +214,16 @@ def run(config: BenchmarkConfig) -> None:
                         pass
         logger.info(f"Resuming — {len(done_ids)} instances already done")
 
-    # MCP requires OAuth token; JWT token is used for project creation
-    jwt_token = login_jwt(config)
-    mcp_token = login_oauth_pkce(config, scope="read write")
-
     with open(output_path, "a") as out_f:
         for idx, instance in enumerate(dataset):
             instance_id = _get_instance_id(instance) or str(idx)
             if instance_id in done_ids:
                 logger.info(f"[{idx+1}/{len(dataset)}] Skipping {instance_id}")
                 continue
+
+            # Re-login before each instance to avoid token expiration
+            jwt_token = login_jwt(config)
+            mcp_token = login_oauth_pkce(config, scope="read write")
 
             question = instance.get("question", "")
             sessions = instance.get("haystack_sessions") or instance.get("sessions", [])
