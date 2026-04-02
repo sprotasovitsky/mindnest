@@ -30,29 +30,20 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s — %(
 logger = logging.getLogger(__name__)
 
 EXTRACT_PROMPT = """\
-You are preparing messages for a knowledge graph API that processes each message independently.
+You are preparing messages for a knowledge graph that processes each message independently.
 
-The API will extract entities (people, items, dates) and facts (relationships between entities) from each message. These become searchable later.
+The graph extracts entities (people, items, dates, places) and facts
+(relationships between entities). These become searchable later.
 
-IMPORTANT: If the message depends on previous context, include that context
-in the message itself. The knowledge graph processes each message independently.
+Extract all facts from the current message: personal details, events, tasks,
+preferences, relationships, states — anything concrete.
 
-Examples with context:
-- Instead of: "Add 50 more"
-- Send: "Add 50 more items to the grocery list (currently has milk, bread)"
+IMPORTANT: Each fact must be self-contained. Use the conversation history to:
+- Resolve pronouns: "She completed it" → "Maria completed the design task"
+- Expand references: "Add 50 more" → "Add 50 more items to the grocery list"
+- Include location/source/person from prior context when relevant
 
-- Instead of: "She completed it"
-- Send: "Maria completed the authentication task"
-
-- History mentions "using the Cartwheel app from Target", then user says "I redeemed a $5 coupon on coffee creamer"
-- Send: "User redeemed a $5 coupon on coffee creamer at Target"
-
-- History mentions "planning a trip to Barcelona", then user says "I booked the hotel"
-- Send: "User booked a hotel for the trip to Barcelona"
-
-Extract all facts from the current message. For each fact, produce a standalone
-statement that includes enough context from the conversation history to be
-understandable on its own. Write in third person (use "User" as the subject).
+Write each fact in third person (use "User" as the subject).
 Only include facts — not questions or advice requests.
 If there are no facts, return exactly: NONE
 

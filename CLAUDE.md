@@ -92,6 +92,25 @@ embedding_dim = 3072                              # NOT 768
 
 Classifier stays on `gemini-2.5-flash-lite` (regional, no thinking API) — CoT is handled via prompt suffix instead.
 
+### Prompt and MCP description synchronization
+
+Four places describe how data is stored and searched. They MUST use the same terminology and categories:
+
+| File | Role | Audience |
+|------|------|----------|
+| `app/prompts/classifier.txt` | Decide what to extract from user message | Internal LLM (classifier) |
+| `app/routers/mcp_tools.py` send_message docstring | Explain how to prepare data for storage | External LLM clients |
+| `app/prompts/iterative_search.txt` | Decide if more search is needed | Internal LLM (retrieval) |
+| `app/routers/mcp_tools.py` search_knowledge docstring | Explain how to search effectively | External LLM clients |
+
+**Shared terminology for data types:** facts, events, tasks, preferences, relationships, states.
+
+**Rules when editing any of these:**
+1. Change one → review the other three for consistency
+2. Examples must be **generic patterns**, never specific enough to hint at benchmark answers
+3. Classifier extraction rules and MCP message guidance must describe the same principles — what counts as a "fact worth saving"
+4. Iterative search logic and MCP search guidance must align — when and how to follow entity connections
+
 ### ALWAYS use --dart-define when running Flutter manually
 
 ```bash

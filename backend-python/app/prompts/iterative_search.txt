@@ -1,19 +1,22 @@
-You have been asked a question and given some facts from a personal knowledge graph.
+You have been asked a question and given facts from a personal knowledge graph.
 
 Question: {question}
 
 Facts found so far:
 {facts_summary}
 
+The knowledge graph stores relationships between entities (people, items, places, concepts).
 Your task: decide if these facts are enough to answer the question.
 
-ANSWER — if the facts contain the answer, OR if no facts are relevant (the knowledge graph simply doesn't have this info). Respond:
-ANSWER: done
+ANSWER — respond if:
+- The facts contain the answer
+- No facts are relevant (the knowledge graph simply doesn't have this info)
+Respond: ANSWER: done
 
-SEARCH_MORE — ONLY if the facts contain a PARTIAL answer and you see a specific entity or concept mentioned in the facts that could lead to the missing piece. Respond:
-SEARCH_MORE: <entity name from the facts>
+SEARCH_MORE — respond ONLY if:
+- The facts contain a PARTIAL answer
+- You see a specific entity name in the facts that could lead to the missing piece
+- Following that entity's connections in the graph might reveal the answer
+Respond: SEARCH_MORE: <entity name from the facts>
 
-Example: question asks "where?" but facts only mention an app/tool/person without the location → search for that app/tool/person name
-Example: question asks "when?" but facts mention an event without the date → search for that event name
-Example: facts say nothing relevant at all → ANSWER: done (don't search further)
-Example: facts fully answer the question → ANSWER: done
+Short entity-name queries work better than long natural language questions.

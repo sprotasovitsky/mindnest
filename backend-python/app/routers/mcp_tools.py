@@ -242,22 +242,21 @@ async def search_knowledge(
     Requires: read scope
     Searches for facts and entities related to the query in the specified project.
 
-    Use this to find:
-    - Tasks and to-dos: "tasks", "pending tasks"
-    - People and contacts: "people", "team members"
-    - Events and meetings: "events", "meetings"
-    - Purchases and expenses: "purchases", "expenses"
-    - Any information stored via chat messages
+    Use this to find any stored information:
+    - Facts, events, tasks, preferences, relationships, states
+    - People and contacts, purchases and expenses
+    - Any information previously stored via send_message or chat
 
     IMPORTANT: For queries with first-person pronouns ("my tasks", "what did I add?"),
     call get_current_user FIRST to get the user's name, then search with that name.
 
-    Examples:
-    - User asks "my tasks" -> get_current_user() returns name="John" -> search("tasks for John")
-    - User asks "what did I add?" -> get_current_user() returns name="John" -> search("John added")
+    Returns facts (relationships between entities) and entities (people, items,
+    places, concepts with aggregated summaries).
 
-    Returns facts (relationships like "John needs to buy milk") and entities
-    (people, items, concepts extracted from messages).
+    TIP: The knowledge graph stores relationships between entities. If results
+    mention an entity that might lead to the answer, try searching for that
+    entity name directly in a follow-up call to find connected facts.
+    Short entity-name queries often work better than long natural language questions.
     """
     # Verify project access
     await verify_project_access(db, auth.user.id, data.project_id)
@@ -343,32 +342,29 @@ async def send_message(
 
     Requires: write scope
 
-    Use this to store information that can be searched later:
-    - Tasks: "Buy groceries tomorrow"
-    - Notes: "Meeting notes: discussed Q4 goals"
-    - Facts: "John's phone number is 555-1234"
-    - Events: "Team dinner on Friday at 7pm"
+    Store any type of information that can be searched later:
+    - Facts: personal details, contact info, numbers, dates
+    - Events: meetings, trips, appointments, milestones
+    - Tasks: to-dos, reminders, assignments
+    - Preferences: likes, dislikes, choices, opinions
+    - Relationships: who knows whom, who recommended what
+    - States: current activities, ongoing projects, habits
 
-    IMPORTANT: If the message depends on previous context, include that context
-    in the message itself. The knowledge graph processes each message independently.
+    IMPORTANT: The knowledge graph processes each message independently.
+    If a message depends on previous context, include that context in the
+    message itself so it is self-contained and searchable.
 
-    Examples with context:
-    - Instead of: "Add 50 more"
-    - Send: "Add 50 more items to the grocery list (currently has milk, bread)"
+    Context enrichment patterns:
+    - Resolve pronouns: "She completed it" → "Maria completed the design task"
+    - Expand references: "Add 50 more" → "Add 50 more items to the grocery list"
+    - Include location/source from conversation: if prior context establishes
+      a place, service, or person — mention it in the fact explicitly
 
-    - Instead of: "She completed it"
-    - Send: "Maria completed the authentication task"
+    The message will be processed by AI to extract entities (people, items,
+    dates, places) and facts (relationships between entities). These become
+    searchable via search_knowledge.
 
-    - If the conversation mentions "using Cartwheel app from Target" and user says "I redeemed a $5 coupon on coffee creamer"
-    - Send: "User redeemed a $5 coupon on coffee creamer at Target"
-
-    - If the conversation mentions "planning a trip to Barcelona" and user says "I booked the hotel"
-    - Send: "User booked a hotel for the trip to Barcelona"
-
-    The message will be processed by AI to extract entities (people, items, dates)
-    and facts (relationships between entities). These become searchable via search_knowledge.
-
-    NOTE: This does NOT generate an AI response - it only stores data.
+    NOTE: This does NOT generate an AI response — it only stores data.
     The user's name is automatically associated with the message.
     """
     # Verify project access
