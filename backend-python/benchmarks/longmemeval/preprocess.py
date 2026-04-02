@@ -23,6 +23,7 @@ import time
 from pathlib import Path
 
 from google import genai
+from google.genai import types
 from google.oauth2 import service_account
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s — %(message)s")
@@ -98,9 +99,13 @@ def extract_facts(message: str, history: str = "", model: str = "gemini-3.1-flas
     client = _get_client()
     prompt = EXTRACT_PROMPT.format(message=message, history=history or "(no history)")
 
+    config = types.GenerateContentConfig(
+        thinking_config=types.ThinkingConfig(thinking_budget=1024),
+    )
+
     for attempt in range(3):
         try:
-            resp = client.models.generate_content(model=model, contents=prompt)
+            resp = client.models.generate_content(model=model, contents=prompt, config=config)
             text = resp.text.strip()
             if text == "NONE" or not text:
                 return []
