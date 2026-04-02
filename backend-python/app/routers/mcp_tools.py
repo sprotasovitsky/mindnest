@@ -359,6 +359,12 @@ async def send_message(
     - Instead of: "She completed it"
     - Send: "Maria completed the authentication task"
 
+    - If the conversation mentions "using Cartwheel app from Target" and user says "I redeemed a $5 coupon on coffee creamer"
+    - Send: "User redeemed a $5 coupon on coffee creamer at Target"
+
+    - If the conversation mentions "planning a trip to Barcelona" and user says "I booked the hotel"
+    - Send: "User booked a hotel for the trip to Barcelona"
+
     The message will be processed by AI to extract entities (people, items, dates)
     and facts (relationships between entities). These become searchable via search_knowledge.
 

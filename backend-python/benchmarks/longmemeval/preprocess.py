@@ -29,15 +29,36 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s — %(
 logger = logging.getLogger(__name__)
 
 EXTRACT_PROMPT = """\
-Extract all personal facts about the user from the message below.
-Return each fact as a separate line, written as a standalone statement in third person
-(use "User" as the subject).
-Only include facts the user explicitly states about themselves, their life,
-preferences, plans, possessions, or experiences.
-Do NOT include questions, advice requests, or assistant responses.
-If there are no personal facts, return exactly: NONE
+You are preparing messages for a knowledge graph API that processes each message independently.
 
-Message:
+The API will extract entities (people, items, dates) and facts (relationships between entities) from each message. These become searchable later.
+
+IMPORTANT: If the message depends on previous context, include that context
+in the message itself. The knowledge graph processes each message independently.
+
+Examples with context:
+- Instead of: "Add 50 more"
+- Send: "Add 50 more items to the grocery list (currently has milk, bread)"
+
+- Instead of: "She completed it"
+- Send: "Maria completed the authentication task"
+
+- History mentions "using the Cartwheel app from Target", then user says "I redeemed a $5 coupon on coffee creamer"
+- Send: "User redeemed a $5 coupon on coffee creamer at Target"
+
+- History mentions "planning a trip to Barcelona", then user says "I booked the hotel"
+- Send: "User booked a hotel for the trip to Barcelona"
+
+Extract all facts from the current message. For each fact, produce a standalone
+statement that includes enough context from the conversation history to be
+understandable on its own. Write in third person (use "User" as the subject).
+Only include facts — not questions or advice requests.
+If there are no facts, return exactly: NONE
+
+Conversation history:
+{history}
+
+Current message:
 {message}
 
 Facts (one per line):"""
@@ -51,7 +72,7 @@ def _get_client() -> genai.Client:
         return _client
 
     project = os.environ.get("VERTEX_AI_PROJECT_ID", "")
-    location = os.environ.get("VERTEX_AI_LOCATION", "us-central1")
+    location = "global"  # gemini-3 models require global endpoint
     sa_email = os.environ.get("GCP_SERVICE_ACCOUNT_EMAIL", "")
     private_key = os.environ.get("GCP_PRIVATE_KEY", "").replace("\\n", "\n")
 
@@ -72,10 +93,10 @@ def _get_client() -> genai.Client:
     return _client
 
 
-def extract_facts(message: str, model: str = "gemini-2.5-flash") -> list[str]:
-    """Ask Gemini to extract atomic facts from a user message."""
+def extract_facts(message: str, history: str = "", model: str = "gemini-3.1-flash-lite-preview") -> list[str]:
+    """Ask Gemini to extract atomic facts from a user message with conversation context."""
     client = _get_client()
-    prompt = EXTRACT_PROMPT.format(message=message)
+    prompt = EXTRACT_PROMPT.format(message=message, history=history or "(no history)")
 
     for attempt in range(3):
         try:
@@ -93,22 +114,29 @@ def extract_facts(message: str, model: str = "gemini-2.5-flash") -> list[str]:
                 return []
 
 
-def preprocess_instance(instance: dict, model: str = "gemini-2.5-flash") -> dict:
-    """Replace user turns with extracted atomic facts."""
+def preprocess_instance(instance: dict, model: str = "gemini-3.1-flash-lite-preview") -> dict:
+    """Replace user turns with extracted atomic facts, passing session context."""
     new_sessions = []
     total_original = 0
     total_facts = 0
 
     for s_idx, session in enumerate(instance["haystack_sessions"]):
         new_turns = []
+        session_history: list[str] = []
         for turn in session:
-            if turn["role"] != "user":
+            role = turn["role"]
+            content = turn["content"]
+            if role != "user":
+                session_history.append(f"[assistant]: {content[:200]}")
                 continue
             total_original += 1
-            facts = extract_facts(turn["content"], model)
+            # Build history from previous turns in this session
+            history = "\n".join(session_history[-10:])  # last 10 turns
+            facts = extract_facts(content, history, model)
             for fact in facts:
                 new_turns.append({"role": "user", "content": fact})
                 total_facts += 1
+            session_history.append(f"[user]: {content[:200]}")
 
         if new_turns:
             new_sessions.append(new_turns)
