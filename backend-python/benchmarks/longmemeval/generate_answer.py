@@ -13,6 +13,7 @@ import os
 from typing import Optional
 
 from google import genai
+from google.genai import types
 from google.oauth2 import service_account
 
 logger = logging.getLogger(__name__)
@@ -20,7 +21,7 @@ logger = logging.getLogger(__name__)
 _client: Optional[genai.Client] = None
 
 
-def _get_client(vertex_project: str = "", vertex_location: str = "us-central1") -> genai.Client:
+def _get_client(vertex_project: str = "", vertex_location: str = "global") -> genai.Client:
     """Lazily create a Vertex AI Gemini client, reusing the backend's env vars."""
     global _client
     if _client is not None:
@@ -110,9 +111,13 @@ def synthesize_answer(
     prompt = _build_synthesis_prompt(question, facts, entities)
     logger.debug(f"Synthesis prompt ({len(prompt)} chars) for question: {question[:80]}")
 
+    config = types.GenerateContentConfig(
+        thinking_config=types.ThinkingConfig(thinking_budget=1024),
+    )
     response = client.models.generate_content(
         model=model,
         contents=prompt,
+        config=config,
     )
     answer = response.text.strip()
     logger.debug(f"Synthesized answer: {answer[:120]}")

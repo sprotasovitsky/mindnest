@@ -37,7 +37,7 @@ class BenchmarkConfig:
     )
 
     # Gemini model used for answer synthesis in the MCP test
-    gemini_model_for_synthesis: str = "gemini-2.5-flash"
+    gemini_model_for_synthesis: str = "gemini-3.1-flash-lite-preview"
 
     # Dataset path (relative to this file's directory or absolute)
     dataset_path: str = str(

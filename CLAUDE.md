@@ -81,16 +81,16 @@ MindNest has an MCP server connected to this workspace. Before answering questio
 ### DO NOT change AI models without explicit user request
 
 ```python
-llm_model = "gemini-2.5-flash-lite"       # Classifier — fast, cost-effective
-llm_model_pro = "gemini-3-flash-preview"  # Chat responses — requires Vertex AI, NOT API key
-graphiti_model = "gemini-2.5-flash"       # Entity extraction — NOT gemini-3, NOT flash-lite
-embedding_model = "gemini-embedding-001"  # NOT text-embedding-004
-embedding_dim = 3072                      # NOT 768
+llm_model = "gemini-2.5-flash-lite"              # Classifier — fast, cost-effective, always-on CoT
+llm_model_pro = "gemini-3-flash-preview"         # Chat responses — requires Vertex AI, NOT API key
+graphiti_model = "gemini-3.1-flash-lite-preview"  # Entity extraction — with thinking_budget=1024
+embedding_model = "gemini-embedding-001"          # NOT text-embedding-004
+embedding_dim = 3072                              # NOT 768
 ```
 
 `gemini-3-flash-preview` requires Vertex AI service account auth — it does NOT work with a plain API key.
 
-`gemini-2.5-flash` for Graphiti was chosen after comparative testing: gemini-3 lost data in budget calculations; flash-lite had excessive refusals; flash is the best balance.
+`gemini-3.1-flash-lite-preview` for Graphiti replaces `gemini-2.5-flash` — 4.6x cheaper with controlled thinking (budget=1024 vs uncontrolled ~1183 tokens). Requires global Vertex AI endpoint. Previous testing: gemini-3 lost data in budget calculations; old flash-lite had excessive refusals; 3.1-flash-lite with thinking is the best balance.
 
 ### ALWAYS use --dart-define when running Flutter manually
 

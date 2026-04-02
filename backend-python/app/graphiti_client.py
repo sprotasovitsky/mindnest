@@ -146,21 +146,35 @@ class KnowledgeGraph:
         settings = get_settings()
         logger.info(f"Initializing Graphiti with Neo4j at {settings.neo4j_uri}")
 
-        genai_client = get_gemini_client()
-
-        # Use configurable model for entity extraction (default: Pro)
+        # Use configurable model for entity extraction
         graphiti_model = settings.graphiti_model or settings.llm_model_pro
         logger.info(f"Using model for Graphiti: {graphiti_model}")
-        llm_config = LLMConfig(model=graphiti_model)
-        llm_client = GeminiClient(config=llm_config, client=genai_client)
 
+        genai_client = get_gemini_client(model=graphiti_model)
+        llm_config = LLMConfig(model=graphiti_model)
+
+        # Enable thinking for models that support it (budget=1024)
+        thinking_config = None
+        if graphiti_model.startswith("gemini-2.5") or graphiti_model.startswith("gemini-3"):
+            from google.genai import types
+            thinking_config = types.ThinkingConfig(thinking_budget=1024)
+            logger.info(f"Graphiti thinking enabled (budget=1024)")
+
+        llm_client = GeminiClient(
+            config=llm_config,
+            client=genai_client,
+            thinking_config=thinking_config,
+        )
+
+        # Embedder and cross-encoder use regional client (don't need global)
+        regional_client = get_gemini_client()
         embedder_config = GeminiEmbedderConfig(
             embedding_model="gemini-embedding-001",
             embedding_dim=3072,
         )
-        embedder = GeminiEmbedder(config=embedder_config, client=genai_client)
+        embedder = GeminiEmbedder(config=embedder_config, client=regional_client)
 
-        cross_encoder = GeminiRerankerClient(config=llm_config, client=genai_client)
+        cross_encoder = GeminiRerankerClient(config=llm_config, client=regional_client)
 
         self._client = Graphiti(
             uri=settings.neo4j_uri,

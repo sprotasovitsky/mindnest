@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     llm_model_pro: str = "gemini-3-flash-preview"  # Best quality (requires Vertex AI, not API key)
 
     # Model for Graphiti entity extraction (can be overridden via env var)
-    graphiti_model: str = "gemini-2.5-flash"  # Best balance of speed and quality for entity extraction
+    graphiti_model: str = "gemini-3.1-flash-lite-preview"  # 4.6x cheaper than 2.5-flash with thinking_budget=1024
     # Embeddings configured in Graphiti: gemini-embedding-001 (3072 dimensions)
 
     # Graphiti features

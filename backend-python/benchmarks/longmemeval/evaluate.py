@@ -27,13 +27,14 @@ from pathlib import Path
 
 import numpy as np
 from google import genai
+from google.genai import types
 from google.oauth2 import service_account
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s — %(message)s")
 logger = logging.getLogger(__name__)
 
 DEFAULT_REFERENCE = Path(__file__).parent / "data" / "longmemeval_s_cleaned.json"
-DEFAULT_MODEL = "gemini-2.5-flash"
+DEFAULT_MODEL = "gemini-3.1-flash-lite-preview"
 
 
 # ---------------------------------------------------------------------------
@@ -49,7 +50,7 @@ def _get_client() -> genai.Client:
         return _client
 
     project = os.environ.get("VERTEX_AI_PROJECT_ID", "")
-    location = os.environ.get("VERTEX_AI_LOCATION", "us-central1")
+    location = "global"  # gemini-3.1 models require global endpoint
     sa_email = os.environ.get("GCP_SERVICE_ACCOUNT_EMAIL", "")
     private_key = os.environ.get("GCP_PRIVATE_KEY", "").replace("\\n", "\n")
 
@@ -79,7 +80,10 @@ def _judge(prompt: str, model: str) -> str:
     client = _get_client()
     for attempt in range(3):
         try:
-            resp = client.models.generate_content(model=model, contents=prompt)
+            config = types.GenerateContentConfig(
+                thinking_config=types.ThinkingConfig(thinking_budget=1024),
+            )
+            resp = client.models.generate_content(model=model, contents=prompt, config=config)
             return resp.text.strip()
         except Exception as e:
             if attempt < 2:

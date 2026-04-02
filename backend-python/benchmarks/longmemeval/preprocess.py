@@ -158,7 +158,7 @@ def main():
     parser = argparse.ArgumentParser(description="Preprocess LongMemEval for MCP test")
     parser.add_argument("--input", required=True, help="Input dataset JSON")
     parser.add_argument("--output", required=True, help="Output dataset JSON")
-    parser.add_argument("--model", default="gemini-2.5-flash")
+    parser.add_argument("--model", default="gemini-3.1-flash-lite-preview")
     parser.add_argument("--limit", type=int, default=None)
     args = parser.parse_args()
 
