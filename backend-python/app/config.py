@@ -31,9 +31,9 @@ class Settings(BaseSettings):
     gcp_private_key: str = ""  # PEM format
 
     # LLM Models
-    llm_model: str = "gemini-2.5-flash-lite"  # Fast, cost-effective
-    llm_model_balanced: str = "gemini-2.5-flash"  # Balanced speed/quality
-    llm_model_pro: str = "gemini-3-flash-preview"  # Best quality (requires Vertex AI, not API key)
+    llm_model: str = "gemini-2.5-flash-lite"  # Classifier — fast, cost-effective, CoT in prompt
+    llm_model_balanced: str = "gemini-3.1-flash-lite-preview"  # Balanced
+    llm_model_pro: str = "gemini-3.1-flash-lite-preview"  # Chat responses
 
     # Model for Graphiti entity extraction (can be overridden via env var)
     graphiti_model: str = "gemini-3.1-flash-lite-preview"  # 4.6x cheaper than 2.5-flash with thinking_budget=1024

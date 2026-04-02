@@ -9,6 +9,7 @@ import logging
 from typing import Optional
 
 from google import genai
+from google.genai import types
 from google.oauth2 import service_account
 
 from .config import get_settings
@@ -124,9 +125,16 @@ async def generate_text(
     last_error: Optional[Exception] = None
     for attempt in range(len(_RETRY_DELAYS) + 1):
         try:
+            # Enable thinking for 3.1+ models
+            config = None
+            if model_name.startswith("gemini-3"):
+                config = types.GenerateContentConfig(
+                    thinking_config=types.ThinkingConfig(thinking_budget=1024),
+                )
             response = await client.aio.models.generate_content(
                 model=model_name,
                 contents=prompt,
+                config=config,
             )
             text = response.text
             if not text or not text.strip():

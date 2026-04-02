@@ -623,6 +623,91 @@ async def _handle_both(
     )
 
 
+ITERATIVE_SEARCH_MAX = 2  # Max additional search rounds
+
+ITERATIVE_SEARCH_PROMPT = """You have been asked a question and given some facts from a knowledge graph.
+Decide if the facts are sufficient to answer the question fully.
+
+Question: {question}
+
+Facts found so far:
+{facts_summary}
+
+If you can answer the question confidently with these facts, respond with:
+ANSWER: <your concise answer>
+
+If the facts mention something relevant but you need more information to answer fully, respond with:
+SEARCH_MORE: <1-2 search queries separated by " | ">
+
+IMPORTANT: Your search queries should be SHORT — just entity names or key concepts
+from the facts above that might lead to the answer. For example:
+- If facts mention "Cartwheel app" but you need to know what store it belongs to → search "Cartwheel app"
+- If facts mention "Dr. Smith" but you need their specialty → search "Dr. Smith"
+- Do NOT write long natural language questions. Just search for the entity name."""
+
+
+async def _iterative_search(
+    kg: KnowledgeGraph,
+    project_id: str,
+    question: str,
+    initial_queries: list[str],
+) -> tuple[list[dict], list[dict], list[dict], list[str]]:
+    """Search with up to 2 additional rounds if first results are insufficient."""
+    settings = get_settings()
+    all_queries = list(initial_queries)
+
+    # Initial search
+    search_result = await _multi_query_search(kg, initial_queries, project_id)
+    edges = search_result.get("edges", [])
+    nodes = search_result.get("nodes", [])
+    communities = search_result.get("communities", [])
+    seen_facts = {e["fact"] for e in edges}
+
+    for iteration in range(ITERATIVE_SEARCH_MAX):
+        # Ask LLM if we have enough to answer
+        facts_summary = "\n".join(f"- {e['fact']}" for e in edges[:20]) or "(none)"
+        verdict_prompt = ITERATIVE_SEARCH_PROMPT.format(
+            question=question, facts_summary=facts_summary
+        )
+
+        try:
+            verdict = await generate_text(verdict_prompt, model=settings.llm_model_pro)
+        except Exception as e:
+            logger.warning(f"Iterative search verdict failed: {e}")
+            break
+
+        if "ANSWER:" in verdict:
+            logger.info(f"Iterative search: sufficient after {iteration} extra rounds")
+            break
+
+        if "SEARCH_MORE:" not in verdict:
+            break
+
+        # Extract new queries
+        raw = verdict.split("SEARCH_MORE:", 1)[1].strip()
+        new_queries = [q.strip() for q in raw.split("|") if q.strip()][:2]
+        if not new_queries:
+            break
+
+        logger.info(f"Iterative search round {iteration + 1}: {new_queries}")
+        all_queries.extend(new_queries)
+
+        # Additional search
+        extra_result = await _multi_query_search(kg, new_queries, project_id)
+        for e in extra_result.get("edges", []):
+            if e["fact"] not in seen_facts:
+                edges.append(e)
+                seen_facts.add(e["fact"])
+        for n in extra_result.get("nodes", []):
+            if not any(existing["name"] == n["name"] for existing in nodes):
+                nodes.append(n)
+        for c in extra_result.get("communities", []):
+            if not any(existing.get("name") == c.get("name") for existing in communities):
+                communities.append(c)
+
+    return edges, nodes, communities, all_queries
+
+
 async def _handle_question(
     request: ChatRequest,
     kg: KnowledgeGraph,
@@ -637,25 +722,19 @@ async def _handle_question(
     queries = search_queries or [request.message]
 
     # Get pending messages FIRST (before search, to avoid race condition)
-    # Background tasks may complete during search and remove messages from pending
     pending = await cache.get_pending(project_id)
     pending_context = cache.format_for_prompt(pending)
 
     if pending:
         logger.info(f"Including {len(pending)} pending messages in context")
 
-    # Search knowledge graph (multi-query)
-    search_result = await _multi_query_search(kg, queries, project_id)
-    success = search_result["success"]
+    # Iterative search — up to 2 extra rounds if first results insufficient
+    edges, nodes, communities, all_queries = await _iterative_search(
+        kg, project_id, request.message, queries
+    )
 
-    if not success:
-        logger.warning(f"Search failed: {search_result.get('error')}")
-
-    edges = search_result.get("edges", [])
-    nodes = search_result.get("nodes", [])
-    communities = search_result.get("communities", [])
-
-    _log_context(str(queries), edges, nodes, communities)
+    success = len(edges) > 0 or len(nodes) > 0
+    _log_context(str(all_queries), edges, nodes, communities)
 
     # Generate response with graph + pending + history + project context
     facts, entities, comm = _format_context(edges, nodes, communities)
@@ -689,7 +768,7 @@ async def _handle_question(
         entities_extracted=0,
         message_type="QUESTION",
         debug_context={
-            "queries_used": queries,
+            "queries_used": all_queries,
             "edges_count": len(edges),
             "nodes_count": len(nodes),
             "pending_count": len(pending),

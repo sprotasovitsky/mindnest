@@ -82,15 +82,15 @@ MindNest has an MCP server connected to this workspace. Before answering questio
 
 ```python
 llm_model = "gemini-2.5-flash-lite"              # Classifier — fast, cost-effective, always-on CoT
-llm_model_pro = "gemini-3-flash-preview"         # Chat responses — requires Vertex AI, NOT API key
+llm_model_pro = "gemini-3.1-flash-lite-preview"  # Chat responses + iterative retrieval
 graphiti_model = "gemini-3.1-flash-lite-preview"  # Entity extraction — with thinking_budget=1024
 embedding_model = "gemini-embedding-001"          # NOT text-embedding-004
 embedding_dim = 3072                              # NOT 768
 ```
 
-`gemini-3-flash-preview` requires Vertex AI service account auth — it does NOT work with a plain API key.
+`gemini-3.1-flash-lite-preview` requires global Vertex AI endpoint and uses thinking_budget=1024 (auto-enabled in llm.py for gemini-3+ models). Replaces both `gemini-3-flash-preview` (chat, 2x cheaper) and `gemini-2.5-flash` (Graphiti, 4.6x cheaper with controlled thinking).
 
-`gemini-3.1-flash-lite-preview` for Graphiti replaces `gemini-2.5-flash` — 4.6x cheaper with controlled thinking (budget=1024 vs uncontrolled ~1183 tokens). Requires global Vertex AI endpoint. Previous testing: gemini-3 lost data in budget calculations; old flash-lite had excessive refusals; 3.1-flash-lite with thinking is the best balance.
+Classifier stays on `gemini-2.5-flash-lite` (regional, no thinking API) — CoT is handled via prompt suffix instead.
 
 ### ALWAYS use --dart-define when running Flutter manually
 
