@@ -32,7 +32,7 @@ from ..graphiti_client import get_knowledge_graph, KnowledgeGraph
 from ..llm import generate_text
 from ..models import ChatMessage, Project, ProjectMember, User
 from ..pending_cache import get_pending_cache
-from ..prompts import format_response_prompt, format_onboarding_prompt
+from ..prompts import format_response_prompt, format_onboarding_prompt, load_prompt
 
 logger = logging.getLogger(__name__)
 
