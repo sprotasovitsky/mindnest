@@ -54,10 +54,13 @@ Use this to find any stored information:
 Returns facts (relationships between entities) and entities (people, items,
 places, concepts with aggregated summaries).
 
-TIP: The knowledge graph stores relationships between entities. If results
-mention an entity that might lead to the answer, try searching for that
-entity name directly in a follow-up call to find connected facts.
-Short entity-name queries often work better than long natural language questions."""
+SEARCH STRATEGY:
+1. Use short keyword queries, not full sentences
+2. If results don't fully answer the question, look at entity names in the
+   returned facts and entities — then search for JUST that entity name alone
+   (one or two words, nothing else)
+3. NEVER repeat a similar query. Each follow-up must be a different, shorter query
+4. Single entity names find more connected facts than long questions"""
 
 GET_USER_TOOL_DESC = """Get the current user's name and ID.
 Call this before searching if the question uses first-person pronouns
@@ -180,6 +183,9 @@ def ask_question_as_agent(
     system_prompt = (
         "You are a helpful assistant answering questions about the user's personal knowledge. "
         "Use the available tools to search the knowledge graph. "
+        "The graph stores entities connected by relationships. "
+        "If your search returns facts that mention an entity you haven't explored yet, "
+        "search for that entity name to discover connected information. "
         "Answer concisely based on the facts you find."
     )
 
