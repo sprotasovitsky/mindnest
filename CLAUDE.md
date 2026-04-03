@@ -135,12 +135,14 @@ Semantics(
 
 ### Two-phase benchmark testing rule
 
+Always use `/api/chat` for all benchmark testing including fill phase — never use MCP endpoints.
+
 When running chat benchmark tests with `run_chat_test.py`, always use a two-phase approach to save cost:
 
-**Phase 1 — Fill (cheap model):**
+**Phase 1 — Fill (fast settings):**
 ```bash
-# Start server with cheap model and no iterative search for ingestion
-LLM_MODEL_PRO=gemini-2.5-flash-lite ITERATIVE_SEARCH_MAX=0 uvicorn app.main:app --port 8000
+# Start server with no iterative search + short responses for ingestion
+ITERATIVE_SEARCH_MAX=0 LLM_MAX_OUTPUT_TOKENS=100 uvicorn app.main:app --port 8000
 
 # Fill projects (creates projects, ingests sessions, saves projects_map.json)
 python -m benchmarks.longmemeval.run_chat_test \
@@ -150,10 +152,10 @@ python -m benchmarks.longmemeval.run_chat_test \
     --fill-only
 ```
 
-**Phase 2 — Ask (proper model):**
+**Phase 2 — Ask (normal settings):**
 ```bash
-# Restart server with proper model
-uvicorn app.main:app --reload --port 8000
+# Restart server with normal settings
+uvicorn app.main:app --port 8000
 
 # Ask questions only (reads projects_map.json)
 python -m benchmarks.longmemeval.run_chat_test \
@@ -163,7 +165,7 @@ python -m benchmarks.longmemeval.run_chat_test \
     --ask-only
 ```
 
-Why: the filling phase makes dozens of API calls per instance for onboarding + ingestion. Using `gemini-2.5-flash-lite` (no thinking) for those calls is 4–10x cheaper since the responses don't need to be high quality. Only the actual question-answering call needs the proper model.
+Why: the filling phase makes hundreds of API calls for onboarding + ingestion. `ITERATIVE_SEARCH_MAX=0` removes iterative search rounds. `LLM_MAX_OUTPUT_TOKENS=100` cuts response length — quality doesn't matter during fill, only data ingestion into Graphiti does. The model stays `gemini-3.1-flash-lite-preview` (faster than 2.5-flash-lite for responses).
 
 ### "termly" references in deployment configs are intentional
 

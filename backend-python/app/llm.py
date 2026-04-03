@@ -127,10 +127,14 @@ async def generate_text(
         try:
             # Enable thinking for 3.1+ models
             config = None
+            max_tokens = settings.llm_max_output_tokens or None
             if model_name.startswith("gemini-3"):
                 config = types.GenerateContentConfig(
                     thinking_config=types.ThinkingConfig(thinking_level="MEDIUM"),
+                    max_output_tokens=max_tokens,
                 )
+            elif max_tokens:
+                config = types.GenerateContentConfig(max_output_tokens=max_tokens)
             response = await client.aio.models.generate_content(
                 model=model_name,
                 contents=prompt,

@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     # Search
     search_limit: int = 40  # Max edges/nodes returned from search
     iterative_search_max: int = 3  # Max additional search rounds (0 = single search, no iterations)
+    llm_max_output_tokens: int = 0  # Max output tokens for chat responses (0 = no limit)
 
     # Chat history
     chat_history_limit: int = 10  # Number of recent messages to include in LLM context

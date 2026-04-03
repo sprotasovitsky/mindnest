@@ -83,14 +83,19 @@ Gitignored. Named by type + timestamp or run name.
 
 ### Chat benchmark — two-phase run (see CLAUDE.md for full commands)
 
-```
-Phase 1 — Fill (cheap model):
-  LLM_MODEL_PRO=gemini-2.5-flash-lite + run_chat_test.py --fill-only
-  → creates projects, ingests sessions, writes projects_map.json
+Always use `/api/chat` — never MCP endpoints.
 
-Phase 2 — Ask (proper model):
-  normal server + run_chat_test.py --ask-only
-  → reads projects_map.json, asks questions, writes chat_hypothesis.jsonl
+```
+Phase 1 — Fill (fast settings):
+  ITERATIVE_SEARCH_MAX=0 LLM_MAX_OUTPUT_TOKENS=100 uvicorn ...
+  run_chat_test.py --fill-only
+  → creates projects, ingests sessions, writes projects_map.json
+  → no iterative search, short responses (100 tokens), fast ingestion
+
+Phase 2 — Ask (normal settings):
+  normal uvicorn (no env overrides)
+  run_chat_test.py --ask-only
+  → reads projects_map.json, asks benchmark questions, writes chat_hypothesis.jsonl
 ```
 
 ### Debug a single question
