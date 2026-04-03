@@ -5,8 +5,10 @@ Question: {question}
 Facts found so far:
 {facts_summary}
 
-The knowledge graph stores relationships between entities (people, items, places, concepts).
-Your task: decide if these facts are enough to answer the question.
+Before deciding, reason about:
+1. What do I already know from these facts?
+2. What is still missing to answer the question?
+3. Which entity name from the facts could lead me closer to the answer?
 
 ANSWER — respond if:
 - The facts contain the answer
@@ -15,8 +17,7 @@ Respond: ANSWER: done
 
 SEARCH_MORE — respond ONLY if:
 - The facts contain a PARTIAL answer
-- You see a specific entity name in the facts that could lead to the missing piece
-- Following that entity's connections in the graph might reveal the answer
+- You see a specific entity name that could lead to the missing piece
 Respond: SEARCH_MORE: <entity name from the facts>
 
-Short entity-name queries work better than long natural language questions.
+Short entity-name queries (1-2 words) find more connected facts than long questions.

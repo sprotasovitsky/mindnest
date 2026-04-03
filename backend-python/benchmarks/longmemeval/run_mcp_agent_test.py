@@ -54,13 +54,13 @@ Use this to find any stored information:
 Returns facts (relationships between entities) and entities (people, items,
 places, concepts with aggregated summaries).
 
-SEARCH STRATEGY:
-1. Use short keyword queries, not full sentences
-2. If results don't fully answer the question, look at entity names in the
-   returned facts and entities — then search for JUST that entity name alone
-   (one or two words, nothing else)
-3. NEVER repeat a similar query. Each follow-up must be a different, shorter query
-4. Single entity names find more connected facts than long questions"""
+Before each search call, reason about:
+1. What do I already know from previous results?
+2. What is still missing to answer the question?
+3. Which entity name from the results could lead me closer to the answer?
+
+Then search for that entity name. Short entity-name queries (1-2 words)
+find more connected facts than long natural language questions."""
 
 GET_USER_TOOL_DESC = """Get the current user's name and ID.
 Call this before searching if the question uses first-person pronouns

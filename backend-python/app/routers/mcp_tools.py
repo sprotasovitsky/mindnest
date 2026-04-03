@@ -253,10 +253,13 @@ async def search_knowledge(
     Returns facts (relationships between entities) and entities (people, items,
     places, concepts with aggregated summaries).
 
-    TIP: The knowledge graph stores relationships between entities. If results
-    mention an entity that might lead to the answer, try searching for that
-    entity name directly in a follow-up call to find connected facts.
-    Short entity-name queries often work better than long natural language questions.
+    Before each search call, reason about:
+    1. What do I already know from previous results?
+    2. What is still missing to answer the question?
+    3. Which entity name from the results could lead me closer to the answer?
+
+    Then search for that entity name. Short entity-name queries (1-2 words)
+    find more connected facts than long natural language questions.
     """
     # Verify project access
     await verify_project_access(db, auth.user.id, data.project_id)
