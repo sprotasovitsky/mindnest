@@ -192,7 +192,7 @@ def ingest_sessions(
             else:
                 message = content
 
-            send_chat(api_url, token, project_id, message)
+            send_chat(api_url, token, project_id, message[:9999])
             total_sent += 1
             prev_user_text = content
 

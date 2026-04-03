@@ -1,15 +1,12 @@
 """Classifier benchmark: compare gemini-2.5-flash-lite vs 3.1-flash-lite (NONE/MINIMAL).
 
-Runs all user messages from one instance through 3 classifier variants and reports:
-- Speed (avg time per message)
-- Tokens (input/output)
-- Classification agreement (TYPE matches between models)
+Uses the exact same code path as production classifier (generate_text from app.llm).
+History: sliding window of last 4 user+assistant pairs from the dataset.
 
 Usage:
     python3 -m benchmarks.longmemeval.test_classifier \
         --dataset benchmarks/longmemeval/data/test_5_new.json \
-        --instance e47becba \
-        --limit 50
+        --instance e47becba
 """
 
 import argparse
@@ -18,16 +15,11 @@ import json
 import time
 from dataclasses import dataclass, field
 
-from google import genai
-from google.genai import types
-
-from app.llm import _get_vertex_credentials
+from app.llm import generate_text
 from app.config import get_settings
 from app.prompts import load_prompt
 
-CONCURRENCY = 10  # parallel requests per variant
-
-CLASSIFIER_PROMPT_TEMPLATE = None  # loaded once
+CLASSIFIER_HISTORY_LIMIT = 4  # must match app/routers/chat.py
 
 COT_SUFFIX = (
     "\n\nBefore answering, briefly explain your reasoning:\n"
@@ -37,15 +29,58 @@ COT_SUFFIX = (
 )
 
 
-def get_prompt(message: str, chat_history: str = "(no history)") -> str:
-    global CLASSIFIER_PROMPT_TEMPLATE
-    if CLASSIFIER_PROMPT_TEMPLATE is None:
-        CLASSIFIER_PROMPT_TEMPLATE = load_prompt("classifier")
-    return CLASSIFIER_PROMPT_TEMPLATE.format(
-        message=message,
-        user_name="Benchmark User",
-        chat_history=chat_history,
-    ) + COT_SUFFIX
+def format_history(pairs: list[tuple[str, str]]) -> str:
+    """Format last N user+assistant pairs exactly like production classifier."""
+    recent = pairs[-CLASSIFIER_HISTORY_LIMIT:]
+    lines = []
+    for user_msg, assistant_msg in recent:
+        lines.append(f"[User]: {user_msg}")
+        lines.append(f"[Assistant]: {assistant_msg}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def build_prompts(instance: dict) -> list[str]:
+    """Build prompt strings from dataset instance.
+
+    Iterates through all sessions and turns, maintaining a sliding window
+    of the last 4 user+assistant pairs as chat_history — same as production.
+    Returns list of full prompt strings for every user turn.
+    """
+    template = load_prompt("classifier")
+    history_pairs: list[tuple[str, str]] = []  # (user_msg, assistant_reply)
+    prompts = []
+
+    for sess in instance["haystack_sessions"]:
+        turns = sess  # list of {"role": ..., "content": ...}
+        i = 0
+        while i < len(turns):
+            turn = turns[i]
+            if turn["role"] != "user":
+                i += 1
+                continue
+
+            message = turn["content"]
+            chat_history = format_history(history_pairs) if history_pairs else "(no history)"
+
+            prompt = template.format(
+                message=message,
+                user_name="Benchmark User",
+                chat_history=chat_history,
+            ) + COT_SUFFIX
+            prompts.append(prompt)
+
+            # Find paired assistant reply for history
+            assistant_reply = ""
+            if i + 1 < len(turns) and turns[i + 1]["role"] == "assistant":
+                assistant_reply = turns[i + 1]["content"][:200]  # truncate for history
+                i += 2
+            else:
+                i += 1
+
+            history_pairs.append((message, assistant_reply))
+
+    return prompts
 
 
 def parse_type(response: str) -> str:
@@ -62,127 +97,74 @@ def parse_type(response: str) -> str:
 class VariantResult:
     name: str
     times: list[float] = field(default_factory=list)
-    input_tokens: list[int] = field(default_factory=list)
-    output_tokens: list[int] = field(default_factory=list)
-    think_tokens: list[int] = field(default_factory=list)
     types: list[str] = field(default_factory=list)
 
 
-async def classify_one(client, model, prompt, thinking_cfg, sem):
-    async with sem:
-        cfg_kwargs = {}
-        if thinking_cfg:
-            cfg_kwargs["thinking_config"] = thinking_cfg
-        config = types.GenerateContentConfig(**cfg_kwargs) if cfg_kwargs else None
-        for attempt in range(4):
-            try:
-                t0 = time.monotonic()
-                resp = await client.aio.models.generate_content(
-                    model=model, contents=prompt, config=config
-                )
-                elapsed = time.monotonic() - t0
-                u = resp.usage_metadata
-                think = getattr(u, "thoughts_token_count", 0) or 0
-                msg_type = parse_type(resp.text or "")
-                return elapsed, u.prompt_token_count, u.candidates_token_count, think, msg_type
-            except Exception as e:
-                if "429" in str(e) and attempt < 3:
-                    await asyncio.sleep(5 * (attempt + 1))
-                else:
-                    raise
+async def classify_one(model: str, thinking_level: str, prompt: str) -> tuple[float, str]:
+    """Call generate_text exactly like production classifier does."""
+    settings = get_settings()
+    old_thinking = settings.llm_thinking_level
+    settings.llm_thinking_level = thinking_level
+
+    t0 = time.monotonic()
+    try:
+        response = await generate_text(prompt, model=model)
+    finally:
+        settings.llm_thinking_level = old_thinking
+
+    elapsed = time.monotonic() - t0
+    return elapsed, parse_type(response)
 
 
-async def run_variant(client, model, thinking_cfg, messages, label) -> VariantResult:
+async def run_variant(model: str, thinking_level: str, prompts: list[str], label: str) -> VariantResult:
     result = VariantResult(name=label)
-    sem = asyncio.Semaphore(CONCURRENCY)
-    print(f"  Running {label} ({len(messages)} messages)...")
+    print(f"  Running {label} ({len(prompts)} messages, sequential)...")
     t_start = time.monotonic()
-    tasks = [classify_one(client, model, msg, thinking_cfg, sem) for msg in messages]
-    results = await asyncio.gather(*tasks)
-    total = time.monotonic() - t_start
-    for elapsed, inp, out, think, mtype in results:
+    for i, prompt in enumerate(prompts):
+        elapsed, mtype = await classify_one(model, thinking_level, prompt)
         result.times.append(elapsed)
-        result.input_tokens.append(inp)
-        result.output_tokens.append(out)
-        result.think_tokens.append(think)
         result.types.append(mtype)
-    print(f"    Done in {total:.1f}s")
+        if (i + 1) % 50 == 0:
+            print(f"    {i+1}/{len(prompts)} done...")
+        await asyncio.sleep(3)
+    print(f"    Done in {time.monotonic()-t_start:.1f}s")
     return result
 
 
 def print_report(variants: list[VariantResult]):
-    baseline_types = variants[0].types
+    baseline = variants[0]
+    n = len(baseline.times)
 
-    print("\n" + "=" * 70)
-    print(f"{'Metric':<30} " + "  ".join(f"{v.name:>12}" for v in variants))
-    print("=" * 70)
+    print("\n" + "=" * 72)
+    print(f"{'Metric':<32} " + "  ".join(f"{v.name:>12}" for v in variants))
+    print("=" * 72)
 
     def row(label, values):
-        print(f"{label:<30} " + "  ".join(f"{v:>12}" for v in values))
+        print(f"{label:<32} " + "  ".join(f"{v:>12}" for v in values))
 
-    n = len(variants[0].times)
-    row("Messages", [f"{n}" for _ in variants])
-    row(
-        "Total time (s)",
-        [f"{sum(v.times):.1f}" for v in variants],
-    )
-    row(
-        "Avg time/msg (s)",
-        [f"{sum(v.times)/len(v.times):.2f}" for v in variants],
-    )
-    row(
-        "Avg input tokens",
-        [f"{sum(v.input_tokens)/n:.0f}" for v in variants],
-    )
-    row(
-        "Avg output tokens",
-        [f"{sum(v.output_tokens)/n:.0f}" for v in variants],
-    )
-    row(
-        "Avg think tokens",
-        [f"{sum(v.think_tokens)/n:.0f}" for v in variants],
-    )
-    row(
-        "Total input tokens",
-        [f"{sum(v.input_tokens):,}" for v in variants],
-    )
-    row(
-        "Total output tokens",
-        [f"{sum(v.output_tokens):,}" for v in variants],
-    )
+    row("Messages", [str(n)] * len(variants))
+    row("Total time (s)", [f"{sum(v.times):.1f}" for v in variants])
+    row("Avg time/msg (s)", [f"{sum(v.times)/n:.2f}" for v in variants])
 
-    print("-" * 70)
-    print("Classification types distribution:")
+    print("-" * 72)
+    print("Type distribution:")
     for t in ("DATA", "QUESTION", "BOTH", "UNKNOWN"):
         counts = [v.types.count(t) for v in variants]
         row(f"  {t}", [f"{c} ({100*c/n:.0f}%)" for c in counts])
 
-    print("-" * 70)
-    print("Agreement with baseline (2.5-flash-lite):")
+    print("-" * 72)
+    print("Agreement with 2.5-flash-lite baseline:")
     for v in variants[1:]:
-        matches = sum(1 for a, b in zip(baseline_types, v.types) if a == b)
+        matches = sum(1 for a, b in zip(baseline.types, v.types) if a == b)
         print(f"  {v.name}: {matches}/{n} ({100*matches/n:.0f}%)")
 
-    print("=" * 70)
-
-    # Per-type disagreements
-    print("\nDisagreements (baseline vs 3.1):")
-    for i, (base_type, msg_preview) in enumerate(
-        zip(baseline_types, [""] * n)
-    ):
-        disagreed = [v for v in variants[1:] if v.types[i] != base_type]
-        if disagreed:
-            print(
-                f"  msg#{i+1}: baseline={base_type} "
-                + " ".join(f"{v.name}={v.types[i]}" for v in disagreed)
-            )
+    print("=" * 72)
 
 
 async def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", default="benchmarks/longmemeval/data/test_5_new.json")
     parser.add_argument("--instance", default="e47becba")
-    parser.add_argument("--limit", type=int, default=0, help="0=all messages")
     args = parser.parse_args()
 
     with open(args.dataset) as f:
@@ -193,78 +175,39 @@ async def main():
         print(f"Instance {args.instance} not found")
         return
 
-    # Extract all user messages
-    messages_raw = []
-    for sess in inst["haystack_sessions"]:
-        for turn in sess:
-            if turn["role"] == "user":
-                messages_raw.append(turn["content"])
+    prompts = build_prompts(inst)
+    # Skip first 4 so history window is always full (4 pairs), then take 100
+    prompts = prompts[4:104]
 
-    if args.limit:
-        messages_raw = messages_raw[: args.limit]
-
-    prompts = [get_prompt(m) for m in messages_raw]
     print(f"Instance: {args.instance} | Messages: {len(prompts)}")
 
-    settings = get_settings()
-    creds = _get_vertex_credentials()
-
-    client_r = genai.Client(
-        vertexai=True,
-        project=settings.vertex_ai_project_id,
-        location=settings.vertex_ai_location,
-        credentials=creds,
-    )
-    client_g = genai.Client(
-        vertexai=True,
-        project=settings.vertex_ai_project_id,
-        location="global",
-        credentials=creds,
-    )
-
-    variants_cfg = [
-        (client_r, "gemini-2.5-flash-lite", None, "2.5-flash-lite"),
-        (client_g, "gemini-3.1-flash-lite-preview", None, "3.1-NONE"),
-        (
-            client_g,
-            "gemini-3.1-flash-lite-preview",
-            types.ThinkingConfig(thinking_level="MINIMAL"),
-            "3.1-MINIMAL",
-        ),
+    # (model, thinking_level, label)
+    # thinking_level is patched into settings before each call — same path as production
+    variants = [
+        ("gemini-2.5-flash-lite", "NONE", "2.5-flash-lite"),
+        ("gemini-3.1-flash-lite-preview", "NONE", "3.1-NONE"),
+        ("gemini-3.1-flash-lite-preview", "MINIMAL", "3.1-MINIMAL"),
     ]
 
     results = []
-    for client, model, thinking_cfg, label in variants_cfg:
-        r = await run_variant(client, model, thinking_cfg, prompts, label)
+    for model, thinking_level, label in variants:
+        r = await run_variant(model, thinking_level, prompts, label)
         results.append(r)
 
     print_report(results)
 
-    # Save raw results
     out_path = f"benchmarks/longmemeval/results/classifier_benchmark_{args.instance}.json"
-    import os
-    os.makedirs("benchmarks/longmemeval/results", exist_ok=True)
     with open(out_path, "w") as f:
-        json.dump(
-            {
-                "instance": args.instance,
-                "n_messages": len(prompts),
-                "variants": [
-                    {
-                        "name": r.name,
-                        "times": r.times,
-                        "input_tokens": r.input_tokens,
-                        "output_tokens": r.output_tokens,
-                        "think_tokens": r.think_tokens,
-                        "types": r.types,
-                    }
-                    for r in results
-                ],
-            },
-            f,
-            indent=2,
-        )
-    print(f"\nRaw results saved to {out_path}")
+        json.dump({
+            "instance": args.instance,
+            "n_messages": len(prompts),
+            "variants": [{
+                "name": r.name,
+                "times": r.times,
+                "types": r.types,
+            } for r in results],
+        }, f, indent=2)
+    print(f"\nSaved to {out_path}")
 
 
 if __name__ == "__main__":
