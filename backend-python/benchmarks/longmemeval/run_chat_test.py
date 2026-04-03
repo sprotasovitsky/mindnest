@@ -306,14 +306,14 @@ def run(config: BenchmarkConfig, fill_only: bool = False, ask_only: bool = False
                 config.api_url, token, project_id, config.onboarding_seed_message
             )
 
-            # Ingest all user-role turns
+            # Ingest all user-role turns (no delay during fill — server has enough natural latency)
             total_msgs = ingest_sessions(
                 api_url=config.api_url,
                 token=token,
                 project_id=project_id,
                 sessions=sessions,
-                inter_message_delay=config.inter_message_delay_seconds,
-                inter_session_delay=config.inter_session_delay_seconds,
+                inter_message_delay=0.0 if fill_only else config.inter_message_delay_seconds,
+                inter_session_delay=0.0 if fill_only else config.inter_session_delay_seconds,
                 short_turn_threshold=config.short_turn_threshold,
             )
 

@@ -81,7 +81,7 @@ def _judge(prompt: str, model: str) -> str:
     for attempt in range(3):
         try:
             config = types.GenerateContentConfig(
-                thinking_config=types.ThinkingConfig(thinking_budget=1024),
+                thinking_config=types.ThinkingConfig(thinking_level="MEDIUM"),
             )
             resp = client.models.generate_content(model=model, contents=prompt, config=config)
             return resp.text.strip()

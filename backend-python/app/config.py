@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     llm_model_pro: str = "gemini-3.1-flash-lite-preview"  # Chat responses
 
     # Model for Graphiti entity extraction (can be overridden via env var)
-    graphiti_model: str = "gemini-3.1-flash-lite-preview"  # 4.6x cheaper than 2.5-flash with thinking_budget=1024
+    graphiti_model: str = "gemini-3.1-flash-lite-preview"  # Entity extraction — thinking_level=MEDIUM
     # Embeddings configured in Graphiti: gemini-embedding-001 (3072 dimensions)
 
     # Graphiti features
@@ -44,6 +44,7 @@ class Settings(BaseSettings):
 
     # Search
     search_limit: int = 40  # Max edges/nodes returned from search
+    iterative_search_max: int = 3  # Max additional search rounds (0 = single search, no iterations)
 
     # Chat history
     chat_history_limit: int = 10  # Number of recent messages to include in LLM context

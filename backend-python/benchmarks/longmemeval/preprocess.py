@@ -91,7 +91,7 @@ def extract_facts(message: str, history: str = "", model: str = "gemini-3.1-flas
     prompt = EXTRACT_PROMPT.format(message=message, history=history or "(no history)")
 
     config = types.GenerateContentConfig(
-        thinking_config=types.ThinkingConfig(thinking_budget=1024),
+        thinking_config=types.ThinkingConfig(thinking_level="MEDIUM"),
     )
 
     for attempt in range(3):

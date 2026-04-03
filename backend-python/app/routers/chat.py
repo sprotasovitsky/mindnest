@@ -627,7 +627,7 @@ async def _handle_both(
     )
 
 
-ITERATIVE_SEARCH_MAX = 3  # Max additional search rounds
+ITERATIVE_SEARCH_MAX = get_settings().iterative_search_max  # Max additional search rounds
 POOL_SIZE = 15  # Max facts in rolling pool (verdict + response both use this)
 
 

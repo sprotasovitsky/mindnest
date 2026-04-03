@@ -153,12 +153,12 @@ class KnowledgeGraph:
         genai_client = get_gemini_client(model=graphiti_model)
         llm_config = LLMConfig(model=graphiti_model)
 
-        # Enable thinking for models that support it (budget=1024)
+        # Enable thinking for gemini-3+ models (thinking_level API)
         thinking_config = None
-        if graphiti_model.startswith("gemini-2.5") or graphiti_model.startswith("gemini-3"):
+        if graphiti_model.startswith("gemini-3"):
             from google.genai import types
-            thinking_config = types.ThinkingConfig(thinking_budget=1024)
-            logger.info(f"Graphiti thinking enabled (budget=1024)")
+            thinking_config = types.ThinkingConfig(thinking_level="MEDIUM")
+            logger.info(f"Graphiti thinking enabled (level=MEDIUM)")
 
         llm_client = GeminiClient(
             config=llm_config,

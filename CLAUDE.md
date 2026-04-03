@@ -139,8 +139,8 @@ When running chat benchmark tests with `run_chat_test.py`, always use a two-phas
 
 **Phase 1 — Fill (cheap model):**
 ```bash
-# Start server with cheap model for ingestion
-LLM_MODEL_PRO=gemini-2.5-flash-lite uvicorn app.main:app --reload --port 8000
+# Start server with cheap model and no iterative search for ingestion
+LLM_MODEL_PRO=gemini-2.5-flash-lite ITERATIVE_SEARCH_MAX=0 uvicorn app.main:app --port 8000
 
 # Fill projects (creates projects, ingests sessions, saves projects_map.json)
 python -m benchmarks.longmemeval.run_chat_test \
