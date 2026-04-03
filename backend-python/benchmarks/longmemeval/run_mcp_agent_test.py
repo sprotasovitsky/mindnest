@@ -191,7 +191,7 @@ def ask_question_as_agent(
 
     config = types.GenerateContentConfig(
         tools=[tools],
-        thinking_config=types.ThinkingConfig(thinking_budget=1024),
+        thinking_config=types.ThinkingConfig(thinking_level="MEDIUM"),
         system_instruction=system_prompt,
     )
 
@@ -266,7 +266,7 @@ def ask_question_as_agent(
             tool_config=types.ToolConfig(
                 function_calling_config=types.FunctionCallingConfig(mode="NONE"),
             ),
-            thinking_config=types.ThinkingConfig(thinking_budget=1024) if "lite" in model else None,
+            thinking_config=types.ThinkingConfig(thinking_level="MEDIUM") if "lite" in model else None,
             system_instruction=system_prompt,
         )
     try:

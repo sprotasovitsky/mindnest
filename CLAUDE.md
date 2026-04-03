@@ -133,6 +133,38 @@ Semantics(
 )
 ```
 
+### Two-phase benchmark testing rule
+
+When running chat benchmark tests with `run_chat_test.py`, always use a two-phase approach to save cost:
+
+**Phase 1 — Fill (cheap model):**
+```bash
+# Start server with cheap model for ingestion
+LLM_MODEL_PRO=gemini-2.5-flash-lite uvicorn app.main:app --reload --port 8000
+
+# Fill projects (creates projects, ingests sessions, saves projects_map.json)
+python -m benchmarks.longmemeval.run_chat_test \
+    --email benchmark@example.com --password BenchmarkPass123! \
+    --dataset benchmarks/longmemeval/data/test_5_new.json \
+    --output-dir benchmarks/longmemeval/results/my_run \
+    --fill-only
+```
+
+**Phase 2 — Ask (proper model):**
+```bash
+# Restart server with proper model
+uvicorn app.main:app --reload --port 8000
+
+# Ask questions only (reads projects_map.json)
+python -m benchmarks.longmemeval.run_chat_test \
+    --email benchmark@example.com --password BenchmarkPass123! \
+    --dataset benchmarks/longmemeval/data/test_5_new.json \
+    --output-dir benchmarks/longmemeval/results/my_run \
+    --ask-only
+```
+
+Why: the filling phase makes dozens of API calls per instance for onboarding + ingestion. Using `gemini-2.5-flash-lite` (no thinking) for those calls is 4–10x cheaper since the responses don't need to be high quality. Only the actual question-answering call needs the proper model.
+
 ### "termly" references in deployment configs are intentional
 
 MindNest staging shares infrastructure with the Termly project: `termly-postgres`, `termly-nginx`, `termly-network`, `/opt/termly/` on EC2. This is not a naming error — see `backend-python/README.md` for details.

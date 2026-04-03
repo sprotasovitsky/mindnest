@@ -213,7 +213,15 @@ def _get_instance_id(instance: dict) -> str:
     return instance.get("question_id") or instance.get("id", "")
 
 
-def run(config: BenchmarkConfig) -> None:
+def run(config: BenchmarkConfig, fill_only: bool = False, ask_only: bool = False) -> None:
+    """Run the benchmark.
+
+    Two-phase testing workflow:
+    - Phase 1 (fill): Start server with LLM_MODEL_PRO=gemini-2.5-flash-lite, run with --fill-only
+      Creates projects, ingests all sessions, saves project mapping to projects_map.json
+    - Phase 2 (ask): Restart server with proper model (gemini-3.1-flash-lite-preview), run with --ask-only
+      Loads project mapping, asks benchmark questions, writes results
+    """
     dataset = load_dataset(config.dataset_path)
     if config.limit:
         dataset = dataset[:config.limit]
@@ -221,6 +229,14 @@ def run(config: BenchmarkConfig) -> None:
     output_dir = Path(config.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / "chat_hypothesis.jsonl"
+    projects_map_path = output_dir / "projects_map.json"
+
+    # Load existing project mapping (instance_id → project_id)
+    projects_map: dict[str, str] = {}
+    if projects_map_path.exists():
+        with open(projects_map_path) as f:
+            projects_map = json.load(f)
+        logger.info(f"Loaded project map: {len(projects_map)} instances")
 
     # Determine which instances are already done (for resuming interrupted runs)
     done_ids: set[str] = set()
@@ -238,16 +254,35 @@ def run(config: BenchmarkConfig) -> None:
     with open(output_path, "a") as out_f:
         for idx, instance in enumerate(dataset):
             instance_id = _get_instance_id(instance) or str(idx)
-            if instance_id in done_ids:
-                logger.info(f"[{idx+1}/{len(dataset)}] Skipping already-done instance {instance_id}")
-                continue
-
-            # Re-login before each instance to avoid token expiration
-            token = login_jwt(config)
 
             question = instance.get("question", "")
             sessions = instance.get("haystack_sessions") or instance.get("sessions", [])
 
+            # --- ASK-ONLY phase: skip ingestion, use existing projects ---
+            if ask_only:
+                if instance_id in done_ids:
+                    logger.info(f"[{idx+1}/{len(dataset)}] Skipping already-answered {instance_id}")
+                    continue
+                if instance_id not in projects_map:
+                    logger.warning(f"[{idx+1}/{len(dataset)}] No project for {instance_id} — run --fill-only first")
+                    continue
+                project_id = projects_map[instance_id]
+                token = login_jwt(config)
+                logger.info(f"[{idx+1}/{len(dataset)}] Asking question for {instance_id} (project {project_id})")
+                chat_resp = send_chat(config.api_url, token, project_id, question)
+                answer = chat_resp.get("reply", "")
+                record = {"id": instance_id, "answer": answer, "question": question}
+                out_f.write(json.dumps(record, ensure_ascii=False) + "\n")
+                out_f.flush()
+                logger.info(f"  → Answer: {answer[:120]}")
+                continue
+
+            # --- FILL-ONLY or FULL phase: create project and ingest ---
+            if instance_id in projects_map and fill_only:
+                logger.info(f"[{idx+1}/{len(dataset)}] Already filled {instance_id}, skipping")
+                continue
+
+            token = login_jwt(config)
             logger.info(
                 f"[{idx+1}/{len(dataset)}] Instance {instance_id} — "
                 f"{len(sessions)} sessions, question: {question[:80]}"
@@ -260,6 +295,11 @@ def run(config: BenchmarkConfig) -> None:
                 name=f"bench-chat-{instance_id}",
             )
             project_id = project["id"]
+
+            # Save project mapping immediately
+            projects_map[instance_id] = project_id
+            with open(projects_map_path, "w") as f:
+                json.dump(projects_map, f, indent=2)
 
             # Complete onboarding before any data messages
             wait_for_onboarding(
@@ -285,14 +325,19 @@ def run(config: BenchmarkConfig) -> None:
             logger.info(f"Waiting {wait_secs:.0f}s for Graphiti to process {total_msgs} messages")
             time.sleep(wait_secs)
 
-            # Ask the benchmark question
+            if fill_only:
+                logger.info(f"  → Fill complete for {instance_id} (project {project_id})")
+                continue
+
+            # --- FULL phase: also ask the question ---
+            if instance_id in done_ids:
+                logger.info(f"[{idx+1}/{len(dataset)}] Skipping already-done instance {instance_id}")
+                continue
             chat_resp = send_chat(config.api_url, token, project_id, question)
             answer = chat_resp.get("reply", "")
-
             record = {"id": instance_id, "answer": answer, "question": question}
             out_f.write(json.dumps(record, ensure_ascii=False) + "\n")
             out_f.flush()
-
             logger.info(f"  → Answer: {answer[:120]}")
 
     logger.info(f"Done. Results written to {output_path}")
@@ -310,6 +355,14 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--dataset", help="Path to dataset JSON (default: config)")
     parser.add_argument("--output-dir", help="Output directory (default: results/)")
     parser.add_argument("--limit", type=int, default=None, help="Max instances to process")
+    parser.add_argument(
+        "--fill-only", action="store_true",
+        help="Phase 1: create projects and ingest sessions only (use cheap model on server)"
+    )
+    parser.add_argument(
+        "--ask-only", action="store_true",
+        help="Phase 2: ask questions only using existing projects from projects_map.json"
+    )
     return parser.parse_args()
 
 
@@ -325,4 +378,4 @@ if __name__ == "__main__":
         cfg.dataset_path = args.dataset
     if args.output_dir:
         cfg.output_dir = args.output_dir
-    run(cfg)
+    run(cfg, fill_only=args.fill_only, ask_only=args.ask_only)
