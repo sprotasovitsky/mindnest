@@ -83,12 +83,15 @@ MindNest has an MCP server connected to this workspace. Before answering questio
 ```python
 llm_model = "gemini-2.5-flash-lite"              # Classifier — fast, cost-effective, always-on CoT
 llm_model_pro = "gemini-3.1-flash-lite-preview"  # Chat responses + iterative retrieval
-graphiti_model = "gemini-3.1-flash-lite-preview"  # Entity extraction — with thinking_budget=1024
+graphiti_model = "gemini-3.1-flash-lite-preview"  # Entity extraction — thinking_budget=1024
 embedding_model = "gemini-embedding-001"          # NOT text-embedding-004
 embedding_dim = 3072                              # NOT 768
+llm_thinking_level = "MEDIUM"                    # Default thinking level for gemini-3+ (NONE/MINIMAL/LOW/MEDIUM/HIGH)
 ```
 
-`gemini-3.1-flash-lite-preview` requires global Vertex AI endpoint and uses thinking_budget=1024 (auto-enabled in llm.py for gemini-3+ models). Replaces both `gemini-3-flash-preview` (chat, 2x cheaper) and `gemini-2.5-flash` (Graphiti, 4.6x cheaper with controlled thinking).
+`gemini-3.1-flash-lite-preview` requires global Vertex AI endpoint. Chat responses use `thinking_level=MEDIUM` (configurable via `LLM_THINKING_LEVEL` env var). Graphiti uses `thinking_budget=1024` (separate param, Graphiti's internal client doesn't support `thinking_level`).
+
+**Important:** `max_output_tokens` on gemini-3+ counts thinking + text combined. With thinking enabled, it starves text output → empty response with `MAX_TOKENS`. Only set `max_output_tokens` when `LLM_THINKING_LEVEL=NONE`.
 
 Classifier stays on `gemini-2.5-flash-lite` (regional, no thinking API) — CoT is handled via prompt suffix instead.
 
@@ -141,8 +144,8 @@ When running chat benchmark tests with `run_chat_test.py`, always use a two-phas
 
 **Phase 1 — Fill (fast settings):**
 ```bash
-# Start server with no iterative search + short responses for ingestion
-ITERATIVE_SEARCH_MAX=0 LLM_MAX_OUTPUT_TOKENS=100 uvicorn app.main:app --port 8000
+# Start server with no iterative search for ingestion
+ITERATIVE_SEARCH_MAX=0 LLM_THINKING_LEVEL=NONE LLM_MAX_OUTPUT_TOKENS=200 uvicorn app.main:app --port 8000
 
 # Fill projects (creates projects, ingests sessions, saves projects_map.json)
 python -m benchmarks.longmemeval.run_chat_test \
@@ -165,7 +168,7 @@ python -m benchmarks.longmemeval.run_chat_test \
     --ask-only
 ```
 
-Why: the filling phase makes hundreds of API calls for onboarding + ingestion. `ITERATIVE_SEARCH_MAX=0` removes iterative search rounds. `LLM_MAX_OUTPUT_TOKENS=100` cuts response length — quality doesn't matter during fill, only data ingestion into Graphiti does. The model stays `gemini-3.1-flash-lite-preview` (faster than 2.5-flash-lite for responses).
+Why: the filling phase makes hundreds of API calls for onboarding + ingestion. `ITERATIVE_SEARCH_MAX=0` removes iterative search rounds. `LLM_THINKING_LEVEL=NONE` disables thinking for chat responses (not Graphiti). `LLM_MAX_OUTPUT_TOKENS=200` caps response length — safe to use only when thinking is NONE. Quality doesn't matter during fill, only data ingestion into Graphiti does.
 
 ### "termly" references in deployment configs are intentional
 

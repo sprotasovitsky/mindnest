@@ -45,7 +45,8 @@ class Settings(BaseSettings):
     # Search
     search_limit: int = 40  # Max edges/nodes returned from search
     iterative_search_max: int = 3  # Max additional search rounds (0 = single search, no iterations)
-    llm_max_output_tokens: int = 0  # Max output tokens for chat responses (0 = no limit)
+    llm_thinking_level: str = "MEDIUM"  # Thinking level for gemini-3+ models (NONE/MINIMAL/LOW/MEDIUM/HIGH)
+    llm_max_output_tokens: int = 0  # Max output tokens for chat responses (0 = no limit; only useful when thinking is off)
 
     # Chat history
     chat_history_limit: int = 10  # Number of recent messages to include in LLM context

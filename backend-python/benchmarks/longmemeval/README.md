@@ -87,10 +87,10 @@ Always use `/api/chat` — never MCP endpoints.
 
 ```
 Phase 1 — Fill (fast settings):
-  ITERATIVE_SEARCH_MAX=0 LLM_MAX_OUTPUT_TOKENS=100 uvicorn ...
+  ITERATIVE_SEARCH_MAX=0 LLM_THINKING_LEVEL=NONE LLM_MAX_OUTPUT_TOKENS=200 uvicorn ...
   run_chat_test.py --fill-only
   → creates projects, ingests sessions, writes projects_map.json
-  → no iterative search, short responses (100 tokens), fast ingestion
+  → no iterative search, no thinking, capped responses (200 tokens)
 
 Phase 2 — Ask (normal settings):
   normal uvicorn (no env overrides)
