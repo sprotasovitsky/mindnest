@@ -292,28 +292,40 @@ class KnowledgeGraph:
             reranker=NodeReranker.rrf,
         )
 
-    def _format_edges(self, edges: list) -> list[dict]:
+    def _format_edges(
+        self,
+        edges: list,
+        uuid_to_name: dict | None = None,
+        scores: list[float] | None = None,
+    ) -> list[dict]:
         """Format edge results for API response."""
+        uuid_to_name = uuid_to_name or {}
+        scores = scores or []
         return [
             {
                 "fact": edge.fact,
+                "source_name": uuid_to_name.get(edge.source_node_uuid, ""),
+                "target_name": uuid_to_name.get(edge.target_node_uuid, ""),
+                "score": scores[i] if i < len(scores) else None,
                 "is_active": edge.expired_at is None,
                 "created_at": edge.created_at.isoformat() if edge.created_at else None,
                 "valid_at": edge.valid_at.isoformat() if edge.valid_at else None,
                 "expired_at": edge.expired_at.isoformat() if edge.expired_at else None,
             }
-            for edge in edges
+            for i, edge in enumerate(edges)
         ]
 
-    def _format_nodes(self, nodes: list) -> list[dict]:
+    def _format_nodes(self, nodes: list, scores: list[float] | None = None) -> list[dict]:
         """Format node results for API response."""
+        scores = scores or []
         return [
             {
                 "name": node.name,
                 "summary": node.summary,
+                "score": scores[i] if i < len(scores) else None,
                 "created_at": node.created_at.isoformat() if node.created_at else None,
             }
-            for node in nodes
+            for i, node in enumerate(nodes)
         ]
 
     def _get_community_config(self) -> CommunitySearchConfig:
@@ -363,15 +375,38 @@ class KnowledgeGraph:
             )
 
             edges = results.edges or []
+            edge_scores = results.edge_reranker_scores or []
             nodes = results.nodes or []
+            node_scores = results.node_reranker_scores or []
             communities = results.communities or []
 
             logger.info(f"Found {len(edges)} edges, {len(nodes)} nodes, {len(communities)} communities")
 
+            # Build uuid→name map: start from search nodes, then fill gaps from Neo4j
+            uuid_to_name = {node.uuid: node.name for node in nodes}
+
+            # Find edge UUIDs missing from nodes
+            edge_uuids = set()
+            for edge in edges:
+                edge_uuids.add(edge.source_node_uuid)
+                edge_uuids.add(edge.target_node_uuid)
+            missing_uuids = edge_uuids - set(uuid_to_name.keys())
+
+            if missing_uuids:
+                try:
+                    records, _, _ = await self._client.driver.execute_query(
+                        "MATCH (n:Entity) WHERE n.uuid IN $uuids RETURN n.uuid AS uuid, n.name AS name",
+                        uuids=list(missing_uuids),
+                    )
+                    for record in records:
+                        uuid_to_name[record["uuid"]] = record["name"]
+                except Exception as e:
+                    logger.warning(f"Failed to resolve edge entity names: {e}")
+
             return {
                 "success": True,
-                "edges": self._format_edges(edges),
-                "nodes": self._format_nodes(nodes),
+                "edges": self._format_edges(edges, uuid_to_name, edge_scores),
+                "nodes": self._format_nodes(nodes, node_scores),
                 "communities": self._format_communities(communities),
             }
         except Exception as e:

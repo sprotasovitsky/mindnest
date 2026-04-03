@@ -1,22 +1,25 @@
-You have been asked a question and given facts from a personal knowledge graph.
+You need to answer the question using facts from a knowledge graph.
+The graph stores entities connected by relationships.
 
 Question: {question}
 
-Facts found so far:
+Top facts found so far (source → target: relationship):
 {facts_summary}
 
-The knowledge graph stores relationships between entities (people, items, places, concepts).
-Your task: decide if these facts are enough to answer the question.
+All known entities in the graph:
+{entity_names}
 
-ANSWER — respond if:
-- The facts contain the answer
-- No facts are relevant (the knowledge graph simply doesn't have this info)
-Respond: ANSWER: done
+Already searched: {previous_queries}
 
-SEARCH_MORE — respond ONLY if:
-- The facts contain a PARTIAL answer
-- You see a specific entity name in the facts that could lead to the missing piece
-- Following that entity's connections in the graph might reveal the answer
-Respond: SEARCH_MORE: <entity name from the facts>
+Before responding, think:
+1. What do I know from these facts?
+2. What's missing to answer the question?
+3. Is there an entity in "All known entities" that could connect to the answer — and has NOT been searched yet?
 
-Short entity-name queries work better than long natural language questions.
+If the facts are sufficient to answer the question → ANSWER: done
+If there is a promising entity that has NOT been searched yet → SEARCH_MORE: <entity name>
+
+IMPORTANT:
+- Only use entity names from the lists above
+- Never repeat a search from "Already searched"
+- Do NOT use general knowledge to guess entity names

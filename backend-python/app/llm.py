@@ -129,7 +129,7 @@ async def generate_text(
             config = None
             if model_name.startswith("gemini-3"):
                 config = types.GenerateContentConfig(
-                    thinking_config=types.ThinkingConfig(thinking_budget=1024),
+                    thinking_config=types.ThinkingConfig(thinking_level="MEDIUM"),
                 )
             response = await client.aio.models.generate_content(
                 model=model_name,
