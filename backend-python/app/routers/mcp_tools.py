@@ -55,6 +55,8 @@ class SearchRequest(BaseModel):
 class FactResult(BaseModel):
     """A fact from the knowledge graph."""
     fact: str
+    source: Optional[str] = None
+    target: Optional[str] = None
     created_at: Optional[str] = None
     valid_at: Optional[str] = None
     expired_at: Optional[str] = None
@@ -67,11 +69,18 @@ class EntityResult(BaseModel):
     created_at: Optional[str] = None
 
 
+class TopicResult(BaseModel):
+    """A topic cluster from the knowledge graph."""
+    name: str
+    summary: Optional[str] = None
+
+
 class SearchResponse(BaseModel):
     """Search results."""
     success: bool
     facts: list[FactResult] = []
     entities: list[EntityResult] = []
+    topics: list[TopicResult] = []
     error: Optional[str] = None
 
 
@@ -275,6 +284,8 @@ async def search_knowledge(
     facts = [
         FactResult(
             fact=e["fact"],
+            source=e.get("source_name") or None,
+            target=e.get("target_name") or None,
             created_at=e.get("created_at"),
             valid_at=e.get("valid_at"),
             expired_at=e.get("expired_at"),
@@ -289,6 +300,14 @@ async def search_knowledge(
             created_at=n.get("created_at"),
         )
         for n in result.get("nodes", [])
+    ]
+
+    topics = [
+        TopicResult(
+            name=c["name"],
+            summary=c.get("summary"),
+        )
+        for c in result.get("communities", [])
     ]
 
     # Log action (without query content for privacy)
@@ -310,6 +329,7 @@ async def search_knowledge(
         success=result.get("success", False),
         facts=facts,
         entities=entities,
+        topics=topics,
         error=result.get("error"),
     )
 
