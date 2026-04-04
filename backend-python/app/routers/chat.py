@@ -32,7 +32,7 @@ from ..graphiti_client import get_knowledge_graph, KnowledgeGraph
 from ..llm import generate_text
 from ..models import ChatMessage, Project, ProjectMember, User
 from ..pending_cache import get_pending_cache
-from ..prompts import format_response_prompt, format_onboarding_prompt
+from ..prompts import format_response_prompt, format_onboarding_prompt, load_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -153,7 +153,9 @@ async def _multi_query_search(
             continue
         any_success = True
         for edge in r.get("edges", []):
-            merged_edges.setdefault(edge["fact"], edge)
+            existing = merged_edges.get(edge["fact"])
+            if existing is None or (edge.get("score") or 0) > (existing.get("score") or 0):
+                merged_edges[edge["fact"]] = edge
         for node in r.get("nodes", []):
             merged_nodes.setdefault(node["name"], node)
         for comm in r.get("communities", []):
@@ -181,7 +183,9 @@ def _log_context(
 
     logger.info(f"--- Edges ({len(edges)}) ---")
     for i, e in enumerate(edges):
-        logger.info(f"  [{i+1}] {e['fact']}")
+        score = e.get("score")
+        score_str = f" [score={score:.4f}]" if score is not None else ""
+        logger.info(f"  [{i+1}]{score_str} {e['fact']}")
 
     logger.info(f"--- Nodes ({len(nodes)}) ---")
     for i, n in enumerate(nodes):
@@ -623,6 +627,175 @@ async def _handle_both(
     )
 
 
+ITERATIVE_SEARCH_MAX = get_settings().iterative_search_max  # Max additional search rounds
+POOL_SIZE = 15  # Max facts in rolling pool (verdict + response both use this)
+
+
+def _pool_top(pool: dict[str, dict], size: int) -> dict[str, dict]:
+    """Trim pool to top-N facts by RRF score."""
+    scored = sorted(
+        pool.items(),
+        key=lambda kv: kv[1].get("score") or 0.0,
+        reverse=True,
+    )
+    return dict(scored[:size])
+
+
+def _get_iterative_search_prompt() -> str:
+    return load_prompt("iterative_search")
+
+
+async def _search_multi(
+    kg: KnowledgeGraph,
+    queries: list[str],
+    project_id: str,
+) -> dict:
+    """Run multi-query search, dedup by fact text keeping highest RRF score."""
+    if not queries:
+        return {"success": True, "edges": [], "nodes": [], "communities": []}
+
+    if len(queries) == 1:
+        return await kg.search(queries[0], project_id)
+
+    tasks = [kg.search(q, project_id) for q in queries]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    merged_edges: dict[str, dict] = {}  # fact → edge with highest score
+    merged_nodes: dict[str, dict] = {}
+    merged_communities: dict[str, dict] = {}
+    any_success = False
+
+    for r in results:
+        if isinstance(r, Exception):
+            logger.warning(f"Search error: {r}")
+            continue
+        if not r.get("success"):
+            continue
+        any_success = True
+        for edge in r.get("edges", []):
+            existing = merged_edges.get(edge["fact"])
+            if existing is None or (edge.get("score") or 0) > (existing.get("score") or 0):
+                merged_edges[edge["fact"]] = edge
+        for node in r.get("nodes", []):
+            merged_nodes.setdefault(node["name"], node)
+        for comm in r.get("communities", []):
+            merged_communities.setdefault(comm["name"], comm)
+
+    return {
+        "success": any_success,
+        "edges": list(merged_edges.values()),
+        "nodes": list(merged_nodes.values()),
+        "communities": list(merged_communities.values()),
+    }
+
+
+async def _iterative_search(
+    kg: KnowledgeGraph,
+    project_id: str,
+    question: str,
+    initial_queries: list[str],
+) -> tuple[list[dict], list[dict], list[dict], list[str]]:
+    """Search with rolling pool of top-POOL_SIZE facts by RRF score.
+
+    Verdict sees:
+    - top-POOL_SIZE edges sorted by RRF score (bounded, no bloat)
+    - ALL accumulated entity names from nodes across all rounds
+      so LLM can follow multi-hop connections (e.g. Cartwheel → Target)
+    """
+    settings = get_settings()
+    all_queries = list(initial_queries)
+
+    # Pool: fact_text → edge dict, bounded to POOL_SIZE by RRF score
+    pool: dict[str, dict] = {}
+    # Nodes: name → node dict — ALL accumulated, not trimmed (names are cheap)
+    all_nodes: dict[str, dict] = {}
+    all_communities: dict[str, dict] = {}
+
+    def _merge_result(r: dict) -> None:
+        for e in r.get("edges", []):
+            existing = pool.get(e["fact"])
+            if existing is None or (e.get("score") or 0) > (existing.get("score") or 0):
+                pool[e["fact"]] = e
+        for n in r.get("nodes", []):
+            all_nodes[n["name"]] = n
+        for c in r.get("communities", []):
+            all_communities[c.get("name", "")] = c
+
+    # Round 0: initial search
+    result = await _search_multi(kg, initial_queries, project_id)
+    _merge_result(result)
+    trimmed_pool = _pool_top(pool, POOL_SIZE)
+    logger.info(f"Round 0: {len(pool)} edges → pool={len(trimmed_pool)}, nodes={len(all_nodes)}")
+
+    for iteration in range(ITERATIVE_SEARCH_MAX):
+        pool_facts = list(trimmed_pool.values())
+        facts_summary = "\n".join(
+            f"- [{e.get('source_name', '?')}] → [{e.get('target_name', '?')}]: {e['fact']}"
+            for e in pool_facts
+        ) or "(none)"
+
+        # Entity names from ALL accumulated edges (source/target) + top nodes by score
+        # Using ALL edges (not just trimmed pool) ensures multi-hop entities stay visible
+        pool_entity_names: set[str] = set()
+        for e in pool.values():
+            if e.get("source_name"):
+                pool_entity_names.add(e["source_name"])
+            if e.get("target_name"):
+                pool_entity_names.add(e["target_name"])
+
+        # Fill up to 25 with top nodes by score not already in pool entities
+        top_nodes = sorted(
+            all_nodes.values(),
+            key=lambda n: n.get("score") or 0.0,
+            reverse=True,
+        )
+        extra_names = [
+            n["name"] for n in top_nodes
+            if n["name"] not in pool_entity_names
+        ][:max(0, 25 - len(pool_entity_names))]
+
+        entity_names = ", ".join(sorted(pool_entity_names) + extra_names) if (pool_entity_names or extra_names) else "(none)"
+        logger.info(f"Verdict round {iteration} entity_names: {entity_names[:300]}")
+
+        previous_queries = ", ".join(all_queries)
+        verdict_prompt = _get_iterative_search_prompt().format(
+            question=question,
+            facts_summary=facts_summary,
+            entity_names=entity_names,
+            previous_queries=previous_queries,
+        )
+
+        try:
+            verdict = await generate_text(verdict_prompt, model=settings.llm_model_pro)
+        except Exception as e:
+            logger.warning(f"Verdict failed: {e}")
+            break
+
+        logger.info(f"Verdict round {iteration}: {verdict[:120]}")
+
+        if "ANSWER:" in verdict:
+            logger.info(f"Iterative search: done after round {iteration} (ANSWER)")
+            break
+
+        if "SEARCH_MORE:" not in verdict:
+            break
+
+        raw = verdict.split("SEARCH_MORE:", 1)[1].strip()
+        new_queries = [q.strip() for q in raw.split("|") if q.strip()][:2]
+        if not new_queries:
+            break
+
+        logger.info(f"Round {iteration + 1}: searching {new_queries}")
+        all_queries.extend(new_queries)
+
+        extra = await _search_multi(kg, new_queries, project_id)
+        _merge_result(extra)
+        trimmed_pool = _pool_top(pool, POOL_SIZE)
+        logger.info(f"Round {iteration + 1}: {len(pool)} edges → pool={len(trimmed_pool)}, nodes={len(all_nodes)}")
+
+    return list(trimmed_pool.values()), list(all_nodes.values()), list(all_communities.values()), all_queries
+
+
 async def _handle_question(
     request: ChatRequest,
     kg: KnowledgeGraph,
@@ -637,27 +810,21 @@ async def _handle_question(
     queries = search_queries or [request.message]
 
     # Get pending messages FIRST (before search, to avoid race condition)
-    # Background tasks may complete during search and remove messages from pending
     pending = await cache.get_pending(project_id)
     pending_context = cache.format_for_prompt(pending)
 
     if pending:
         logger.info(f"Including {len(pending)} pending messages in context")
 
-    # Search knowledge graph (multi-query)
-    search_result = await _multi_query_search(kg, queries, project_id)
-    success = search_result["success"]
+    # Iterative search — up to 2 extra rounds if first results insufficient
+    edges, nodes, communities, all_queries = await _iterative_search(
+        kg, project_id, request.message, queries
+    )
 
-    if not success:
-        logger.warning(f"Search failed: {search_result.get('error')}")
+    success = len(edges) > 0 or len(nodes) > 0
+    _log_context(str(all_queries), edges, nodes, communities)
 
-    edges = search_result.get("edges", [])
-    nodes = search_result.get("nodes", [])
-    communities = search_result.get("communities", [])
-
-    _log_context(str(queries), edges, nodes, communities)
-
-    # Generate response with graph + pending + history + project context
+    # edges already bounded to POOL_SIZE and sorted by question_score
     facts, entities, comm = _format_context(edges, nodes, communities)
     settings = get_settings()
     prompt = format_response_prompt(
@@ -689,7 +856,7 @@ async def _handle_question(
         entities_extracted=0,
         message_type="QUESTION",
         debug_context={
-            "queries_used": queries,
+            "queries_used": all_queries,
             "edges_count": len(edges),
             "nodes_count": len(nodes),
             "pending_count": len(pending),

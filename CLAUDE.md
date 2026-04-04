@@ -81,16 +81,38 @@ MindNest has an MCP server connected to this workspace. Before answering questio
 ### DO NOT change AI models without explicit user request
 
 ```python
-llm_model = "gemini-2.5-flash-lite"       # Classifier — fast, cost-effective
-llm_model_pro = "gemini-3-flash-preview"  # Chat responses — requires Vertex AI, NOT API key
-graphiti_model = "gemini-2.5-flash"       # Entity extraction — NOT gemini-3, NOT flash-lite
-embedding_model = "gemini-embedding-001"  # NOT text-embedding-004
-embedding_dim = 3072                      # NOT 768
+llm_model = "gemini-2.5-flash-lite"              # Classifier — fast, cost-effective, always-on CoT
+llm_model_pro = "gemini-3.1-flash-lite-preview"  # Chat responses + iterative retrieval
+graphiti_model = "gemini-3.1-flash-lite-preview"  # Entity extraction — thinking_budget=1024
+embedding_model = "gemini-embedding-001"          # NOT text-embedding-004
+embedding_dim = 3072                              # NOT 768
+llm_thinking_level = "MEDIUM"                    # Default thinking level for gemini-3+ (NONE/MINIMAL/LOW/MEDIUM/HIGH)
 ```
 
-`gemini-3-flash-preview` requires Vertex AI service account auth — it does NOT work with a plain API key.
+`gemini-3.1-flash-lite-preview` requires global Vertex AI endpoint. Chat responses use `thinking_level=MEDIUM` (configurable via `LLM_THINKING_LEVEL` env var). Graphiti uses `thinking_budget=1024` (separate param, Graphiti's internal client doesn't support `thinking_level`).
 
-`gemini-2.5-flash` for Graphiti was chosen after comparative testing: gemini-3 lost data in budget calculations; flash-lite had excessive refusals; flash is the best balance.
+**Important:** `max_output_tokens` on gemini-3+ counts thinking + text combined. With thinking enabled, it starves text output → empty response with `MAX_TOKENS`. Only set `max_output_tokens` when `LLM_THINKING_LEVEL=NONE`.
+
+Classifier stays on `gemini-2.5-flash-lite` (regional, no thinking API) — CoT is handled via prompt suffix instead.
+
+### Prompt and MCP description synchronization
+
+Four places describe how data is stored and searched. They MUST use the same terminology and categories:
+
+| File | Role | Audience |
+|------|------|----------|
+| `app/prompts/classifier.txt` | Decide what to extract from user message | Internal LLM (classifier) |
+| `app/routers/mcp_tools.py` send_message docstring | Explain how to prepare data for storage | External LLM clients |
+| `app/prompts/iterative_search.txt` | Decide if more search is needed | Internal LLM (retrieval) |
+| `app/routers/mcp_tools.py` search_knowledge docstring | Explain how to search effectively | External LLM clients |
+
+**Shared terminology for data types:** facts, events, tasks, preferences, relationships, states.
+
+**Rules when editing any of these:**
+1. Change one → review the other three for consistency
+2. Examples must be **generic patterns**, never specific enough to hint at benchmark answers
+3. Classifier extraction rules and MCP message guidance must describe the same principles — what counts as a "fact worth saving"
+4. Iterative search logic and MCP search guidance must align — when and how to follow entity connections
 
 ### ALWAYS use --dart-define when running Flutter manually
 
@@ -113,6 +135,40 @@ Semantics(
   child: IconButton.filled(tooltip: 'Send', ...),  // Maestro does NOT reliably find tooltip
 )
 ```
+
+### Two-phase benchmark testing rule
+
+Always use `/api/chat` for all benchmark testing including fill phase — never use MCP endpoints.
+
+When running chat benchmark tests with `run_chat_test.py`, always use a two-phase approach to save cost:
+
+**Phase 1 — Fill (fast settings):**
+```bash
+# Start server with no iterative search for ingestion
+ITERATIVE_SEARCH_MAX=0 LLM_THINKING_LEVEL=NONE LLM_MAX_OUTPUT_TOKENS=200 uvicorn app.main:app --port 8000
+
+# Fill projects (creates projects, ingests sessions, saves projects_map.json)
+python -m benchmarks.longmemeval.run_chat_test \
+    --email benchmark@example.com --password BenchmarkPass123! \
+    --dataset benchmarks/longmemeval/data/test_5_new.json \
+    --output-dir benchmarks/longmemeval/results/my_run \
+    --fill-only
+```
+
+**Phase 2 — Ask (normal settings):**
+```bash
+# Restart server with normal settings
+uvicorn app.main:app --port 8000
+
+# Ask questions only (reads projects_map.json)
+python -m benchmarks.longmemeval.run_chat_test \
+    --email benchmark@example.com --password BenchmarkPass123! \
+    --dataset benchmarks/longmemeval/data/test_5_new.json \
+    --output-dir benchmarks/longmemeval/results/my_run \
+    --ask-only
+```
+
+Why: the filling phase makes hundreds of API calls for onboarding + ingestion. `ITERATIVE_SEARCH_MAX=0` removes iterative search rounds. `LLM_THINKING_LEVEL=NONE` disables thinking for chat responses (not Graphiti). `LLM_MAX_OUTPUT_TOKENS=200` caps response length — safe to use only when thinking is NONE. Quality doesn't matter during fill, only data ingestion into Graphiti does.
 
 ### "termly" references in deployment configs are intentional
 

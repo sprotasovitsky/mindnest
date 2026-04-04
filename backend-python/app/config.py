@@ -31,12 +31,12 @@ class Settings(BaseSettings):
     gcp_private_key: str = ""  # PEM format
 
     # LLM Models
-    llm_model: str = "gemini-2.5-flash-lite"  # Fast, cost-effective
-    llm_model_balanced: str = "gemini-2.5-flash"  # Balanced speed/quality
-    llm_model_pro: str = "gemini-3-flash-preview"  # Best quality (requires Vertex AI, not API key)
+    llm_model: str = "gemini-2.5-flash-lite"  # Classifier — fast, cost-effective, CoT in prompt
+    llm_model_balanced: str = "gemini-3.1-flash-lite-preview"  # Balanced
+    llm_model_pro: str = "gemini-3.1-flash-lite-preview"  # Chat responses
 
     # Model for Graphiti entity extraction (can be overridden via env var)
-    graphiti_model: str = "gemini-2.5-flash"  # Best balance of speed and quality for entity extraction
+    graphiti_model: str = "gemini-3.1-flash-lite-preview"  # Entity extraction — thinking_level=MEDIUM
     # Embeddings configured in Graphiti: gemini-embedding-001 (3072 dimensions)
 
     # Graphiti features
@@ -44,6 +44,9 @@ class Settings(BaseSettings):
 
     # Search
     search_limit: int = 40  # Max edges/nodes returned from search
+    iterative_search_max: int = 3  # Max additional search rounds (0 = single search, no iterations)
+    llm_thinking_level: str = "MEDIUM"  # Thinking level for gemini-3+ models (NONE/MINIMAL/LOW/MEDIUM/HIGH)
+    llm_max_output_tokens: int = 0  # Max output tokens for chat responses (0 = no limit; only useful when thinking is off)
 
     # Chat history
     chat_history_limit: int = 10  # Number of recent messages to include in LLM context
