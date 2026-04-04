@@ -7,10 +7,12 @@ powered by Graphiti for knowledge graph management.
 import logging
 from contextlib import asynccontextmanager
 
+import structlog
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
+from prometheus_fastapi_instrumentator import Instrumentator
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -18,16 +20,31 @@ from slowapi.errors import RateLimitExceeded
 from .config import get_settings
 from .database import init_db, close_db
 from .graphiti_client import get_knowledge_graph, close_knowledge_graph
+from .langfuse_client import flush_langfuse
 from .llm import close_client as close_llm_client
+from .prompts import sync_prompts_to_langfuse
 from .routers import chat, auth, projects, social_auth, mcp_tools, oauth
 from .mcp_server import setup_mcp_server
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+# Configure structlog with JSON output
+structlog.configure(
+    processors=[
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.add_logger_name,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+        structlog.processors.JSONRenderer(),
+    ],
+    wrapper_class=structlog.stdlib.BoundLogger,
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    cache_logger_on_first_use=True,
 )
-logger = logging.getLogger(__name__)
+
+# Keep stdlib logging bridge so third-party libs still work
+logging.basicConfig(level=logging.INFO)
+
+logger = structlog.get_logger(__name__)
 
 # Rate limiter instance
 limiter = Limiter(key_func=get_remote_address)
@@ -58,19 +75,23 @@ async def lifespan(app: FastAPI):
     # Initialize Graphiti
     try:
         kg = await get_knowledge_graph()
-        logger.info("Graphiti knowledge graph initialized")
+        logger.info("graphiti_initialized")
     except Exception as e:
-        logger.error(f"Failed to initialize Graphiti: {e}")
+        logger.error("graphiti_init_failed", error=str(e))
         raise
+
+    # Sync local prompts to Langfuse (no-op if Langfuse not configured)
+    await sync_prompts_to_langfuse()
 
     yield
 
     # Shutdown
-    logger.info("Shutting down MindNest backend...")
+    logger.info("mindnest_shutdown")
     await close_knowledge_graph()
     await close_db()
     close_llm_client()
-    logger.info("All connections closed")
+    flush_langfuse()
+    logger.info("mindnest_shutdown_complete")
 
 
 # Create FastAPI app
@@ -84,6 +105,9 @@ app = FastAPI(
 # Add rate limiter to app state
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Prometheus metrics — exposes /metrics endpoint
+Instrumentator().instrument(app).expose(app, endpoint="/metrics")
 
 
 # Custom validation error handler - strips sensitive data (passwords) from errors

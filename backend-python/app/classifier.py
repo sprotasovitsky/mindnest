@@ -6,16 +6,17 @@ Classifies user messages and extracts data to save:
 - BOTH: Message contains new data AND asks a question
 """
 
-import logging
 from enum import Enum
 from typing import Optional
 
+import structlog
 from pydantic import BaseModel
 
 from .llm import generate_text
+from .metrics import message_type_counter
 from .prompts import load_prompt
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class MessageType(str, Enum):
@@ -40,6 +41,9 @@ async def classify_message(
     message: str,
     user_name: Optional[str] = None,
     chat_history: Optional[str] = None,
+    trace_id: Optional[str] = None,
+    project_id: Optional[str] = None,
+    user_id: Optional[str] = None,
 ) -> ClassificationResult:
     """Classify a user message and extract data using LLM.
 
@@ -65,7 +69,14 @@ async def classify_message(
     ) + cot_suffix
 
     try:
-        response = await generate_text(prompt)
+        response = await generate_text(
+            prompt,
+            prompt_name="classifier",
+            step="classify",
+            trace_id=trace_id,
+            project_id=project_id,
+            user_id=user_id,
+        )
         result = _parse_classification(response)
 
         # Up to 2 retries if BOTH but no data extracted
@@ -82,14 +93,18 @@ async def classify_message(
                 logger.warning("BOTH with no data after 2 retries — using original message")
                 result.data_to_save = message
 
+        message_type_counter.labels(message_type=result.message_type.value).inc()
+
         logger.info(
-            f"Classified: type={result.message_type} "
-            f"data_to_save={'yes' if result.data_to_save else 'no'} "
-            f"search_queries={len(result.search_queries)}"
+            "classified",
+            message_type=result.message_type,
+            has_data=bool(result.data_to_save),
+            search_queries=len(result.search_queries),
+            trace_id=trace_id,
         )
         return result
     except Exception as e:
-        logger.error(f"Classification failed: {e}")
+        logger.error("classification_failed", error=str(e), trace_id=trace_id)
         # Default to DATA to avoid losing information
         return ClassificationResult(
             message_type=MessageType.DATA,

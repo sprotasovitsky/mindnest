@@ -81,6 +81,11 @@ class Settings(BaseSettings):
     reset_code_max_attempts: int = 5
     resend_email_cooldown_seconds: int = 60
 
+    # Langfuse observability
+    langfuse_public_key: Optional[str] = None
+    langfuse_secret_key: Optional[str] = None
+    langfuse_host: str = "http://localhost:3001"
+
     # OAuth 2.0 settings (for MCP clients)
     oauth_issuer: str = ""  # Set via env var per environment
     oauth_resource_uri: str = ""  # Usually same as issuer

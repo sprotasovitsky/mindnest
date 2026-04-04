@@ -10,10 +10,11 @@ Classification-based flow with background processing:
 CLASSIFIER_HISTORY_LIMIT = 4
 
 import asyncio
-import logging
 import uuid
 from datetime import datetime
 from typing import Optional
+
+import structlog
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
@@ -34,7 +35,7 @@ from ..models import ChatMessage, Project, ProjectMember, User
 from ..pending_cache import get_pending_cache
 from ..prompts import format_response_prompt, format_onboarding_prompt, load_prompt
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def verify_project_membership(
@@ -361,6 +362,9 @@ async def process_onboarding(
     message: str,
     chat_history: str,
     user_name: Optional[str],
+    trace_id: Optional[str] = None,
+    project_id: Optional[str] = None,
+    user_id: Optional[str] = None,
 ) -> str:
     """Process message in onboarding mode."""
     settings = get_settings()
@@ -369,7 +373,15 @@ async def process_onboarding(
         chat_history=chat_history,
         user_name=user_name,
     )
-    return await generate_text(prompt, model=settings.llm_model_pro)
+    return await generate_text(
+        prompt,
+        model=settings.llm_model_pro,
+        prompt_name="onboarding",
+        step="onboarding",
+        trace_id=trace_id,
+        project_id=project_id,
+        user_id=user_id,
+    )
 
 
 async def _add_to_graph_background(
@@ -410,6 +422,7 @@ async def process_message(
     chat_history: str = "",
     classifier_history: str = "",
     project_description: Optional[str] = None,
+    trace_id: Optional[str] = None,
 ) -> ChatResponse:
     """Process a chat message with classification-based flow."""
     project_id = request.get_project_id()
@@ -421,6 +434,9 @@ async def process_message(
         message=request.message,
         user_name=user_name,
         chat_history=classifier_history,
+        trace_id=trace_id,
+        project_id=project_id,
+        user_id=user_id,
     )
     logger.info(
         f"Classified as {classification.message_type}: "
@@ -433,21 +449,24 @@ async def process_message(
         # Pure question - no data to save
         return await _handle_question(
             request, kg, project_id, user_name,
-            classification.search_queries, chat_history, project_description
+            classification.search_queries, chat_history, project_description,
+            trace_id=trace_id, user_id=user_id,
         )
     elif classification.message_type == MessageType.BOTH:
         # Mixed message - save data AND answer question
         return await _handle_both(
             request, kg, project_id, user_id, user_name,
             background_tasks, classification.data_to_save,
-            classification.search_queries, chat_history, project_description
+            classification.search_queries, chat_history, project_description,
+            trace_id=trace_id,
         )
     else:
         # Pure data - save and acknowledge
         return await _handle_data(
             request, kg, project_id, user_id, user_name,
             background_tasks, classification.data_to_save,
-            chat_history, project_description
+            chat_history, project_description,
+            trace_id=trace_id,
         )
 
 
@@ -461,6 +480,7 @@ async def _handle_data(
     data_to_save: Optional[str],
     chat_history: str = "",
     project_description: Optional[str] = None,
+    trace_id: Optional[str] = None,
 ) -> ChatResponse:
     """Handle DATA message with pending cache and background processing."""
     cache = get_pending_cache()
@@ -526,12 +546,20 @@ async def _handle_data(
     _log_prompt_stats(prompt, "DATA")
 
     try:
-        reply = await generate_text(prompt, model=settings.llm_model_pro)
+        reply = await generate_text(
+            prompt,
+            model=settings.llm_model_pro,
+            prompt_name="response",
+            step="chat_response",
+            trace_id=trace_id,
+            project_id=project_id,
+            user_id=user_id,
+        )
         if not reply or not reply.strip():
-            logger.warning("LLM returned empty response for DATA message")
+            logger.warning("llm_empty_response_data", trace_id=trace_id)
             reply = "Got it! I've recorded that information."
     except Exception as e:
-        logger.error(f"Failed to generate response: {e}")
+        logger.error("generate_response_failed", error=str(e), trace_id=trace_id)
         reply = "Got it! I've recorded that information."
 
     return ChatResponse(
@@ -554,6 +582,7 @@ async def _handle_both(
     search_queries: list[str] | None = None,
     chat_history: str = "",
     project_description: Optional[str] = None,
+    trace_id: Optional[str] = None,
 ) -> ChatResponse:
     """Handle BOTH message - save data AND answer question."""
     cache = get_pending_cache()
@@ -620,12 +649,20 @@ async def _handle_both(
     _log_prompt_stats(prompt, "BOTH")
 
     try:
-        reply = await generate_text(prompt, model=settings.llm_model_pro)
+        reply = await generate_text(
+            prompt,
+            model=settings.llm_model_pro,
+            prompt_name="response",
+            step="chat_response",
+            trace_id=trace_id,
+            project_id=project_id,
+            user_id=user_id,
+        )
         if not reply or not reply.strip():
-            logger.warning("[BOTH] LLM returned empty response")
+            logger.warning("llm_empty_response_both", trace_id=trace_id)
             reply = "Got it! I've recorded the information. However, I couldn't generate a full response."
     except Exception as e:
-        logger.error(f"[BOTH] Failed to generate response: {e}")
+        logger.error("generate_response_failed_both", error=str(e), trace_id=trace_id)
         reply = "Got it! I've recorded the information, but encountered an error generating a response."
 
     return ChatResponse(
@@ -821,6 +858,8 @@ async def _handle_question(
     search_queries: list[str] | None = None,
     chat_history: str = "",
     project_description: Optional[str] = None,
+    trace_id: Optional[str] = None,
+    user_id: Optional[str] = None,
 ) -> ChatResponse:
     """Handle QUESTION message - search graph + pending and answer."""
     cache = get_pending_cache()
@@ -858,12 +897,20 @@ async def _handle_question(
     _log_prompt_stats(prompt, "QUESTION")
 
     try:
-        reply = await generate_text(prompt, model=settings.llm_model_pro)
+        reply = await generate_text(
+            prompt,
+            model=settings.llm_model_pro,
+            prompt_name="response",
+            step="chat_response",
+            trace_id=trace_id,
+            project_id=project_id,
+            user_id=user_id,
+        )
         if not reply or not reply.strip():
-            logger.warning("LLM returned empty response for QUESTION message")
+            logger.warning("llm_empty_response_question", trace_id=trace_id)
             reply = "Sorry, I couldn't generate a response. Please try again."
     except Exception as e:
-        logger.error(f"Failed to generate response: {e}")
+        logger.error("generate_response_failed_question", error=str(e), trace_id=trace_id)
         reply = "Sorry, I encountered an error. Please try again."
 
     return ChatResponse(
@@ -895,6 +942,9 @@ async def send_message(
     # Check token limit for unverified users
     await check_token_limit(user, db)
 
+    # Generate trace_id for this request — correlates all LLM calls in Langfuse/logs
+    trace_id = str(uuid.uuid4())
+
     project_id = chat_request.get_project_id()
     if not project_id:
         raise HTTPException(
@@ -919,12 +969,15 @@ async def send_message(
 
     if needs_onboarding:
         # Onboarding flow
-        logger.info(f"Onboarding mode for project {project_id}")
+        logger.info("onboarding_mode", project_id=project_id, trace_id=trace_id)
         try:
             reply = await process_onboarding(
                 message=chat_request.message,
                 chat_history=chat_history,
                 user_name=user_name,
+                trace_id=trace_id,
+                project_id=project_id,
+                user_id=user_id,
             )
 
             # Check if description was confirmed
@@ -957,7 +1010,8 @@ async def send_message(
         # Normal flow - project has description
         response = await process_message(
             chat_request, kg, background_tasks, user,
-            chat_history, classifier_history, project.description
+            chat_history, classifier_history, project.description,
+            trace_id=trace_id,
         )
 
     # Save message to history (don't block on save errors)

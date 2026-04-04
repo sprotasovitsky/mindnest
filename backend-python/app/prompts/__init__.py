@@ -1,14 +1,23 @@
 """Prompt management for MindNest.
 
 This module handles loading and formatting prompts from external files.
-All prompts are stored as .txt files for easy editing and version control.
+Prompts are loaded from Langfuse (when configured) with fallback to .txt files.
+All prompts are also stored as .txt files for development and version control.
+
+Langfuse Prompt Management (Layer 6):
+- Prompts stored in Langfuse UI with version history
+- Production version fetched at runtime via Langfuse SDK
+- Falls back to .txt files when Langfuse is unavailable
 """
 
 import json
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from functools import lru_cache
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 # Directory containing prompt files
 PROMPTS_DIR = Path(__file__).parent
@@ -28,24 +37,76 @@ def get_current_datetime_string() -> str:
     return now.strftime(f"{weekday}, %B %d, %Y at %H:%M UTC")
 
 
+def _load_from_file(name: str) -> str:
+    """Load a prompt from a local .txt file."""
+    file_path = PROMPTS_DIR / f"{name}.txt"
+    if not file_path.exists():
+        raise FileNotFoundError(f"Prompt file not found: {file_path}")
+    return file_path.read_text(encoding="utf-8")
+
+
 @lru_cache(maxsize=10)
 def load_prompt(name: str) -> str:
-    """Load a prompt from a file.
+    """Load a prompt by name.
+
+    Tries Langfuse first (production version), falls back to local .txt file.
 
     Args:
-        name: Prompt name (without .txt extension)
+        name: Prompt name (without .txt extension), e.g. "classifier", "response"
 
     Returns:
         Prompt content as string
 
     Raises:
-        FileNotFoundError: If prompt file doesn't exist
+        FileNotFoundError: If prompt file not found and Langfuse unavailable
     """
-    file_path = PROMPTS_DIR / f"{name}.txt"
-    if not file_path.exists():
-        raise FileNotFoundError(f"Prompt file not found: {file_path}")
+    from ..langfuse_client import get_langfuse
+    lf = get_langfuse()
+    if lf:
+        try:
+            prompt_obj = lf.get_prompt(name)
+            # TextPromptClient exposes .prompt (str); fallback for future SDK changes
+            return prompt_obj.prompt if hasattr(prompt_obj, "prompt") else str(prompt_obj)
+        except Exception as e:
+            logger.debug(f"Langfuse prompt '{name}' not found, using file: {e}")
 
-    return file_path.read_text(encoding="utf-8")
+    return _load_from_file(name)
+
+
+async def sync_prompts_to_langfuse() -> None:
+    """Push local .txt prompts to Langfuse if they don't exist there yet.
+
+    Called once at application startup to seed Langfuse with current prompts.
+    Only uploads prompts that don't already exist in Langfuse.
+    """
+    from ..langfuse_client import get_langfuse
+    lf = get_langfuse()
+    if not lf:
+        return
+
+    prompt_files = list(PROMPTS_DIR.glob("*.txt"))
+    synced = 0
+    for file_path in prompt_files:
+        name = file_path.stem
+        content = file_path.read_text(encoding="utf-8")
+        try:
+            # Try to get existing prompt — if it exists, skip
+            lf.get_prompt(name)
+        except Exception:
+            # Doesn't exist yet — create it
+            try:
+                lf.create_prompt(
+                    name=name,
+                    prompt=content,
+                    labels=["production"],
+                )
+                synced += 1
+                logger.info(f"Synced prompt '{name}' to Langfuse")
+            except Exception as e:
+                logger.warning(f"Failed to sync prompt '{name}' to Langfuse: {e}")
+
+    if synced:
+        logger.info(f"Synced {synced} prompts to Langfuse")
 
 
 def get_system_prompt() -> str:
