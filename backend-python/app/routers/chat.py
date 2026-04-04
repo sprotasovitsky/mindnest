@@ -466,8 +466,17 @@ async def _handle_data(
     cache = get_pending_cache()
     message_id = str(uuid.uuid4())
 
-    # Use extracted data_to_save, or fall back to original message
-    graphiti_message = data_to_save or request.message
+    # Use extracted data_to_save, or fall back to original message.
+    # If data_to_save lost significant content (< 40% of original length), use original —
+    # this prevents the classifier from summarizing structured lists into just their header.
+    if data_to_save and len(data_to_save) < len(request.message) * 0.4:
+        logger.warning(
+            f"data_to_save too short ({len(data_to_save)} vs {len(request.message)} chars), "
+            "falling back to original message"
+        )
+        graphiti_message = request.message
+    else:
+        graphiti_message = data_to_save or request.message
 
     # 1. Instantly add to pending cache
     await cache.add(
@@ -553,18 +562,26 @@ async def _handle_both(
 
     # 1. Save data to pending cache and schedule background processing
     if data_to_save:
+        # Fall back to original if classifier lost significant content
+        graphiti_data = data_to_save
+        if len(data_to_save) < len(request.message) * 0.4:
+            logger.warning(
+                f"[BOTH] data_to_save too short ({len(data_to_save)} vs {len(request.message)} chars), "
+                "falling back to original message"
+            )
+            graphiti_data = request.message
         await cache.add(
             project_id=project_id,
             message_id=message_id,
             user_name=user_name or "User",
-            text=data_to_save,
+            text=graphiti_data,
         )
-        logger.info(f"[BOTH] Added to pending: {message_id[:8]}... data={data_to_save[:50]}")
+        logger.info(f"[BOTH] Added to pending: {message_id[:8]}... data={graphiti_data[:50]}")
 
         background_tasks.add_task(
             _add_to_graph_background,
             message_id=message_id,
-            message=data_to_save,
+            message=graphiti_data,
             project_id=project_id,
             user_id=user_id,
             user_name=user_name,

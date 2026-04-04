@@ -32,6 +32,7 @@ SEARCH_QUERIES: <one or more search queries separated by " | " if TYPE is QUESTI
   - "this list" → actual list items from history
   - "add more" → specify what and to what
 - Include user attribution: "{user_name}: shopping list - milk, bread"
+- PRESERVE ALL ITEMS in structured lists — numbered lists, task lists, relationship declarations, expense lists. Never summarize a list to just its header. Every item must appear in DATA_TO_SAVE.
 - If no data to save, write "none"
 
 ## SEARCH_QUERIES rules:
@@ -143,3 +144,9 @@ User: "My sister recommended a true crime podcast and I've been listening to How
 TYPE: BOTH
 DATA_TO_SAVE: User's sister recommended a true crime podcast; User has been listening to How I Built This for months
 SEARCH_QUERIES: entrepreneurship podcasts recommendations
+
+Example 17 - Structured list of relationships (ALL items must be preserved):
+User: "Save these links: 1. Feature A depends on Task X 2. Feature A depends on Task Y 3. Feature B depends on Task Z 4. Bug C relates to Decision D"
+TYPE: DATA
+DATA_TO_SAVE: Feature A depends on Task X; Feature A depends on Task Y; Feature B depends on Task Z; Bug C relates to Decision D
+SEARCH_QUERIES: none
