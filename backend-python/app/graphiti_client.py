@@ -221,7 +221,10 @@ class KnowledgeGraph:
         "something has ended, been removed, or is no longer true. "
         "Ambiguity should default to keeping edges valid.\n"
         "5. Lists of items are collections. Each item is a separate fact. "
-        "Adding new items does NOT invalidate existing items in the same list."
+        "Adding new items does NOT invalidate existing items in the same list.\n"
+        "6. When processing a list of items (expenses, tasks, purchases, relationships), "
+        "extract EVERY item as its own fact — do not skip any. "
+        "If there are 10 items in a list, there must be 10 extracted facts."
     )
 
     async def add_episode(
