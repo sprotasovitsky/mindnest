@@ -36,7 +36,7 @@ prometheus-fastapi-instrumentator>=7.0.0
 prometheus_client>=0.21.0
 
 # Observability - Layer 4: Langfuse LLM tracing
-langfuse>=2.60.0
+langfuse>=2.60.0,<3.0.0
 
 # Observability - Layer 7: Evaluation
 deepeval>=2.0.0

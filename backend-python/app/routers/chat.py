@@ -945,6 +945,20 @@ async def send_message(
     # Generate trace_id for this request — correlates all LLM calls in Langfuse/logs
     trace_id = str(uuid.uuid4())
 
+    # Create Langfuse trace for this request (must exist before generations are added)
+    from ..langfuse_client import get_langfuse
+    lf = get_langfuse()
+    if lf:
+        try:
+            lf.trace(
+                id=trace_id,
+                name="chat_request",
+                input=chat_request.message,
+                metadata={"project_id": chat_request.get_project_id()},
+            )
+        except Exception:
+            pass
+
     project_id = chat_request.get_project_id()
     if not project_id:
         raise HTTPException(
