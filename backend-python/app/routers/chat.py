@@ -717,6 +717,7 @@ async def _search_multi(
     kg: KnowledgeGraph,
     queries: list[str],
     project_id: str,
+    span_name: str = "search_multi",
 ) -> dict:
     """Run multi-query search, dedup by fact text keeping highest RRF score."""
     if not queries:
@@ -724,6 +725,11 @@ async def _search_multi(
 
     if len(queries) == 1:
         return await kg.search(queries[0], project_id)
+
+    from ..graphiti_client import _lf_span
+    import time as _time
+    span = _lf_span(span_name, input=queries, metadata={"query_count": len(queries)})
+    t0 = _time.monotonic()
 
     tasks = [kg.search(q, project_id) for q in queries]
     results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -749,12 +755,19 @@ async def _search_multi(
         for comm in r.get("communities", []):
             merged_communities.setdefault(comm["name"], comm)
 
-    return {
+    merged = {
         "success": any_success,
         "edges": list(merged_edges.values()),
         "nodes": list(merged_nodes.values()),
         "communities": list(merged_communities.values()),
     }
+    if span:
+        span.end(output={
+            "edges": len(merged["edges"]),
+            "nodes": len(merged["nodes"]),
+            "latency_ms": round((_time.monotonic() - t0) * 1000),
+        })
+    return merged
 
 
 async def _iterative_search(
@@ -790,7 +803,7 @@ async def _iterative_search(
             all_communities[c.get("name", "")] = c
 
     # Round 0: initial search
-    result = await _search_multi(kg, initial_queries, project_id)
+    result = await _search_multi(kg, initial_queries, project_id, span_name="iterative_search_round_0")
     _merge_result(result)
     trimmed_pool = _pool_top(pool, POOL_SIZE)
     logger.info(f"Round 0: {len(pool)} edges → pool={len(trimmed_pool)}, nodes={len(all_nodes)}")
@@ -834,7 +847,14 @@ async def _iterative_search(
         )
 
         try:
-            verdict = await generate_text(verdict_prompt, model=settings.llm_model_pro)
+            from ..context import current_trace_id
+            verdict = await generate_text(
+                verdict_prompt,
+                model=settings.llm_model_pro,
+                prompt_name="iterative_search",
+                step=f"iterative_verdict_{iteration}",
+                trace_id=current_trace_id.get(),
+            )
         except Exception as e:
             logger.warning(f"Verdict failed: {e}")
             break
@@ -856,7 +876,7 @@ async def _iterative_search(
         logger.info(f"Round {iteration + 1}: searching {new_queries}")
         all_queries.extend(new_queries)
 
-        extra = await _search_multi(kg, new_queries, project_id)
+        extra = await _search_multi(kg, new_queries, project_id, span_name=f"iterative_search_round_{iteration + 1}")
         _merge_result(extra)
         trimmed_pool = _pool_top(pool, POOL_SIZE)
         logger.info(f"Round {iteration + 1}: {len(pool)} edges → pool={len(trimmed_pool)}, nodes={len(all_nodes)}")
