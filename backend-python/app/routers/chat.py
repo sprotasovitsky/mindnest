@@ -125,63 +125,6 @@ def _format_context(
     return facts, entities, comm
 
 
-async def _multi_query_search(
-    kg: KnowledgeGraph,
-    queries: list[str],
-    project_id: str,
-) -> dict:
-    """Execute multiple search queries in parallel and merge/dedup results."""
-    if not queries:
-        return {"success": True, "edges": [], "nodes": [], "communities": []}
-
-    if len(queries) == 1:
-        return await kg.search(queries[0], project_id)
-
-    # Span for parallel multi-query search
-    from ..graphiti_client import _lf_span
-    import time as _time
-    span = _lf_span("multi_query_search", input=queries, metadata={"query_count": len(queries)})
-    t0 = _time.monotonic()
-
-    # Execute all queries in parallel
-    tasks = [kg.search(q, project_id) for q in queries]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-
-    merged_edges: dict[str, dict] = {}  # fact text -> edge dict (dedup by fact)
-    merged_nodes: dict[str, dict] = {}  # name -> node dict (dedup by name)
-    merged_communities: dict[str, dict] = {}  # name -> community dict (dedup by name)
-    any_success = False
-
-    for r in results:
-        if isinstance(r, Exception):
-            logger.warning(f"Multi-query search error: {r}")
-            continue
-        if not r.get("success"):
-            continue
-        any_success = True
-        for edge in r.get("edges", []):
-            existing = merged_edges.get(edge["fact"])
-            if existing is None or (edge.get("score") or 0) > (existing.get("score") or 0):
-                merged_edges[edge["fact"]] = edge
-        for node in r.get("nodes", []):
-            merged_nodes.setdefault(node["name"], node)
-        for comm in r.get("communities", []):
-            merged_communities.setdefault(comm["name"], comm)
-
-    merged = {
-        "success": any_success,
-        "edges": list(merged_edges.values()),
-        "nodes": list(merged_nodes.values()),
-        "communities": list(merged_communities.values()),
-    }
-    if span:
-        span.end(output={
-            "edges": len(merged["edges"]),
-            "nodes": len(merged["nodes"]),
-            "communities": len(merged["communities"]),
-            "latency_ms": round((_time.monotonic() - t0) * 1000),
-        })
-    return merged
 
 
 def _log_context(
@@ -404,8 +347,14 @@ async def _add_to_graph_background(
     project_id: str,
     user_id: str,
     user_name: Optional[str],
+    trace_id: Optional[str] = None,
 ) -> None:
     """Background task: add to graph, then remove from pending."""
+    # Restore trace_id in ContextVar so Langfuse spans inside kg.add_episode() are linked
+    from ..context import current_trace_id
+    if trace_id:
+        current_trace_id.set(trace_id)
+
     cache = get_pending_cache()
     kg = await get_knowledge_graph()
 
@@ -529,6 +478,7 @@ async def _handle_data(
         project_id=project_id,
         user_id=user_id,
         user_name=user_name,
+        trace_id=trace_id,
     )
 
     # 3. Search graph for existing context
@@ -628,6 +578,7 @@ async def _handle_both(
             project_id=project_id,
             user_id=user_id,
             user_name=user_name,
+            trace_id=trace_id,
         )
 
     # 2. Get pending messages (including what we just added)
@@ -635,7 +586,7 @@ async def _handle_both(
     pending_context = cache.format_for_prompt(pending)
 
     # 3. Search knowledge graph (multi-query)
-    search_result = await _multi_query_search(kg, queries, project_id)
+    search_result = await _search_multi(kg, queries, project_id, span_name="search_multi")
     success = search_result["success"]
     edges = search_result.get("edges", []) if success else []
     nodes = search_result.get("nodes", []) if success else []
@@ -775,6 +726,7 @@ async def _iterative_search(
     project_id: str,
     question: str,
     initial_queries: list[str],
+    trace_id: Optional[str] = None,
 ) -> tuple[list[dict], list[dict], list[dict], list[str]]:
     """Search with rolling pool of top-POOL_SIZE facts by RRF score.
 
@@ -847,13 +799,12 @@ async def _iterative_search(
         )
 
         try:
-            from ..context import current_trace_id
             verdict = await generate_text(
                 verdict_prompt,
                 model=settings.llm_model_pro,
                 prompt_name="iterative_search",
                 step=f"iterative_verdict_{iteration}",
-                trace_id=current_trace_id.get(),
+                trace_id=trace_id,
             )
         except Exception as e:
             logger.warning(f"Verdict failed: {e}")
@@ -908,7 +859,7 @@ async def _handle_question(
 
     # Iterative search — up to 2 extra rounds if first results insufficient
     edges, nodes, communities, all_queries = await _iterative_search(
-        kg, project_id, request.message, queries
+        kg, project_id, request.message, queries, trace_id=trace_id
     )
 
     success = len(edges) > 0 or len(nodes) > 0
