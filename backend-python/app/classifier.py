@@ -83,7 +83,14 @@ async def classify_message(
         if result.message_type == MessageType.BOTH and not result.data_to_save:
             for retry in range(2):
                 logger.info(f"BOTH with no data — retry {retry + 1}/2")
-                response = await generate_text(prompt)
+                response = await generate_text(
+                    prompt,
+                    prompt_name="classifier",
+                    step=f"classify_retry_{retry + 1}",
+                    trace_id=trace_id,
+                    project_id=project_id,
+                    user_id=user_id,
+                )
                 result = _parse_classification(response)
                 if result.data_to_save:
                     break

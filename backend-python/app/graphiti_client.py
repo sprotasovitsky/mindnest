@@ -429,6 +429,8 @@ class KnowledgeGraph:
             missing_uuids = edge_uuids - set(uuid_to_name.keys())
 
             if missing_uuids:
+                neo4j_span = _lf_span("neo4j_entity_lookup", metadata={"missing_uuids": len(missing_uuids)})
+                t_neo4j = time.monotonic()
                 try:
                     records, _, _ = await self._client.driver.execute_query(
                         "MATCH (n:Entity) WHERE n.uuid IN $uuids RETURN n.uuid AS uuid, n.name AS name",
@@ -436,8 +438,12 @@ class KnowledgeGraph:
                     )
                     for record in records:
                         uuid_to_name[record["uuid"]] = record["name"]
+                    if neo4j_span:
+                        neo4j_span.end(output={"resolved": len(records), "latency_ms": round((time.monotonic() - t_neo4j) * 1000)})
                 except Exception as e:
                     logger.warning(f"Failed to resolve edge entity names: {e}")
+                    if neo4j_span:
+                        neo4j_span.end(output={"error": str(e)}, level="ERROR")
 
             formatted = {
                 "success": True,
