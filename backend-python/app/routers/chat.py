@@ -137,6 +137,12 @@ async def _multi_query_search(
     if len(queries) == 1:
         return await kg.search(queries[0], project_id)
 
+    # Span for parallel multi-query search
+    from ..graphiti_client import _lf_span
+    import time as _time
+    span = _lf_span("multi_query_search", input=queries, metadata={"query_count": len(queries)})
+    t0 = _time.monotonic()
+
     # Execute all queries in parallel
     tasks = [kg.search(q, project_id) for q in queries]
     results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -162,12 +168,20 @@ async def _multi_query_search(
         for comm in r.get("communities", []):
             merged_communities.setdefault(comm["name"], comm)
 
-    return {
+    merged = {
         "success": any_success,
         "edges": list(merged_edges.values()),
         "nodes": list(merged_nodes.values()),
         "communities": list(merged_communities.values()),
     }
+    if span:
+        span.end(output={
+            "edges": len(merged["edges"]),
+            "nodes": len(merged["nodes"]),
+            "communities": len(merged["communities"]),
+            "latency_ms": round((_time.monotonic() - t0) * 1000),
+        })
+    return merged
 
 
 def _log_context(
@@ -944,6 +958,10 @@ async def send_message(
 
     # Generate trace_id for this request — correlates all LLM calls in Langfuse/logs
     trace_id = str(uuid.uuid4())
+
+    # Propagate trace_id via context var so Graphiti spans can read it without param threading
+    from ..context import current_trace_id
+    current_trace_id.set(trace_id)
 
     # Create Langfuse trace for this request (must exist before generations are added)
     from ..langfuse_client import get_langfuse

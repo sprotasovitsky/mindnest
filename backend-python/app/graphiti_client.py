@@ -26,10 +26,26 @@ from graphiti_core.search.search_config import (
     CommunityReranker,
 )
 
+import time
+
 from .config import get_settings
 from .llm import get_gemini_client
 
 logger = logging.getLogger(__name__)
+
+
+def _lf_span(name: str, **kwargs):
+    """Create a Langfuse span tied to the current request trace, or return None."""
+    from .langfuse_client import get_langfuse
+    from .context import current_trace_id
+    lf = get_langfuse()
+    trace_id = current_trace_id.get()
+    if not lf or not trace_id:
+        return None
+    try:
+        return lf.span(name=name, trace_id=trace_id, **kwargs)
+    except Exception:
+        return None
 
 
 def _apply_graphiti_patches() -> None:
@@ -249,6 +265,12 @@ class KnowledgeGraph:
         logger.info(f"Adding episode: len={len(episode_body)} for project {project_id}")
 
         settings = get_settings()
+        span = _lf_span(
+            "graphiti_add_episode",
+            input=episode_body[:500],
+            metadata={"project_id": project_id, "user_id": user_id},
+        )
+        t_start = time.monotonic()
 
         try:
             result = await self.client.add_episode(
@@ -261,14 +283,24 @@ class KnowledgeGraph:
                 update_communities=settings.auto_update_communities,
             )
 
+            nodes_created = len(result.nodes) if result and result.nodes else 0
+            edges_created = len(result.edges) if result and result.edges else 0
+            if span:
+                span.end(output={
+                    "nodes_created": nodes_created,
+                    "edges_created": edges_created,
+                    "latency_ms": round((time.monotonic() - t_start) * 1000),
+                })
             return {
                 "success": True,
                 "episode_id": result.episode.uuid if result and result.episode else None,
-                "nodes_created": len(result.nodes) if result and result.nodes else 0,
-                "edges_created": len(result.edges) if result and result.edges else 0,
+                "nodes_created": nodes_created,
+                "edges_created": edges_created,
             }
         except Exception as e:
             logger.error(f"Failed to add episode: {e}")
+            if span:
+                span.end(output={"error": str(e)}, level="ERROR", status_message=str(e))
             return {"success": False, "error": str(e)}
 
     def _get_edge_config(self) -> EdgeSearchConfig:
@@ -361,6 +393,9 @@ class KnowledgeGraph:
         limit = limit or settings.search_limit
         logger.info(f"Searching: {query[:80]}...")
 
+        span = _lf_span("graphiti_search", input=query, metadata={"project_id": project_id, "limit": limit})
+        t_start = time.monotonic()
+
         try:
             config = SearchConfig(
                 edge_config=self._get_edge_config(),
@@ -404,14 +439,24 @@ class KnowledgeGraph:
                 except Exception as e:
                     logger.warning(f"Failed to resolve edge entity names: {e}")
 
-            return {
+            formatted = {
                 "success": True,
                 "edges": self._format_edges(edges, uuid_to_name, edge_scores),
                 "nodes": self._format_nodes(nodes, node_scores),
                 "communities": self._format_communities(communities),
             }
+            if span:
+                span.end(output={
+                    "edges": len(edges),
+                    "nodes": len(nodes),
+                    "communities": len(communities),
+                    "latency_ms": round((time.monotonic() - t_start) * 1000),
+                })
+            return formatted
         except Exception as e:
             logger.error(f"Search failed: {e}")
+            if span:
+                span.end(output={"error": str(e)}, level="ERROR", status_message=str(e))
             return {"success": False, "error": str(e), "edges": [], "nodes": [], "communities": []}
 
     async def build_communities(self, project_id: str) -> dict:
