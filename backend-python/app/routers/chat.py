@@ -427,7 +427,7 @@ async def process_message(
     else:
         # Pure data - save and acknowledge
         return await _handle_data(
-            request, kg, project_id, user_id, user_name,
+            request, project_id, user_id, user_name,
             background_tasks, classification.data_to_save,
             chat_history, project_description,
             trace_id=trace_id,
@@ -436,7 +436,6 @@ async def process_message(
 
 async def _handle_data(
     request: ChatRequest,
-    kg: KnowledgeGraph,
     project_id: str,
     user_id: str,
     user_name: Optional[str],
@@ -482,18 +481,14 @@ async def _handle_data(
         trace_id=trace_id,
     )
 
-    # 3. Search graph for existing context
-    search_result = await kg.search(request.message, project_id)
-    success = search_result["success"]
-    edges = search_result.get("edges", []) if success else []
-    nodes = search_result.get("nodes", []) if success else []
-    communities = search_result.get("communities", []) if success else []
-
-    # 4. Get pending messages (including the one we just added)
+    # 3. Get pending messages (including the one we just added)
+    # NOTE: No graph search for DATA — pending_context already has the new fact,
+    # and generating a simple "Got it!" acknowledgment doesn't need graph context.
     pending = await cache.get_pending(project_id)
     pending_context = cache.format_for_prompt(pending)
 
-    # 5. Generate response with graph + pending + history + project context
+    # 4. Generate acknowledgment — no graph search for DATA
+    edges, nodes, communities = [], [], []
     _log_context(request.message, edges, nodes, communities)
     facts, entities, comm = _format_context(edges, nodes, communities)
     settings = get_settings()
