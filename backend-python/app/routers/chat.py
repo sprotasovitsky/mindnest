@@ -407,6 +407,7 @@ async def process_message(
         f"search_queries={classification.search_queries or 'none'}"
     )
 
+
     # Step 2: Process based on type
     if classification.message_type == MessageType.QUESTION:
         # Pure question - no data to save
