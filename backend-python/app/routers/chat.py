@@ -599,15 +599,10 @@ async def _handle_both(
     pending = await cache.get_pending(project_id)
     pending_context = cache.format_for_prompt(pending)
 
-    # 3. Search knowledge graph (multi-query)
-    search_result = await _search_multi(kg, queries, project_id, span_name="search_multi")
-    success = search_result["success"]
-    edges = search_result.get("edges", []) if success else []
-    nodes = search_result.get("nodes", []) if success else []
-    communities = search_result.get("communities", []) if success else []
-
-    if not success:
-        logger.warning(f"[BOTH] Search failed: {search_result.get('error')}")
+    # 3. Search knowledge graph (iterative, same as QUESTION)
+    edges, nodes, communities, _all_queries = await _iterative_search(
+        kg, project_id, request.message, queries, trace_id=trace_id,
+    )
 
     _log_context(str(queries), edges, nodes, communities)
 
