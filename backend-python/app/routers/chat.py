@@ -1031,6 +1031,13 @@ async def send_message(
     estimated_tokens = (len(chat_request.message) + len(response.reply)) // 4
     await update_token_usage(user, estimated_tokens, db)
 
+    # Update Langfuse trace with final output
+    if lf:
+        try:
+            lf.trace(id=trace_id, output=response.reply)
+        except Exception:
+            pass
+
     return response
 
 

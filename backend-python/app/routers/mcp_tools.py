@@ -339,13 +339,19 @@ async def search_knowledge(
         f"found {len(facts)} facts, {len(entities)} entities"
     )
 
-    return SearchResponse(
+    response = SearchResponse(
         success=result.get("success", False),
         facts=facts,
         entities=entities,
         topics=topics,
         error=result.get("error"),
     )
+    if lf:
+        try:
+            lf.trace(id=trace_id, output=f"{len(facts)} facts, {len(entities)} entities, {len(topics)} topics")
+        except Exception:
+            pass
+    return response
 
 
 async def _add_to_knowledge_graph(
@@ -453,6 +459,11 @@ async def send_message(
         f"queued for project {data.project_id}"
     )
 
+    if lf:
+        try:
+            lf.trace(id=trace_id, output="Message queued for processing")
+        except Exception:
+            pass
     return SendMessageResponse(
         success=True,
         message="Message queued for processing",
