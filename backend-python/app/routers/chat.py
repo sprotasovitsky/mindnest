@@ -939,6 +939,8 @@ async def send_message(
                 id=trace_id,
                 name="chat_request",
                 input=chat_request.message,
+                user_id=str(user.id),
+                session_id=chat_request.get_project_id(),
                 metadata={"project_id": chat_request.get_project_id()},
             )
         except Exception:
