@@ -5,6 +5,7 @@ Only OAuth 2.0 authentication is supported.
 """
 
 import logging
+import uuid
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
@@ -13,8 +14,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from ..context import current_trace_id
 from ..database import get_db
 from ..graphiti_client import get_knowledge_graph
+from ..langfuse_client import get_langfuse
 from ..mcp_auth import McpAuth, get_mcp_auth_read, get_mcp_auth_write
 from ..models import Project, ProjectMember
 
@@ -273,6 +276,17 @@ async def search_knowledge(
     # Verify project access
     await verify_project_access(db, auth.user.id, data.project_id)
 
+    # Create Langfuse trace for this MCP request
+    trace_id = str(uuid.uuid4())
+    current_trace_id.set(trace_id)
+    lf = get_langfuse()
+    if lf:
+        try:
+            lf.trace(id=trace_id, name="mcp_search", input=data.query,
+                     metadata={"project_id": data.project_id, "user_id": str(auth.user.id)})
+        except Exception:
+            pass
+
     # Search knowledge graph
     kg = await get_knowledge_graph()
     result = await kg.search(
@@ -339,8 +353,11 @@ async def _add_to_knowledge_graph(
     project_id: str,
     user_id: str,
     user_name: str,
+    trace_id: Optional[str] = None,
 ) -> None:
     """Background task to add message to knowledge graph."""
+    if trace_id:
+        current_trace_id.set(trace_id)
     try:
         kg = await get_knowledge_graph()
         await kg.add_episode(
@@ -400,6 +417,17 @@ async def send_message(
             detail="Project onboarding not complete. Please complete onboarding in the app first.",
         )
 
+    # Create Langfuse trace for this MCP request
+    trace_id = str(uuid.uuid4())
+    current_trace_id.set(trace_id)
+    lf = get_langfuse()
+    if lf:
+        try:
+            lf.trace(id=trace_id, name="mcp_send_message", input=data.message[:200],
+                     metadata={"project_id": data.project_id, "user_id": str(auth.user.id)})
+        except Exception:
+            pass
+
     # Add to knowledge graph in background
     background_tasks.add_task(
         _add_to_knowledge_graph,
@@ -407,6 +435,7 @@ async def send_message(
         project_id=data.project_id,
         user_id=auth.user.id,
         user_name=auth.user.name,
+        trace_id=trace_id,
     )
 
     # Log action (without message content for privacy)
