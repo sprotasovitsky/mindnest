@@ -81,7 +81,7 @@ MindNest has an MCP server connected to this workspace. Before answering questio
 ### DO NOT change AI models without explicit user request
 
 ```python
-llm_model = "gemini-2.5-flash-lite"              # Classifier — fast, cost-effective, always-on CoT
+llm_model = "gemini-3.1-flash-lite-preview"       # Classifier — upgraded from 2.5-flash-lite for better BOTH detection
 llm_model_pro = "gemini-3.1-flash-lite-preview"  # Chat responses + iterative retrieval
 graphiti_model = "gemini-3.1-flash-lite-preview"  # Entity extraction — thinking_budget=1024
 embedding_model = "gemini-embedding-001"          # NOT text-embedding-004
@@ -93,7 +93,7 @@ llm_thinking_level = "MEDIUM"                    # Default thinking level for ge
 
 **Important:** `max_output_tokens` on gemini-3+ counts thinking + text combined. With thinking enabled, it starves text output → empty response with `MAX_TOKENS`. Only set `max_output_tokens` when `LLM_THINKING_LEVEL=NONE`.
 
-Classifier stays on `gemini-2.5-flash-lite` (regional, no thinking API) — CoT is handled via prompt suffix instead.
+Classifier upgraded to `gemini-3.1-flash-lite-preview` for better BOTH detection (messages containing both data and questions). Uses `thinking_level=MEDIUM` + CoT prompt suffix.
 
 ### Prompt and MCP description synchronization
 

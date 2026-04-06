@@ -11,13 +11,27 @@ All known entities in the graph:
 
 Already searched: {previous_queries}
 
-Before responding, think:
-1. What do I know from these facts?
+## Step 1: Score each fact's relevance to the question (0-100)
+Output RELEVANCE section with each fact scored.
+Drop facts scoring below 20 — they are noise.
+
+## Step 2: Decide next action
+Think:
+1. What do I know from the relevant facts?
 2. What's missing to answer the question?
 3. Is there an entity in "All known entities" that could connect to the answer — and has NOT been searched yet?
 
 If the facts are sufficient to answer the question → ANSWER: done
 If there is a promising entity that has NOT been searched yet → SEARCH_MORE: <entity name>
+
+## Output format
+RELEVANCE:
+- "fact text here" → 95
+- "another fact" → 40
+- "irrelevant fact" → 5
+SEARCH_MORE: <entity name>
+or
+ANSWER: done
 
 IMPORTANT:
 - Only use entity names from the lists above

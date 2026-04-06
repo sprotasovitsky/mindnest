@@ -304,23 +304,21 @@ class KnowledgeGraph:
             return {"success": False, "error": str(e)}
 
     def _get_edge_config(self) -> EdgeSearchConfig:
-        """Get standard edge search config with BFS and RRF reranking."""
+        """Get standard edge search config without BFS (bm25 + cosine only)."""
         return EdgeSearchConfig(
             search_methods=[
                 EdgeSearchMethod.bm25,
                 EdgeSearchMethod.cosine_similarity,
-                EdgeSearchMethod.bfs,
             ],
             reranker=EdgeReranker.rrf,
         )
 
     def _get_node_config(self) -> NodeSearchConfig:
-        """Get standard node search config with BFS and RRF reranking."""
+        """Get standard node search config without BFS (bm25 + cosine only)."""
         return NodeSearchConfig(
             search_methods=[
                 NodeSearchMethod.bm25,
                 NodeSearchMethod.cosine_similarity,
-                NodeSearchMethod.bfs,
             ],
             reranker=NodeReranker.rrf,
         )

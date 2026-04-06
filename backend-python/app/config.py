@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     gcp_private_key: str = ""  # PEM format
 
     # LLM Models
-    llm_model: str = "gemini-2.5-flash-lite"  # Classifier — fast, cost-effective, CoT in prompt
+    llm_model: str = "gemini-3.1-flash-lite-preview"  # Classifier — was gemini-2.5-flash-lite, upgraded to 3.1 for better BOTH detection
     llm_model_balanced: str = "gemini-3.1-flash-lite-preview"  # Balanced
     llm_model_pro: str = "gemini-3.1-flash-lite-preview"  # Chat responses
 

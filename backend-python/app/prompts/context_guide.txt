@@ -1,45 +1,40 @@
 ## Knowledge Graph Data Format
 
-Data is provided as JSON arrays with full metadata.
+Data from the knowledge graph is organized by entity, showing connections as a graph structure.
 
-### Facts (edges)
-Each fact represents an atomic piece of information:
-- `fact`: the statement
-- `is_active`: true = current truth, false = superseded by newer information
-- `created_at`: when recorded
-- `valid_at`: when became true
-- `expired_at`: null = current, timestamp = superseded by newer information
+### Facts (edges between entities)
+Facts are grouped by entity with directional arrows:
+- `→ TargetEntity: fact text [score]` — outgoing relationship
+- `← SourceEntity: fact text [score]` — incoming relationship
+- `score` indicates search relevance (higher = more relevant to the query)
+
+Each entity section may include a `Summary` — aggregated knowledge about that entity.
+
+Follow the arrows to trace multi-step relationships. For example:
+  Benchmark → $5 coupon (redeemed) → Target (redeemed at)
+means Benchmark redeemed a coupon at Target.
 
 ### Active vs Superseded Facts
-- **Active facts** (`is_active: true`) = current truth. Use these for current-state questions.
-- **Superseded facts** (`is_active: false`) = historical. Use these for "what changed?", "what was before?", "history of changes".
-- When both active and superseded facts exist on the same topic, the active fact takes priority for current-state answers.
-- Superseded facts are valuable context — they show evolution and history. Never ignore them entirely.
+- **Active facts** = current truth. Use these for current-state questions.
+- **Superseded facts** = historical. Use them ONLY for "what changed?", "what was before?", "history of changes".
+- When both exist on the same topic, active facts take priority.
 
-### Entities (nodes)
-Each entity represents a person, item, or concept:
-- `name`: entity identifier
-- `summary`: aggregated, synthesized information about this entity
-- `created_at`: when this version was created
+### Entity Summaries
+Summaries are synthesized from ALL facts, including superseded ones.
 
-Multiple entities with same name represent evolution over time (newer created_at = more complete).
+**WARNING**: Summaries may contain stale data. For specific values (prices, quantities, dates), ALWAYS cross-check with individual Active Facts rather than relying on summaries alone.
 
-**WARNING**: Entity summaries are synthesized from ALL facts, including superseded ones. They may contain stale data that no longer reflects the current state. For specific values (prices, quantities, statuses, dates), ALWAYS cross-check with individual Active Facts rather than relying on entity summaries alone.
+### Handling Conflicts
+- Facts > Entity Summaries (facts are more specific and current)
+- For calculations (expenses, totals): use individual facts, not summary totals
 
-### Handling Conflicts Between Facts and Entity Summaries
-- If Facts and Entity Summaries contain conflicting information, ALWAYS prioritize Facts
-- Entity summaries are aggregated over time and may contain outdated or incorrectly attributed data
-- For calculations (expenses, totals, settlements): be extra careful and cross-check with individual Facts
-- When summing expenses: use specific expense facts (e.g., "Boris spent 14000 rubles") rather than entity summary totals
-
-### Community Summaries
-Community summaries provide high-level overviews of related entity clusters. They are useful for understanding broad topics, themes, and relationships in the project. Use them as background context — they complement individual facts and entity summaries.
+### Topic Summaries
+High-level overviews of related entity clusters. Use as background context.
 
 ### Recent Messages (pending)
-Messages in "Recent Messages" section are the MOST RECENT updates that haven't been processed into the graph yet.
+Messages in "Recent Messages" section are the MOST RECENT updates not yet in the graph.
 
 **IMPORTANT: Pending messages take PRIORITY over graph data!**
 - If pending says "task completed" but graph doesn't show it → trust pending
 - If pending says "changed to 10 bottles" but graph says "6 bottles" → use 10
-- Extract ALL relevant information from pending messages (items, quantities, expenses, task status)
 - Pending messages are raw text in format `[UserName]: message content`

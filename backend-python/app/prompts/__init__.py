@@ -124,6 +124,96 @@ def get_response_template() -> str:
     return load_prompt("response")
 
 
+def _format_facts_grouped(facts: list[dict], entities: list[dict]) -> str:
+    """Group facts by entity, showing graph connections clearly.
+
+    Output format:
+    ## EntityName
+    Summary: ... (if available)
+    - → TargetEntity: fact text
+    - ← SourceEntity: fact text
+    """
+    # Build entity summary lookup
+    entity_summaries = {e["name"]: e.get("summary", "") for e in entities if e.get("name")}
+
+    # Group facts by source and target entities
+    entity_facts: dict[str, list[str]] = {}
+    for f in facts:
+        src = f.get("source_name") or "Unknown"
+        tgt = f.get("target_name") or "Unknown"
+        fact_text = f.get("fact", "")
+        score = f.get("score")
+        score_str = f" [{score:.2f}]" if score is not None else ""
+
+        # Add to source entity
+        entity_facts.setdefault(src, []).append(f"→ {tgt}: {fact_text}{score_str}")
+        # Add to target entity (reverse direction)
+        if tgt != src:
+            entity_facts.setdefault(tgt, []).append(f"← {src}: {fact_text}{score_str}")
+
+    # Sort entities: most connected first
+    sorted_entities = sorted(
+        [(name, fact_list) for name, fact_list in entity_facts.items() if name != "Unknown"],
+        key=lambda x: len(x[1]),
+        reverse=True,
+    )
+
+    lines = []
+    for name, fact_lines in sorted_entities:
+        summary = entity_summaries.get(name, "")
+        lines.append(f"## {name}")
+        if summary:
+            lines.append(f"Summary: {summary}")
+        # Deduplicate
+        seen = set()
+        for fl in fact_lines:
+            if fl not in seen:
+                seen.add(fl)
+                lines.append(f"  - {fl}")
+        lines.append("")
+
+    # Append ungrouped facts (missing source/target names)
+    if "Unknown" in entity_facts:
+        lines.append("## (ungrouped facts)")
+        seen = set()
+        for fl in entity_facts["Unknown"]:
+            if fl not in seen:
+                seen.add(fl)
+                lines.append(f"  - {fl}")
+        lines.append("")
+
+    return "\n".join(lines) if lines else "(no facts found)"
+
+
+def _format_entities_standalone(entities: list[dict], facts: list[dict]) -> str:
+    """Format entities that have summaries but no facts in the current result set."""
+    # Find entities not mentioned in facts
+    fact_names = set()
+    for f in facts:
+        fact_names.add(f.get("source_name", ""))
+        fact_names.add(f.get("target_name", ""))
+
+    orphan_entities = [e for e in entities if e.get("name") and e["name"] not in fact_names and e.get("summary")]
+    if not orphan_entities:
+        return "(all entities included in facts above)"
+
+    lines = []
+    for e in orphan_entities:
+        lines.append(f"- {e['name']}: {e['summary']}")
+    return "\n".join(lines)
+
+
+def _format_communities_text(communities: list[dict] | None) -> str:
+    """Format community summaries as text."""
+    if not communities:
+        return "(none)"
+    lines = []
+    for c in communities:
+        if c.get("summary"):
+            lines.append(f"- {c['name']}: {c['summary']}")
+    return "\n".join(lines) if lines else "(none)"
+
+
 def format_response_prompt(
     message: str,
     facts: list[dict],
@@ -155,10 +245,10 @@ def format_response_prompt(
     active_facts = [f for f in facts if f.get("is_active", True)]
     expired_facts = [f for f in facts if not f.get("is_active", True)]
 
-    active_facts_text = json.dumps(active_facts, indent=2, ensure_ascii=False) if active_facts else "[]"
-    expired_facts_text = json.dumps(expired_facts, indent=2, ensure_ascii=False) if expired_facts else "[]"
-    entities_text = json.dumps(entities, indent=2, ensure_ascii=False) if entities else "[]"
-    communities_text = json.dumps(communities, indent=2, ensure_ascii=False) if communities else "[]"
+    active_facts_text = _format_facts_grouped(active_facts, entities) if active_facts else "(no facts found)"
+    expired_facts_text = _format_facts_grouped(expired_facts, []) if expired_facts else "(none)"
+    entities_text = _format_entities_standalone(entities, active_facts) if entities else "(no entities found)"
+    communities_text = _format_communities_text(communities) if communities else "(none)"
 
     # Load and format template
     template = get_response_template()

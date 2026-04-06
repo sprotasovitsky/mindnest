@@ -64,13 +64,13 @@ def _headers(token: str) -> dict:
 
 
 def send_chat(api_url: str, token: str, project_id: str, message: str, retries: int = 3) -> dict:
-    """POST /api/chat and return the response JSON. Handles 429 with backoff."""
+    """POST /api/chat and return the response JSON. Handles 429 and timeouts with backoff."""
     url = f"{api_url}/api/chat"
     payload = {"message": message, "project_id": project_id}
     backoff = 60
     for attempt in range(retries):
         try:
-            resp = httpx.post(url, json=payload, headers=_headers(token), timeout=120)
+            resp = httpx.post(url, json=payload, headers=_headers(token), timeout=180)
             if resp.status_code == 429:
                 wait = backoff * (attempt + 1)
                 logger.warning(f"Rate limited — waiting {wait}s (attempt {attempt + 1}/{retries})")
@@ -78,6 +78,13 @@ def send_chat(api_url: str, token: str, project_id: str, message: str, retries: 
                 continue
             resp.raise_for_status()
             return resp.json()
+        except (httpx.ReadTimeout, httpx.ConnectTimeout) as e:
+            wait = 30 * (attempt + 1)
+            logger.warning(f"Timeout ({e.__class__.__name__}) — waiting {wait}s (attempt {attempt + 1}/{retries})")
+            if attempt < retries - 1:
+                time.sleep(wait)
+            else:
+                raise
         except httpx.HTTPStatusError as e:
             if attempt < retries - 1:
                 logger.warning(f"HTTP error {e.response.status_code}, retrying...")
@@ -306,14 +313,14 @@ def run(config: BenchmarkConfig, fill_only: bool = False, ask_only: bool = False
                 config.api_url, token, project_id, config.onboarding_seed_message
             )
 
-            # Ingest all user-role turns (no delay during fill — server has enough natural latency)
+            # Ingest all user-role turns
             total_msgs = ingest_sessions(
                 api_url=config.api_url,
                 token=token,
                 project_id=project_id,
                 sessions=sessions,
-                inter_message_delay=0.0 if fill_only else config.inter_message_delay_seconds,
-                inter_session_delay=0.0 if fill_only else config.inter_session_delay_seconds,
+                inter_message_delay=config.inter_message_delay_seconds,
+                inter_session_delay=config.inter_session_delay_seconds,
                 short_turn_threshold=config.short_turn_threshold,
             )
 
@@ -363,6 +370,10 @@ def _parse_args() -> argparse.Namespace:
         "--ask-only", action="store_true",
         help="Phase 2: ask questions only using existing projects from projects_map.json"
     )
+    parser.add_argument(
+        "--inter-message-delay", type=float, default=None,
+        help="Delay in seconds between messages (overrides config default of 1.0)"
+    )
     return parser.parse_args()
 
 
@@ -378,4 +389,6 @@ if __name__ == "__main__":
         cfg.dataset_path = args.dataset
     if args.output_dir:
         cfg.output_dir = args.output_dir
+    if args.inter_message_delay is not None:
+        cfg.inter_message_delay_seconds = args.inter_message_delay
     run(cfg, fill_only=args.fill_only, ask_only=args.ask_only)

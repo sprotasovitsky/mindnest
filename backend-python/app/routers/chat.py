@@ -7,9 +7,10 @@ Classification-based flow with background processing:
 """
 
 # Classifier gets last N messages for context resolution
-CLASSIFIER_HISTORY_LIMIT = 4
+CLASSIFIER_HISTORY_LIMIT = 2
 
 import asyncio
+import re
 import uuid
 from datetime import datetime
 from typing import Optional
@@ -350,10 +351,27 @@ async def _add_to_graph_background(
     trace_id: Optional[str] = None,
 ) -> None:
     """Background task: add to graph, then remove from pending."""
-    # Restore trace_id in ContextVar so Langfuse spans inside kg.add_episode() are linked
+    # Create a separate trace for background processing so it doesn't inflate
+    # the main chat trace duration (add_episode runs after response is sent)
     from ..context import current_trace_id
-    if trace_id:
-        current_trace_id.set(trace_id)
+    from ..langfuse_client import get_langfuse
+    bg_trace_id = f"{trace_id}-bg" if trace_id else None
+    if bg_trace_id:
+        current_trace_id.set(bg_trace_id)
+        lf = get_langfuse()
+        if lf:
+            try:
+                lf.trace(
+                    id=bg_trace_id,
+                    name="background_add_episode",
+                    input=message[:200],
+                    user_id=str(user_id),
+                    session_id=f"{user_id}:{project_id}",
+                    tags=["background", "graphiti"],
+                    metadata={"parent_trace_id": trace_id, "message_id": message_id},
+                )
+            except Exception:
+                pass
 
     cache = get_pending_cache()
     kg = await get_knowledge_graph()
@@ -808,6 +826,10 @@ async def _iterative_search(
 
         logger.info(f"Verdict round {iteration}: {verdict[:120]}")
 
+        # Parse RELEVANCE scores and update pool
+        _apply_relevance_scores(verdict, pool)
+        trimmed_pool = _pool_top(pool, POOL_SIZE)
+
         if "ANSWER:" in verdict:
             logger.info(f"Iterative search: done after round {iteration} (ANSWER)")
             break
@@ -829,6 +851,53 @@ async def _iterative_search(
         logger.info(f"Round {iteration + 1}: {len(pool)} edges → pool={len(trimmed_pool)}, nodes={len(all_nodes)}")
 
     return list(trimmed_pool.values()), list(all_nodes.values()), list(all_communities.values()), all_queries
+
+
+def _apply_relevance_scores(verdict: str, pool: dict[str, dict]) -> None:
+    """Parse RELEVANCE section from verdict and update pool scores.
+
+    Only updates scores — does NOT delete facts from pool to preserve
+    entity names for subsequent search rounds. Low-score facts will be
+    naturally pushed out by _pool_top() when better facts arrive.
+    Format: - "fact text" → 95
+    """
+    if "RELEVANCE:" not in verdict:
+        return
+
+    relevance_section = verdict.split("RELEVANCE:", 1)[1]
+    # Stop at SEARCH_MORE or ANSWER
+    for stop in ("SEARCH_MORE:", "ANSWER:"):
+        if stop in relevance_section:
+            relevance_section = relevance_section.split(stop, 1)[0]
+
+    # Parse lines like: - "fact text" → 95
+    scored: dict[str, int] = {}
+    for line in relevance_section.strip().split("\n"):
+        line = line.strip().lstrip("- ")
+        match = re.search(r'(?:→|->)\s*(\d+)\s*$', line)
+        if match:
+            score = int(match.group(1))
+            fact_part = line[:match.start()].strip().strip('"').strip("'").strip()
+            if fact_part:
+                scored[fact_part] = score
+
+    if not scored:
+        return
+
+    # Update pool scores (no deletion — preserves entity names for next rounds)
+    updated = 0
+    for _key, fact_dict in pool.items():
+        fact_text = fact_dict.get("fact", "")
+        # Require high overlap to avoid false matches
+        for scored_text, score in scored.items():
+            shorter, longer = (scored_text, fact_text) if len(scored_text) <= len(fact_text) else (fact_text, scored_text)
+            if shorter in longer and len(shorter) / max(len(longer), 1) > 0.5:
+                fact_dict["score"] = score / 100.0
+                updated += 1
+                break
+
+    if updated:
+        logger.info(f"Relevance scores: updated {updated}/{len(pool)} facts")
 
 
 async def _handle_question(
