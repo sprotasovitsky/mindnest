@@ -81,7 +81,7 @@ MindNest has an MCP server connected to this workspace. Before answering questio
 ### DO NOT change AI models without explicit user request
 
 ```python
-llm_model = "gemini-3.1-flash-lite-preview"       # Classifier — upgraded from 2.5-flash-lite for better BOTH detection
+llm_model = "gemini-3.1-flash-lite-preview"       # Classifier — all models are 3.1 now
 llm_model_pro = "gemini-3.1-flash-lite-preview"  # Chat responses + iterative retrieval
 graphiti_model = "gemini-3.1-flash-lite-preview"  # Entity extraction — thinking_budget=1024
 embedding_model = "gemini-embedding-001"          # NOT text-embedding-004
@@ -89,21 +89,35 @@ embedding_dim = 3072                              # NOT 768
 llm_thinking_level = "MEDIUM"                    # Default thinking level for gemini-3+ (NONE/MINIMAL/LOW/MEDIUM/HIGH)
 ```
 
-`gemini-3.1-flash-lite-preview` requires global Vertex AI endpoint. Chat responses use `thinking_level=MEDIUM` (configurable via `LLM_THINKING_LEVEL` env var). Graphiti uses `thinking_budget=1024` (separate param, Graphiti's internal client doesn't support `thinking_level`).
+`gemini-3.1-flash-lite-preview` requires global Vertex AI endpoint. All LLM calls use `thinking_level=MEDIUM` (configurable via `LLM_THINKING_LEVEL` env var). Graphiti uses `thinking_budget=1024` (separate param, Graphiti's internal client doesn't support `thinking_level`).
 
 **Important:** `max_output_tokens` on gemini-3+ counts thinking + text combined. With thinking enabled, it starves text output → empty response with `MAX_TOKENS`. Only set `max_output_tokens` when `LLM_THINKING_LEVEL=NONE`.
 
-Classifier upgraded to `gemini-3.1-flash-lite-preview` for better BOTH detection (messages containing both data and questions). Uses `thinking_level=MEDIUM` + CoT prompt suffix.
+### Search architecture
+
+```python
+search_methods = [bm25, cosine_similarity, bfs]  # BFS depth=1 (not default 3)
+reranker = rrf                                     # No cross-encoder — LLM relevance scoring instead
+iterative_search_max = 3                           # Up to 4 total search rounds
+classifier_history_limit = 2                       # Last 2 message pairs for context
+```
+
+- **BFS depth=1** — immediate neighbors only. Deeper traversal handled by iterative search (LLM picks next entity to search).
+- **LLM relevance scoring** — iterative verdict scores each fact 0-100 in RELEVANCE section, replaces cross-encoder (zero extra LLM calls).
+- **Entity-grouped prompt** — facts grouped by entity with directional arrows (→/←) and scores, not flat JSON. LLM sees graph structure.
+- **Extraction instructions** — in `app/prompts/extraction.txt`, synced to Langfuse for versioning.
+- **Background add_episode** — separate Langfuse trace (`{trace_id}-bg`) so it doesn't inflate main trace duration.
 
 ### Prompt and MCP description synchronization
 
-Four places describe how data is stored and searched. They MUST use the same terminology and categories:
+Five places describe how data is stored and searched. They MUST use the same terminology and categories:
 
 | File | Role | Audience |
 |------|------|----------|
 | `app/prompts/classifier.txt` | Decide what to extract from user message | Internal LLM (classifier) |
+| `app/prompts/extraction.txt` | How Graphiti should extract entities and facts | Graphiti extraction LLM |
+| `app/prompts/iterative_search.txt` | Decide if more search is needed + score relevance | Internal LLM (retrieval) |
 | `app/routers/mcp_tools.py` send_message docstring | Explain how to prepare data for storage | External LLM clients |
-| `app/prompts/iterative_search.txt` | Decide if more search is needed | Internal LLM (retrieval) |
 | `app/routers/mcp_tools.py` search_knowledge docstring | Explain how to search effectively | External LLM clients |
 
 **Shared terminology for data types:** facts, events, tasks, preferences, relationships, states.
