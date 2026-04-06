@@ -85,6 +85,7 @@ class Settings(BaseSettings):
     langfuse_public_key: Optional[str] = None
     langfuse_secret_key: Optional[str] = None
     langfuse_host: str = "http://localhost:3001"
+    app_version: str = "dev"  # Set via APP_VERSION env var in production
 
     # OAuth 2.0 settings (for MCP clients)
     oauth_issuer: str = ""  # Set via env var per environment

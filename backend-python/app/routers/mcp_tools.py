@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from ..config import get_settings
 from ..context import current_trace_id
 from ..database import get_db
 from ..graphiti_client import get_knowledge_graph
@@ -279,12 +280,15 @@ async def search_knowledge(
     # Create Langfuse trace for this MCP request
     trace_id = str(uuid.uuid4())
     current_trace_id.set(trace_id)
+    settings = get_settings()
     lf = get_langfuse()
     if lf:
         try:
             lf.trace(id=trace_id, name="mcp_search", input=data.query,
                      user_id=str(auth.user.id), session_id=f"{auth.user.id}:{data.project_id}",
-                     metadata={"project_id": data.project_id})
+                     version=settings.app_version,
+                     tags=["mcp", "search"],
+                     metadata={"project_id": data.project_id, "oauth_client_id": auth.oauth_client_id})
         except Exception:
             pass
 
@@ -427,12 +431,15 @@ async def send_message(
     # Create Langfuse trace for this MCP request
     trace_id = str(uuid.uuid4())
     current_trace_id.set(trace_id)
+    settings = get_settings()
     lf = get_langfuse()
     if lf:
         try:
             lf.trace(id=trace_id, name="mcp_send_message", input=data.message[:200],
                      user_id=str(auth.user.id), session_id=f"{auth.user.id}:{data.project_id}",
-                     metadata={"project_id": data.project_id})
+                     version=settings.app_version,
+                     tags=["mcp", "write"],
+                     metadata={"project_id": data.project_id, "oauth_client_id": auth.oauth_client_id})
         except Exception:
             pass
 

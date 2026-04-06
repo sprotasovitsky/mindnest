@@ -932,6 +932,7 @@ async def send_message(
 
     # Create Langfuse trace for this request (must exist before generations are added)
     from ..langfuse_client import get_langfuse
+    settings = get_settings()
     lf = get_langfuse()
     if lf:
         try:
@@ -941,6 +942,8 @@ async def send_message(
                 input=chat_request.message,
                 user_id=str(user.id),
                 session_id=f"{user.id}:{chat_request.get_project_id()}",
+                version=settings.app_version,
+                tags=["chat"],
                 metadata={"project_id": chat_request.get_project_id()},
             )
         except Exception:
@@ -1033,10 +1036,14 @@ async def send_message(
     estimated_tokens = (len(chat_request.message) + len(response.reply)) // 4
     await update_token_usage(user, estimated_tokens, db)
 
-    # Update Langfuse trace with final output
+    # Update Langfuse trace with final output and message type tag
     if lf:
         try:
-            lf.trace(id=trace_id, output=response.reply)
+            lf.trace(
+                id=trace_id,
+                output=response.reply,
+                tags=["chat", response.message_type.lower()],
+            )
         except Exception:
             pass
 
