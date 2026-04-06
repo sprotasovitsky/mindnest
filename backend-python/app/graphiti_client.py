@@ -221,38 +221,11 @@ class KnowledgeGraph:
             raise RuntimeError("KnowledgeGraph not initialized. Call initialize() first.")
         return self._client
 
-    # Instructions for Graphiti's entity/edge extraction LLM
-    EXTRACTION_INSTRUCTIONS = (
-        "## What to extract\n"
-        "1. Extract EVERY factual statement as a separate atomic fact. "
-        "One fact = one relationship between two entities. "
-        "If a sentence contains multiple facts, split them.\n"
-        "2. Personal attributes are entities: education (degree, school), "
-        "job (title, company), health (conditions, metrics), hobbies, skills. "
-        "Create an entity for the attribute and an edge from the person.\n"
-        "3. Use SPECIFIC names, not generic descriptions. "
-        "If the text provides a proper noun, brand, title, or named entity, "
-        "always use it instead of a generic reference.\n"
-        "4. When a message mentions an action at a location, extract BOTH: "
-        "the action fact AND the location as separate edges connecting "
-        "through the relevant entity.\n"
-        "5. Quantitative data (prices, durations, frequencies, measurements) "
-        "are important facts — always extract them with their values.\n"
-        "\n## Temporal rules\n"
-        "6. Separate CURRENT STATE from PLANNED/FUTURE ACTION as distinct facts. "
-        "'X does not have Y' is current-state, 'X will add Y' is planned-action. "
-        "These are independent — one must NOT invalidate the other.\n"
-        "7. Words like 'will', 'plan to', 'going to', 'should', 'intend to' "
-        "indicate PLANNED ACTIONS. They must NOT cause expiration (invalid_at) "
-        "of any existing current-state facts.\n"
-        "8. Numerical data, comparisons, measurements are "
-        "reference facts — never expire them unless EXPLICITLY stated wrong.\n"
-        "9. Never set invalid_at unless the text EXPLICITLY states "
-        "something has ended, been removed, or is no longer true. "
-        "Ambiguity → keep edges valid.\n"
-        "10. Lists of items are collections. Each item is a separate fact. "
-        "Adding new items does NOT invalidate existing items in the same list."
-    )
+    @staticmethod
+    def _load_extraction_instructions() -> str:
+        """Load extraction instructions from prompt file."""
+        from .prompts import load_prompt
+        return load_prompt("extraction")
 
     async def add_episode(
         self,
@@ -293,7 +266,7 @@ class KnowledgeGraph:
                 source_description=source_description,
                 reference_time=ref_time,
                 group_id=project_id,
-                custom_extraction_instructions=self.EXTRACTION_INSTRUCTIONS,
+                custom_extraction_instructions=self._load_extraction_instructions(),
                 update_communities=settings.auto_update_communities,
             )
 
