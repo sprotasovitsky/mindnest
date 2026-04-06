@@ -778,6 +778,7 @@ async def _iterative_search(
         pool_facts = list(trimmed_pool.values())
         facts_summary = "\n".join(
             f"- [{e.get('source_name', '?')}] → [{e.get('target_name', '?')}]: {e['fact']}"
+            + (f" [{e['score']:.2f}]" if e.get('score') is not None else "")
             for e in pool_facts
         ) or "(none)"
 

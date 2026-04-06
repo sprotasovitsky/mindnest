@@ -296,18 +296,22 @@ class KnowledgeGraph:
             search_methods=[
                 EdgeSearchMethod.bm25,
                 EdgeSearchMethod.cosine_similarity,
+                EdgeSearchMethod.bfs,
             ],
             reranker=EdgeReranker.rrf,
+            bfs_max_depth=1,
         )
 
     def _get_node_config(self) -> NodeSearchConfig:
-        """Get standard node search config without BFS (bm25 + cosine only)."""
+        """Get standard node search config with BFS depth=1."""
         return NodeSearchConfig(
             search_methods=[
                 NodeSearchMethod.bm25,
                 NodeSearchMethod.cosine_similarity,
+                NodeSearchMethod.bfs,
             ],
             reranker=NodeReranker.rrf,
+            bfs_max_depth=1,
         )
 
     def _format_edges(

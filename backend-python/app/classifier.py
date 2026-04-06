@@ -129,7 +129,7 @@ def _parse_classification(response: str) -> ClassificationResult:
     search_queries: list[str] = []
 
     for line in lines:
-        line = line.strip()
+        line = line.strip().lstrip("*").strip()
         if line.startswith("TYPE:"):
             type_str = line.replace("TYPE:", "").strip().upper()
             if type_str == "QUESTION":
