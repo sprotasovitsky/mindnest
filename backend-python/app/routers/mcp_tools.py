@@ -283,7 +283,7 @@ async def search_knowledge(
     if lf:
         try:
             lf.trace(id=trace_id, name="mcp_search", input=data.query,
-                     user_id=str(auth.user.id), session_id=data.project_id,
+                     user_id=str(auth.user.id), session_id=f"{auth.user.id}:{data.project_id}",
                      metadata={"project_id": data.project_id})
         except Exception:
             pass
@@ -431,7 +431,7 @@ async def send_message(
     if lf:
         try:
             lf.trace(id=trace_id, name="mcp_send_message", input=data.message[:200],
-                     user_id=str(auth.user.id), session_id=data.project_id,
+                     user_id=str(auth.user.id), session_id=f"{auth.user.id}:{data.project_id}",
                      metadata={"project_id": data.project_id})
         except Exception:
             pass

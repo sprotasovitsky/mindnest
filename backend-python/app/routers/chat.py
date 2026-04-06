@@ -940,7 +940,7 @@ async def send_message(
                 name="chat_request",
                 input=chat_request.message,
                 user_id=str(user.id),
-                session_id=chat_request.get_project_id(),
+                session_id=f"{user.id}:{chat_request.get_project_id()}",
                 metadata={"project_id": chat_request.get_project_id()},
             )
         except Exception:
