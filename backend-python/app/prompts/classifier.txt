@@ -26,14 +26,21 @@ DATA_TO_SAVE: <expanded data to save in knowledge graph, or "none">
 SEARCH_QUERIES: <one or more search queries separated by " | " if TYPE is QUESTION or BOTH, otherwise "none">
 
 ## DATA_TO_SAVE rules:
-- Extract concrete facts, items, tasks, lists from the message
+- Each distinct fact must be a separate statement, separated by "; "
+- A "fact" is any piece of information that could be independently useful later:
+  - Personal attributes (names, ages, roles, degrees)
+  - Quantitative data (durations, prices, frequencies, measurements)
+  - Preferences, habits, routines
+  - Events, actions, states
+  - Relationships between people or things
 - EXPAND any references using chat history:
   - "recipe 1" → "omelet: eggs, milk, cheese" (from history)
   - "this list" → actual list items from history
-  - "add more" → specify what and to what
-- Include user attribution: "{user_name}: shopping list - milk, bread"
-- PRESERVE ALL ITEMS in structured lists — numbered lists, task lists, relationship declarations, expense lists. Never summarize a list to just its header. Every item must appear in DATA_TO_SAVE.
-- After writing DATA_TO_SAVE, verify: if the original message contained a list, does DATA_TO_SAVE contain every item? If any item is missing, rewrite DATA_TO_SAVE with all items included.
+- PRESERVE ALL ITEMS in structured lists — every item must appear
+- After writing DATA_TO_SAVE, verify:
+  1. Count the distinct facts in the original message
+  2. Count the facts in DATA_TO_SAVE
+  3. If any fact is missing (especially numbers, names, places, dates), add it
 - If no data to save, write "none"
 
 ## SEARCH_QUERIES rules:
@@ -50,7 +57,7 @@ SEARCH_QUERIES: <one or more search queries separated by " | " if TYPE is QUESTI
 Example 1 - Mixed message (data + question):
 User: "Buy groceries: cottage cheese, eggs, bread. Any gift ideas for a surprise?"
 TYPE: BOTH
-DATA_TO_SAVE: Shopping list: cottage cheese, eggs, bread
+DATA_TO_SAVE: {user_name} needs to buy groceries: cottage cheese, eggs, bread
 SEARCH_QUERIES: gift ideas surprise presents
 
 Example 2 - Reference to history:
@@ -69,7 +76,7 @@ SEARCH_QUERIES: shopping list items to buy groceries
 Example 4 - Pure data (expense tracking):
 User: "Spent $45 on groceries at the supermarket"
 TYPE: DATA
-DATA_TO_SAVE: Expense: groceries, $45, supermarket
+DATA_TO_SAVE: {user_name} spent $45 on groceries; groceries were purchased at the supermarket
 SEARCH_QUERIES: none
 
 Example 5 - Add to existing:
@@ -137,17 +144,27 @@ SEARCH_QUERIES: none
 Example 15 - Facts as context to a question:
 User: "I graduated with a degree in Business Administration, which has helped me in my new role. Any advice on organizing paperwork?"
 TYPE: BOTH
-DATA_TO_SAVE: Benchmark User graduated with a degree in Business Administration; it has helped in new role
+DATA_TO_SAVE: {user_name} graduated with a degree in Business Administration; {user_name}'s Business Administration degree has helped in their new role
 SEARCH_QUERIES: organizing paperwork documentation tips
 
 Example 16 - Multiple background facts in a question:
 User: "My sister recommended a true crime podcast and I've been listening to How I Built This for months. Can you suggest more entrepreneurship podcasts?"
 TYPE: BOTH
-DATA_TO_SAVE: User's sister recommended a true crime podcast; User has been listening to How I Built This for months
+DATA_TO_SAVE: {user_name}'s sister recommended a true crime podcast; {user_name} has been listening to How I Built This podcast for months
 SEARCH_QUERIES: entrepreneurship podcasts recommendations
+
+Example 18 - Quantitative facts (each number is a separate fact):
+User: "I run 5km every morning in the park near my office."
+TYPE: DATA
+DATA_TO_SAVE: {user_name} runs every morning; {user_name}'s morning run distance is 5km; {user_name} runs in the park near the office
+SEARCH_QUERIES: none
 
 Example 17 - Structured list of relationships (ALL items must be preserved):
 User: "Save these links: 1. Feature A depends on Task X 2. Feature A depends on Task Y 3. Feature B depends on Task Z 4. Bug C relates to Decision D"
 TYPE: DATA
 DATA_TO_SAVE: Feature A depends on Task X; Feature A depends on Task Y; Feature B depends on Task Z; Bug C relates to Decision D
 SEARCH_QUERIES: none
+
+## VERIFICATION (do this before submitting your answer):
+Count every distinct fact in the original message: names, numbers, places, dates, durations, preferences, actions, relationships.
+Compare with your DATA_TO_SAVE — is every fact present? If any number, name, or place from the message is missing in DATA_TO_SAVE, rewrite it.
