@@ -120,6 +120,52 @@ async def classify_message(
         )
 
 
+async def extract_data(
+    message: str,
+    user_name: Optional[str] = None,
+    trace_id: Optional[str] = None,
+    project_id: Optional[str] = None,
+    user_id: Optional[str] = None,
+) -> str:
+    """Extract atomic facts from a message for knowledge graph storage.
+
+    Used by MCP send_message where intent classification is not needed
+    (endpoint already determines it's data). Returns extracted facts as
+    a string, or the original message as fallback.
+    """
+    prompt_template = load_prompt("data_extractor")
+    prompt = prompt_template.format(
+        message=message,
+        user_name=user_name or "User",
+    )
+
+    try:
+        response = await generate_text(
+            prompt,
+            prompt_name="data_extractor",
+            step="extract_data",
+            trace_id=trace_id,
+            project_id=project_id,
+            user_id=user_id,
+        )
+
+        # Parse "DATA: fact1; fact2; fact3"
+        for line in response.strip().split("\n"):
+            line = line.strip().replace("*", "").strip()
+            if line.startswith("DATA:"):
+                data = line.replace("DATA:", "").strip()
+                if data.lower() != "none" and data:
+                    logger.info("data_extracted", facts_len=len(data), trace_id=trace_id)
+                    return data
+
+        # Fallback: return original message
+        logger.warning("data_extraction_no_output", trace_id=trace_id)
+        return message
+    except Exception as e:
+        logger.error("data_extraction_failed", error=str(e), trace_id=trace_id)
+        return message
+
+
 def _parse_classification(response: str) -> ClassificationResult:
     """Parse LLM response into ClassificationResult."""
     lines = response.strip().split("\n")

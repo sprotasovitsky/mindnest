@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from ..classifier import extract_data
 from ..config import get_settings
 from ..context import current_trace_id
 from ..database import get_db
@@ -21,6 +22,9 @@ from ..graphiti_client import get_knowledge_graph
 from ..langfuse_client import get_langfuse
 from ..mcp_auth import McpAuth, get_mcp_auth_read, get_mcp_auth_write
 from ..models import Project, ProjectMember
+from ..pending_cache import get_pending_cache
+from ..prompts import _format_facts_grouped, _format_entities_standalone
+from ..search import iterative_search, add_to_graph_background, format_context
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/mcp", tags=["mcp"])
@@ -82,9 +86,10 @@ class TopicResult(BaseModel):
 class SearchResponse(BaseModel):
     """Search results."""
     success: bool
-    facts: list[FactResult] = []
+    facts: str = ""
     entities: list[EntityResult] = []
     topics: list[TopicResult] = []
+    pending_context: str = ""
     error: Optional[str] = None
 
 
@@ -250,34 +255,25 @@ async def search_knowledge(
     auth: McpAuth = Depends(get_mcp_auth_read),
     db: AsyncSession = Depends(get_db),
 ) -> SearchResponse:
-    """Search project knowledge using natural language.
+    """Search project knowledge using iterative multi-round search.
 
     Requires: read scope
-    Searches for facts and entities related to the query in the specified project.
 
-    Use this to find any stored information:
-    - Facts, events, tasks, preferences, relationships, states
-    - People and contacts, purchases and expenses
-    - Any information previously stored via send_message or chat
+    Performs LLM-guided iterative search through the knowledge graph:
+    - Multiple search rounds with relevance scoring
+    - BFS depth=1 for immediate neighbor discovery
+    - Results grouped by entity with directional arrows
+
+    Returns facts as entity-grouped text showing graph connections,
+    plus any pending (recently added, not yet processed) data.
 
     IMPORTANT: For queries with first-person pronouns ("my tasks", "what did I add?"),
     call get_current_user FIRST to get the user's name, then search with that name.
-
-    Returns facts (relationships between entities) and entities (people, items,
-    places, concepts with aggregated summaries).
-
-    Before each search call, reason about:
-    1. What do I already know from previous results?
-    2. What is still missing to answer the question?
-    3. Which entity name from the results could lead me closer to the answer?
-
-    Then search for that entity name. Short entity-name queries (1-2 words)
-    find more connected facts than long natural language questions.
     """
     # Verify project access
     await verify_project_access(db, auth.user.id, data.project_id)
 
-    # Create Langfuse trace for this MCP request
+    # Create Langfuse trace
     trace_id = str(uuid.uuid4())
     current_trace_id.set(trace_id)
     settings = get_settings()
@@ -292,33 +288,29 @@ async def search_knowledge(
         except Exception:
             pass
 
-    # Search knowledge graph
+    # Iterative search (same pipeline as chat)
     kg = await get_knowledge_graph()
-    result = await kg.search(
-        query=data.query,
-        project_id=data.project_id,
+    edges, nodes, communities, all_queries = await iterative_search(
+        kg, data.project_id, data.query, [data.query], trace_id=trace_id,
     )
 
-    # Format results
-    facts = [
-        FactResult(
-            fact=e["fact"],
-            source=e.get("source_name") or None,
-            target=e.get("target_name") or None,
-            created_at=e.get("created_at"),
-            valid_at=e.get("valid_at"),
-            expired_at=e.get("expired_at"),
-        )
-        for e in result.get("edges", [])
-    ]
+    # Format as entity-grouped text (same as chat prompt)
+    facts_list, entities_list, comm_list = format_context(edges, nodes, communities)
+    facts_text = _format_facts_grouped(facts_list, entities_list)
 
-    entities = [
+    # Get pending context (recently added, not yet in graph)
+    cache = get_pending_cache()
+    pending = await cache.get_pending(data.project_id)
+    pending_context = cache.format_for_prompt(pending)
+
+    # Entity results for backward compat
+    entity_results = [
         EntityResult(
             name=n["name"],
             summary=n.get("summary"),
             created_at=n.get("created_at"),
         )
-        for n in result.get("nodes", [])
+        for n in nodes
     ]
 
     topics = [
@@ -326,60 +318,38 @@ async def search_knowledge(
             name=c["name"],
             summary=c.get("summary"),
         )
-        for c in result.get("communities", [])
+        for c in communities
+        if c.get("summary")
     ]
 
-    # Log action (without query content for privacy)
+    # Log action
     await log_mcp_action(
         db=db,
         auth=auth,
         action="search_knowledge",
         project_id=data.project_id,
-        request_data={"query_len": len(data.query)},
-        response_summary=f"Found {len(facts)} facts, {len(entities)} entities",
+        request_data={"query_len": len(data.query), "search_rounds": len(all_queries)},
+        response_summary=f"Found {len(edges)} facts, {len(nodes)} entities, {len(all_queries)} queries",
     )
 
     logger.info(
         f"MCP search_knowledge: query_len={len(data.query)} "
-        f"found {len(facts)} facts, {len(entities)} entities"
+        f"found {len(edges)} facts, {len(nodes)} entities, {len(all_queries)} queries"
     )
 
     response = SearchResponse(
-        success=result.get("success", False),
-        facts=facts,
-        entities=entities,
+        success=True,
+        facts=facts_text,
+        entities=entity_results,
         topics=topics,
-        error=result.get("error"),
+        pending_context=pending_context,
     )
     if lf:
         try:
-            lf.trace(id=trace_id, output=f"{len(facts)} facts, {len(entities)} entities, {len(topics)} topics")
+            lf.trace(id=trace_id, output=f"{len(edges)} facts, {len(nodes)} entities, {len(all_queries)} queries")
         except Exception:
             pass
     return response
-
-
-async def _add_to_knowledge_graph(
-    message: str,
-    project_id: str,
-    user_id: str,
-    user_name: str,
-    trace_id: Optional[str] = None,
-) -> None:
-    """Background task to add message to knowledge graph."""
-    if trace_id:
-        current_trace_id.set(trace_id)
-    try:
-        kg = await get_knowledge_graph()
-        await kg.add_episode(
-            message=message,
-            project_id=project_id,
-            user_id=user_id,
-            user_name=user_name,
-        )
-        logger.info(f"MCP message added to knowledge graph for project {project_id}")
-    except Exception as e:
-        logger.error(f"Failed to add MCP message to knowledge graph: {e}")
 
 
 @router.post("/message", response_model=SendMessageResponse, operation_id="send_message")
@@ -401,34 +371,25 @@ async def send_message(
     - Relationships: who knows whom, who recommended what
     - States: current activities, ongoing projects, habits
 
-    IMPORTANT: The knowledge graph processes each message independently.
-    If a message depends on previous context, include that context in the
-    message itself so it is self-contained and searchable.
+    The message is automatically processed to extract atomic facts before
+    storage. Data becomes immediately searchable via search_knowledge
+    (pending cache) and permanently stored after graph processing (~30s).
 
-    Context enrichment patterns:
-    - Resolve pronouns: "She completed it" → "Maria completed the design task"
-    - Expand references: "Add 50 more" → "Add 50 more items to the grocery list"
-    - Include location/source from conversation: if prior context establishes
-      a place, service, or person — mention it in the fact explicitly
-
-    The message will be processed by AI to extract entities (people, items,
-    dates, places) and facts (relationships between entities). These become
-    searchable via search_knowledge.
+    IMPORTANT: Each message is processed independently. Include full context
+    in the message itself — resolve pronouns, expand references.
 
     NOTE: This does NOT generate an AI response — it only stores data.
-    The user's name is automatically associated with the message.
     """
     # Verify project access
     project = await verify_project_access(db, auth.user.id, data.project_id)
 
-    # Check if project has completed onboarding
     if not project.description:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Project onboarding not complete. Please complete onboarding in the app first.",
         )
 
-    # Create Langfuse trace for this MCP request
+    # Create Langfuse trace
     trace_id = str(uuid.uuid4())
     current_trace_id.set(trace_id)
     settings = get_settings()
@@ -443,37 +404,57 @@ async def send_message(
         except Exception:
             pass
 
-    # Add to knowledge graph in background
-    background_tasks.add_task(
-        _add_to_knowledge_graph,
+    # Extract atomic facts from message (same as chat classifier data extraction)
+    extracted = await extract_data(
         message=data.message,
+        user_name=auth.user.name,
+        trace_id=trace_id,
+        project_id=data.project_id,
+        user_id=auth.user.id,
+    )
+
+    # Add to pending cache for immediate searchability
+    cache = get_pending_cache()
+    message_id = str(uuid.uuid4())
+    await cache.add(
+        project_id=data.project_id,
+        message_id=message_id,
+        user_name=auth.user.name,
+        text=extracted,
+    )
+
+    # Background: add to graph, then remove from pending
+    background_tasks.add_task(
+        add_to_graph_background,
+        message_id=message_id,
+        message=extracted,
         project_id=data.project_id,
         user_id=auth.user.id,
         user_name=auth.user.name,
         trace_id=trace_id,
     )
 
-    # Log action (without message content for privacy)
+    # Log action
     await log_mcp_action(
         db=db,
         auth=auth,
         action="send_message",
         project_id=data.project_id,
-        request_data={"message_len": len(data.message)},
-        response_summary="Message queued for processing",
+        request_data={"message_len": len(data.message), "extracted_len": len(extracted)},
+        response_summary="Message extracted and queued",
     )
 
     logger.info(
-        f"MCP send_message: len={len(data.message)} "
+        f"MCP send_message: len={len(data.message)} extracted={len(extracted)} "
         f"queued for project {data.project_id}"
     )
 
     if lf:
         try:
-            lf.trace(id=trace_id, output="Message queued for processing")
+            lf.trace(id=trace_id, output=f"Extracted {len(extracted)} chars, queued for processing")
         except Exception:
             pass
     return SendMessageResponse(
         success=True,
-        message="Message queued for processing",
+        message="Message extracted and queued for processing. Data is immediately searchable.",
     )
