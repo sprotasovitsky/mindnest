@@ -10,8 +10,10 @@ Classification-based flow with background processing:
 CLASSIFIER_HISTORY_LIMIT = 2
 
 import asyncio
+import json
+import re
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import structlog
@@ -33,7 +35,12 @@ from ..graphiti_client import get_knowledge_graph, KnowledgeGraph
 from ..llm import generate_text
 from ..models import ChatMessage, Project, ProjectMember, User
 from ..pending_cache import get_pending_cache
-from ..prompts import format_response_prompt, format_onboarding_prompt, load_prompt
+from ..prompts import (
+    format_response_prompt,
+    format_onboarding_prompt,
+    get_current_datetime_string,
+    load_prompt,
+)
 from ..search import (
     iterative_search,
     search_multi,
@@ -881,6 +888,191 @@ async def get_history(
         ],
         total=len(messages),
     )
+
+
+# --- Chat summary ---
+
+SUMMARY_DEFAULT_DAYS = 7
+SUMMARY_MAX_DAYS = 30
+# Upper bound on messages fed to the summary prompt (newest are kept)
+SUMMARY_MAX_MESSAGES = 200
+# Per-field cap so a single huge message can't blow up the prompt
+SUMMARY_MAX_CHARS_PER_FIELD = 1000
+SUMMARY_MAX_TOPICS = 5
+
+
+class ChatSummaryResponse(BaseModel):
+    """Summary of a user's chat in a project over a recent period."""
+    summary: str
+    key_topics: list[str]
+    message_count: int
+    period_days: int
+
+
+async def get_messages_since(
+    db: AsyncSession,
+    project_id: str,
+    user_id: str,
+    since: datetime,
+    limit: int = SUMMARY_MAX_MESSAGES,
+) -> list[ChatMessage]:
+    """Get a user's chat messages in a project created at or after `since`.
+
+    Returns at most `limit` newest messages, in chronological order.
+    """
+    query = (
+        select(ChatMessage)
+        .where(ChatMessage.project_id == project_id)
+        .where(ChatMessage.user_id == user_id)
+        .where(ChatMessage.created_at >= since)
+        .order_by(desc(ChatMessage.created_at))
+        .limit(limit)
+    )
+    result = await db.execute(query)
+    return list(reversed(result.scalars().all()))
+
+
+def _truncate(text: str, limit: int = SUMMARY_MAX_CHARS_PER_FIELD) -> str:
+    return text if len(text) <= limit else text[:limit] + "…"
+
+
+def format_messages_for_summary(messages: list[ChatMessage]) -> str:
+    """Format messages with timestamps for the summary prompt."""
+    lines = []
+    for msg in messages:
+        ts = msg.created_at.strftime("%Y-%m-%d %H:%M") if msg.created_at else "unknown time"
+        lines.append(f"[{ts}] User: {_truncate(msg.user_message)}")
+        lines.append(f"[{ts}] Assistant: {_truncate(msg.assistant_reply)}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+_JSON_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.IGNORECASE)
+
+
+def parse_summary_response(raw: str) -> tuple[str, list[str]]:
+    """Parse the LLM summary JSON into (summary, key_topics).
+
+    Tolerates markdown code fences. If the output is not valid JSON,
+    the raw text is used as the summary and topics are left empty.
+    """
+    text = _JSON_FENCE_RE.sub("", (raw or "").strip()).strip()
+    try:
+        data = json.loads(text)
+    except (json.JSONDecodeError, ValueError):
+        logger.warning("chat_summary_unparseable", raw_preview=text[:200])
+        return text, []
+
+    if not isinstance(data, dict):
+        return text, []
+
+    summary = str(data.get("summary") or "").strip()
+    raw_topics = data.get("key_topics") or []
+    topics: list[str] = []
+    if isinstance(raw_topics, list):
+        for t in raw_topics:
+            label = str(t).strip()
+            if label and label not in topics:
+                topics.append(label)
+    return summary, topics[:SUMMARY_MAX_TOPICS]
+
+
+@router.get("/summary", response_model=ChatSummaryResponse)
+@limiter.limit(_get_chat_limit)
+async def get_chat_summary(
+    request: Request,
+    project_id: str = Query(..., min_length=1, description="Project ID to summarize"),
+    days: int = Query(
+        default=SUMMARY_DEFAULT_DAYS,
+        ge=1,
+        le=SUMMARY_MAX_DAYS,
+        description="Look-back period in days",
+    ),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> ChatSummaryResponse:
+    """Summarize the current user's chat in a project over the last N days.
+
+    Only the requesting user's own messages are summarized, so project members
+    never see a summary of someone else's conversation.
+    Requires authentication and membership.
+    """
+    await check_token_limit(user, db)
+    await verify_project_membership(db, user, project_id)
+
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    messages = await get_messages_since(db, project_id, user.id, since)
+
+    if not messages:
+        # Nothing to summarize — skip the LLM call entirely
+        return ChatSummaryResponse(
+            summary="", key_topics=[], message_count=0, period_days=days,
+        )
+
+    trace_id = str(uuid.uuid4())
+    from ..context import current_trace_id
+    current_trace_id.set(trace_id)
+
+    # Create Langfuse trace (must exist before the generation is attached)
+    from ..langfuse_client import get_langfuse
+    settings = get_settings()
+    lf = get_langfuse()
+    if lf:
+        try:
+            lf.trace(
+                id=trace_id,
+                name="chat_summary",
+                input={"project_id": project_id, "days": days, "message_count": len(messages)},
+                user_id=str(user.id),
+                session_id=f"{user.id}:{project_id}",
+                version=settings.app_version,
+                tags=["chat", "summary"],
+                metadata={"project_id": project_id},
+            )
+        except Exception:
+            pass
+
+    prompt = load_prompt("chat_summary").format(
+        current_datetime=get_current_datetime_string(),
+        period_days=days,
+        messages=format_messages_for_summary(messages),
+    )
+
+    try:
+        raw = await generate_text(
+            prompt,
+            model=settings.llm_model_pro,
+            prompt_name="chat_summary",
+            step="chat_summary",
+            trace_id=trace_id,
+            project_id=project_id,
+            user_id=user.id,
+        )
+    except Exception as e:
+        logger.error("chat_summary_failed", error=str(e), trace_id=trace_id)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to generate summary",
+        )
+
+    summary, key_topics = parse_summary_response(raw)
+    response = ChatSummaryResponse(
+        summary=summary,
+        key_topics=key_topics,
+        message_count=len(messages),
+        period_days=days,
+    )
+
+    # Same rough estimate as chat: 4 characters per token (prompt + output)
+    await update_token_usage(user, (len(prompt) + len(raw or "")) // 4, db)
+
+    if lf:
+        try:
+            lf.trace(id=trace_id, output=response.model_dump())
+        except Exception:
+            pass
+
+    return response
 
 
 @router.get("/health")
