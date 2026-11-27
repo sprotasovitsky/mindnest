@@ -5,10 +5,16 @@ metadata:
   description: What a MindNest backend build must hand over
 spec:
   materials:
+    - type: CONTAINER_IMAGE
+      name: backend-image
+      output: true
     - type: SBOM_CYCLONEDX_JSON
       name: backend-sbom
     - type: JUNIT_XML
       name: backend-tests
+  # attestations are only accepted from GitHub Actions, not from a laptop
+  runner:
+    type: GITHUB_ACTION
   policies:
     materials:
       - ref: file://.chainloop/policies/sbom-baseline.yaml
