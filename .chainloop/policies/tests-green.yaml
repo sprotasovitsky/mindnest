@@ -1,0 +1,35 @@
+apiVersion: chainloop.dev/v1
+kind: Policy
+metadata:
+  name: mindnest-tests-green
+  description: The JUnit report must contain tests and none of them may fail
+spec:
+  policies:
+    - kind: JUNIT_XML
+      embedded: |
+        package main
+
+        import rego.v1
+
+        # Chainloop hands the raw XML over base64-encoded
+        report := base64.decode(input.chainloop_metadata.content)
+
+        suite_total(attr) := sum([to_number(m[1]) |
+            some m in regex.find_all_string_submatch_n(sprintf(`<testsuite\s[^>]*\b%s="(\d+)"`, [attr]), report, -1)
+        ])
+
+        violations contains msg if {
+            suite_total("tests") == 0
+            msg := "the JUnit report has no tests"
+        }
+
+        violations contains msg if {
+            broken := suite_total("failures") + suite_total("errors")
+            broken > 0
+            msg := sprintf("%d of %d tests failed", [broken, suite_total("tests")])
+        }
+
+        violations contains msg if {
+            some m in regex.find_all_string_submatch_n(`<testcase\s[^>]*\bname="([^"]+)"[^>]*>\s*<(failure|error)\b`, report, -1)
+            msg := sprintf("failed: %s", [m[1]])
+        }

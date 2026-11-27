@@ -50,6 +50,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+      # GitHub OIDC token: Chainloop records the runner as authenticated and GitHub-hosted
+      id-token: write
     env:
       CHAINLOOP_TOKEN: ${{ secrets.CHAINLOOP_TOKEN }}
       DO_NOT_TRACK: '1'

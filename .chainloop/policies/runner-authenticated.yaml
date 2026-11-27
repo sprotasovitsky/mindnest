@@ -1,0 +1,25 @@
+apiVersion: chainloop.dev/v1
+kind: Policy
+metadata:
+  name: mindnest-runner-authenticated
+  description: The attestation must come from a GitHub-hosted runner proven by a GitHub OIDC token
+spec:
+  policies:
+    - kind: ATTESTATION
+      embedded: |
+        package main
+
+        import rego.v1
+
+        # runner type in the contract is read from env vars, which a laptop can fake;
+        # runnerAuthenticated is set only when the job got an OIDC token (permissions: id-token: write)
+        violations contains msg if {
+            not input.predicate.runnerAuthenticated
+            msg := sprintf("runner %v is not authenticated by an OIDC token: the CI environment may be faked", [object.get(input.predicate, "runnerType", "?")])
+        }
+
+        violations contains msg if {
+            input.predicate.runnerAuthenticated
+            input.predicate.runnerEnvironment != "managed"
+            msg := sprintf("runner environment is %v, only GitHub-hosted runners may build releases", [input.predicate.runnerEnvironment])
+        }

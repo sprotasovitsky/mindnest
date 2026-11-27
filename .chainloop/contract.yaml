@@ -20,3 +20,9 @@ spec:
       - ref: file://.chainloop/policies/sbom-baseline.yaml
         # a violation fails `attestation push`, even though the organization is ADVISORY
         gate: true
+      - ref: file://.chainloop/policies/tests-green.yaml
+        gate: true
+    # checks the whole attestation, not one material
+    attestation:
+      - ref: file://.chainloop/policies/runner-authenticated.yaml
+        gate: true
