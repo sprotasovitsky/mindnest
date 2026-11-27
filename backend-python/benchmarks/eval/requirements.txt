@@ -1,0 +1,5 @@
+# Evaluation only (DeepEval + Ragas). Not part of the backend image:
+# together they pull ~200 packages and send the pip resolver into hours of backtracking.
+# Install into a separate venv: pip install -r benchmarks/eval/requirements.txt
+deepeval>=2.0.0
+ragas>=0.2.0

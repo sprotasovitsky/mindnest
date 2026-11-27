@@ -4,7 +4,7 @@
 # Prerequisites:
 #   1. Running MindNest backend (uvicorn app.main:app --port 8000)
 #   2. Benchmark project created and filled with data
-#   3. Python env with requirements.txt installed
+#   3. Python env with requirements.txt and benchmarks/eval/requirements.txt installed
 #
 # Usage:
 #   cd backend-python
