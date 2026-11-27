@@ -11,25 +11,25 @@ spec:
 
         import rego.v1
 
-        # Chainloop hands the raw XML over base64-encoded
-        report := base64.decode(input.chainloop_metadata.content)
-
-        suite_total(attr) := sum([to_number(m[1]) |
-            some m in regex.find_all_string_submatch_n(sprintf(`<testsuite\s[^>]*\b%s="(\d+)"`, [attr]), report, -1)
-        ])
+        # Chainloop parses the XML into input.elements: one entry per test suite,
+        # with totals {tests, passed, failed, error, skipped} and the test cases.
+        # Do not read chainloop_metadata.content: on push it is not the raw XML.
+        total(field) := sum([object.get(s.totals, field, 0) | some s in input.elements])
 
         violations contains msg if {
-            suite_total("tests") == 0
+            total("tests") == 0
             msg := "the JUnit report has no tests"
         }
 
         violations contains msg if {
-            broken := suite_total("failures") + suite_total("errors")
+            broken := total("failed") + total("error")
             broken > 0
-            msg := sprintf("%d of %d tests failed", [broken, suite_total("tests")])
+            msg := sprintf("%d of %d tests failed", [broken, total("tests")])
         }
 
         violations contains msg if {
-            some m in regex.find_all_string_submatch_n(`<testcase\s[^>]*\bname="([^"]+)"[^>]*>\s*<(failure|error)\b`, report, -1)
-            msg := sprintf("failed: %s", [m[1]])
+            some s in input.elements
+            some t in s.tests
+            t.status in {"failed", "error"}
+            msg := sprintf("failed: %s.%s", [t.classname, t.name])
         }
