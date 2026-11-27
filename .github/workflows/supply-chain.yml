@@ -89,6 +89,7 @@ jobs:
 
       - name: Install Chainloop CLI
         run: |
+          mkdir -p "$HOME/.local/bin"
           curl -sfL https://dl.chainloop.dev/cli/install.sh | bash -s -- --oss --version "$CHAINLOOP_VERSION" --path "$HOME/.local/bin"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
