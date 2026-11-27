@@ -35,6 +35,14 @@ llm_errors = Counter(
     ["model", "step"],
 )
 
+# Prompt cache hits (labels: model)
+# Source: usage.cache_read_input_tokens > 0
+llm_cache_hits = Counter(
+    "llm_cache_hits_total",
+    "Total LLM prompt cache hits",
+    ["model"],
+)
+
 # Chat message type distribution (labels: message_type = DATA|QUESTION|BOTH)
 message_type_counter = Counter(
     "chat_message_type_total",
