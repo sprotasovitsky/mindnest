@@ -36,7 +36,7 @@ jobs:
           cache-dependency-path: backend-python/requirements.txt
 
       - name: Install dependencies
-        run: pip install -r backend-python/requirements.txt pytest
+        run: pip install -r backend-python/requirements.txt pytest pytest-asyncio
 
       # Failures are recorded in the JUnit report and attested; a policy decides what blocks
       - name: Run tests
