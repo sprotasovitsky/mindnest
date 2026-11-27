@@ -18,3 +18,5 @@ spec:
   policies:
     materials:
       - ref: file://.chainloop/policies/sbom-baseline.yaml
+        # a violation fails `attestation push`, even though the organization is ADVISORY
+        gate: true

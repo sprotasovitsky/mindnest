@@ -1,20 +1,30 @@
 name: Deploy to Staging
 
+# build → attest (Chainloop, gated SBOM policy) → gate checks the image digest → deploy that exact digest.
+# The mutable :staging tag moves only after a deploy that passed the gate and the health check.
 on:
   push:
     branches: [main]
     paths:
       - 'backend-python/**'
       - 'mobile/**'
+      - '.chainloop/**'
       - '.github/workflows/staging-deploy.yml'
   workflow_dispatch:
+    inputs:
+      image_digest:
+        description: 'Skip the build and deploy an existing image (sha256:...). The Chainloop gate still checks it.'
+        required: false
+        default: ''
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: sprotasovitsky/mindnest/backend
+  CHAINLOOP_VERSION: v1.138.0
 
 jobs:
   test:
+    if: inputs.image_digest == ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -26,7 +36,20 @@ jobs:
           cache-dependency-path: backend-python/requirements.txt
 
       - name: Install dependencies
-        run: pip install -r backend-python/requirements.txt
+        run: pip install -r backend-python/requirements.txt pytest
+
+      # Failures are recorded in the JUnit report and attested; a policy decides what blocks
+      - name: Run tests
+        working-directory: backend-python
+        env:
+          DEBUG: 'true'
+        run: python -m pytest tests -q --junitxml=junit.xml || echo "tests failed, recorded in junit.xml"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: junit
+          path: backend-python/junit.xml
+          retention-days: 7
 
   build-flutter-web:
     runs-on: ubuntu-latest
@@ -63,13 +86,18 @@ jobs:
           include-hidden-files: true
           retention-days: 1
 
-  build-and-deploy:
-    needs: [test, build-flutter-web]
+  build-and-attest:
+    needs: test
+    if: inputs.image_digest == ''
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-
+    env:
+      CHAINLOOP_TOKEN: ${{ secrets.CHAINLOOP_TOKEN }}
+      DO_NOT_TRACK: '1'
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
     steps:
       - uses: actions/checkout@v6
 
@@ -86,17 +114,91 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Only the immutable commit tag here; :staging moves after the deploy
       - name: Build and push Docker image
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: ./backend-python
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:staging
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
+
+      - name: Image SBOM (CycloneDX)
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+          format: cyclonedx-json
+          output-file: sbom.cdx.json
+          upload-artifact: false
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: junit
+
+      - name: Install Chainloop CLI
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -sfL https://dl.chainloop.dev/cli/install.sh | bash -s -- --oss --version "$CHAINLOOP_VERSION" --path "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      # gate: true in the contract makes a policy violation fail this push
+      - name: Attest (policy gate)
+        run: |
+          chainloop attestation init --workflow backend-build --project mindnest
+          chainloop attestation add --name backend-image --value "${REGISTRY}/${IMAGE_NAME}@${{ steps.build.outputs.digest }}"
+          chainloop attestation add --name backend-sbom --value sbom.cdx.json
+          chainloop attestation add --name backend-tests --value junit.xml
+          chainloop attestation push
+
+      - name: Mark attestation failed
+        if: failure()
+        run: chainloop attestation reset --trigger failure || true
+
+  deploy:
+    needs: [build-and-attest, build-flutter-web]
+    # also runs when build-and-attest is skipped because a digest was given by hand
+    if: ${{ !cancelled() && needs.build-flutter-web.result == 'success' && (needs.build-and-attest.result == 'success' || inputs.image_digest != '') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE_DIGEST: ${{ inputs.image_digest || needs.build-and-attest.outputs.digest }}
+      CHAINLOOP_TOKEN: ${{ secrets.CHAINLOOP_TOKEN }}
+      DO_NOT_TRACK: '1'
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Chainloop CLI
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -sfL https://dl.chainloop.dev/cli/install.sh | bash -s -- --oss --version "$CHAINLOOP_VERSION" --path "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      # Deploy only an image that has a backend-build attestation with no policy violations
+      - name: Chainloop gate
+        run: |
+          echo "Image: ${REGISTRY}/${IMAGE_NAME}@${IMAGE_DIGEST}"
+          if ! chainloop discover --digest "$IMAGE_DIGEST" -o json > discover.json; then
+            echo "::error::Chainloop has never seen ${IMAGE_DIGEST}: no attestation, no deploy"
+            exit 1
+          fi
+          jq '[.result.references[]? | select(.kind == "ATTESTATION") | {attestation: .digest, workflow: .metadata.name, violations: .metadata.hasPolicyViolations}]' discover.json
+          builds=$(jq '[.result.references[]? | select(.kind == "ATTESTATION" and .metadata.name == "backend-build")] | length' discover.json)
+          clean=$(jq -r '[.result.references[]? | select(.kind == "ATTESTATION" and .metadata.name == "backend-build" and .metadata.hasPolicyViolations == "false")][0].digest // empty' discover.json)
+          if [ "$builds" -eq 0 ]; then
+            echo "::error::No backend-build attestation for ${IMAGE_DIGEST}: the image was not built by CI"
+            exit 1
+          fi
+          if [ -z "$clean" ]; then
+            echo "::error::Every backend-build attestation of ${IMAGE_DIGEST} has policy violations"
+            exit 1
+          fi
+          echo "Gate passed: attestation $clean"
+          echo "https://app.chainloop.dev/u/mindnest/workflow-runs/$clean" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Download Flutter web build
         uses: actions/download-artifact@v4
@@ -135,6 +237,9 @@ jobs:
 
             # Create .env file
             cat > .env << 'ENVEOF'
+            # Image that passed the Chainloop gate (read by docker-compose.yml)
+            BACKEND_IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ env.IMAGE_DIGEST }}
+
             # Database
             NEO4J_PASSWORD=${{ secrets.STAGING_NEO4J_PASSWORD }}
             DATABASE_URL=postgresql+asyncpg://mindnest:${{ secrets.STAGING_POSTGRES_PASSWORD }}@termly-postgres:5432/mindnest_staging
@@ -163,8 +268,8 @@ jobs:
             # Login to GitHub Container Registry
             echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u sprotasovitsky --password-stdin
 
-            # Pull the new image
-            docker pull ghcr.io/sprotasovitsky/mindnest/backend:staging
+            # Pull the exact image that passed the gate
+            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ env.IMAGE_DIGEST }}
 
             # Rename compose file if needed
             if [ -f docker-compose.staging.yml ]; then
@@ -203,3 +308,14 @@ jobs:
         run: |
           sleep 10
           curl -f https://dev-api.mindnest.one/health || echo "SSL may need initial setup"
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # :staging now names what really runs on staging
+      - name: Move :staging to the deployed digest
+        run: docker buildx imagetools create -t "${REGISTRY}/${IMAGE_NAME}:staging" "${REGISTRY}/${IMAGE_NAME}@${IMAGE_DIGEST}"

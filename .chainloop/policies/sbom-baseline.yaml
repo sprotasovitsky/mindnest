@@ -2,7 +2,7 @@ apiVersion: chainloop.dev/v1
 kind: Policy
 metadata:
   name: mindnest-sbom-baseline
-  description: SBOM must list real dependencies and contain no strong-copyleft licenses
+  description: SBOM must list real dependencies and no Python dependency may use a strong-copyleft license
 spec:
   policies:
     - kind: SBOM_CYCLONEDX_JSON
@@ -20,8 +20,10 @@ spec:
             msg := sprintf("SBOM lists only %d components: scan the installed environment or image, not the source", [count(object.get(input, "components", []))])
         }
 
+        # only our Python dependencies: GPL tools of the Debian base image (tar, sed, bash) are not linked into the app
         violations contains msg if {
             some comp in input.components
+            startswith(object.get(comp, "purl", ""), "pkg:pypi/")
             some lic in object.get(comp, "licenses", [])
             lic.license.id in banned
             msg := sprintf("%s %s uses %s", [comp.name, object.get(comp, "version", "?"), lic.license.id])
