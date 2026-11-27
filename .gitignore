@@ -59,3 +59,6 @@ backend-python/venv/
 # Test results (generated, not tracked)
 tests/results/
 .mcp.json
+
+# Chainloop build outputs (SBOM, test reports)
+.chainloop/out/

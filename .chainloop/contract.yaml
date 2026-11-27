@@ -1,0 +1,14 @@
+apiVersion: chainloop.dev/v1
+kind: Contract
+metadata:
+  name: mindnest-backend-build
+  description: What a MindNest backend build must hand over
+spec:
+  materials:
+    - type: SBOM_CYCLONEDX_JSON
+      name: backend-sbom
+    - type: JUNIT_XML
+      name: backend-tests
+  policies:
+    materials:
+      - ref: file://.chainloop/policies/sbom-baseline.yaml

@@ -1,5 +1,70 @@
 {
   "enabledPlugins": {
     "frontend-design@claude-plugins-official": true
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "sh -c 'if ! command -v chainloop \u003e/dev/null 2\u003e\u00261; then exit 0; fi; exec chainloop trace hook claude post-tool-use'",
+            "type": "command"
+          }
+        ],
+        "matcher": "Edit|Write|MultiEdit|Bash|Skill"
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [
+          {
+            "command": "sh -c 'if ! command -v chainloop \u003e/dev/null 2\u003e\u00261; then exit 0; fi; exec chainloop trace hook claude post-tool-use'",
+            "type": "command"
+          }
+        ],
+        "matcher": "Edit|Write|MultiEdit|Bash"
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "sh -c 'if ! command -v chainloop \u003e/dev/null 2\u003e\u00261; then exit 0; fi; exec chainloop trace hook claude pre-tool-use'",
+            "type": "command"
+          }
+        ],
+        "matcher": "Edit|Write|MultiEdit|Bash"
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "command": "sh -c 'if ! command -v chainloop \u003e/dev/null 2\u003e\u00261; then exit 0; fi; exec chainloop trace hook claude session-end'",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "command": "sh -c 'if ! command -v chainloop \u003e/dev/null 2\u003e\u00261; then exit 0; fi; exec chainloop trace hook claude session-start'",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "command": "sh -c 'if ! command -v chainloop \u003e/dev/null 2\u003e\u00261; then exit 0; fi; exec chainloop trace hook claude user-prompt-submit'",
+            "type": "command"
+          }
+        ]
+      }
+    ]
   }
 }
